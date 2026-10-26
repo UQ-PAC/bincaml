@@ -391,17 +391,29 @@ module Label = struct
   let compose = flip compose
 end
 
+module Vertex = struct
+  type t = Var of Var.t | Zero [@@deriving show, ord, eq]
+
+  let hash =
+    Hash.(map (function Var v -> Some v | Zero -> None) (opt Var.hash))
+
+  let name = function Var v -> Some (Var.name v) | Zero -> None
+end
+
+module VertMap = Map.Make (Vertex)
+module VertSet = Set.Make (Vertex)
+
 module CopyNode = struct
   module EQ = Bincaml_util.Labelled_unionfind.MakeEquiv (Label)
 
-  type body = { v : Var.t; copied_from : t list }
+  type body = { v : Vertex.t; copied_from : t list }
   and edge = body EQ.edge
   and t = body EQ.t
 
-  let var (n : t) = (EQ.get n).v
+  let vert (n : t) = (EQ.get n).v
   let copied_from (n : t) = (EQ.get n).copied_from
-  let eq (n : t) (m : t) = Var.equal (var n) (var m)
-  let init v : t = EQ.make { v; copied_from = [] }
+  let eq (n : t) (m : t) = Vertex.equal (vert n) (vert m)
+  let init v : t = EQ.make { v = Var v; copied_from = [] }
 
   (** Set out edges of a given vertex (think `v := phi(a, b, c)` defining edges
       `v -> a, v -> b, v -> c`). *)
@@ -415,55 +427,57 @@ module CopyNode = struct
 
     let sccs_with_find find vs =
       (* Tarjan's *)
-      let scc_map = ref VarMap.empty in
+      let scc_map = ref VertMap.empty in
       let sccs = ref [] in
-      let index = ref VarMap.empty in
-      let lowlink = ref VarMap.empty in
-      let on_stack = ref VarSet.empty in
+      let index = ref VertMap.empty in
+      let lowlink = ref VertMap.empty in
+      let on_stack = ref VertSet.empty in
       let stack = Stack.create () in
       let i = ref 0 in
 
       let rec strongconnect v =
-        index := VarMap.add (var v) !i !index;
-        lowlink := VarMap.add (var v) !i !lowlink;
+        index := VertMap.add (vert v) !i !index;
+        lowlink := VertMap.add (vert v) !i !lowlink;
         i := !i + 1;
-        Stack.push (var v) stack;
-        on_stack := VarSet.add (var v) !on_stack;
+        Stack.push (vert v) stack;
+        on_stack := VertSet.add (vert v) !on_stack;
 
         copied_from v
         |> List.iter (fun w ->
             let w = find w in
-            if not (VarMap.mem (var w) !index) then (
+            if not (VertMap.mem (vert w) !index) then (
               strongconnect w;
               let ll =
                 min
-                  (VarMap.find (var v) !lowlink)
-                  (VarMap.find (var w) !lowlink)
+                  (VertMap.find (vert v) !lowlink)
+                  (VertMap.find (vert w) !lowlink)
               in
-              lowlink := VarMap.add (var v) ll !lowlink)
-            else if VarSet.mem (var w) !on_stack then
+              lowlink := VertMap.add (vert v) ll !lowlink)
+            else if VertSet.mem (vert w) !on_stack then
               let ll =
-                min (VarMap.find (var v) !lowlink) (VarMap.find (var w) !index)
+                min
+                  (VertMap.find (vert v) !lowlink)
+                  (VertMap.find (vert w) !index)
               in
-              lowlink := VarMap.add (var v) ll !lowlink);
+              lowlink := VertMap.add (vert v) ll !lowlink);
 
-        if VarMap.find (var v) !lowlink = VarMap.find (var v) !index then (
-          let scc = ref VarSet.empty in
+        if VertMap.find (vert v) !lowlink = VertMap.find (vert v) !index then (
+          let scc = ref VertSet.empty in
           while
             let w = Stack.pop stack in
-            on_stack := VarSet.remove w !on_stack;
-            scc := VarSet.add w !scc;
-            not @@ Var.equal (var v) w
+            on_stack := VertSet.remove w !on_stack;
+            scc := VertSet.add w !scc;
+            not @@ Vertex.equal (vert v) w
           do
             ()
           done;
           sccs := !scc :: !sccs;
-          VarSet.iter (fun v -> scc_map := VarMap.add v !scc !scc_map) !scc)
+          VertSet.iter (fun v -> scc_map := VertMap.add v !scc !scc_map) !scc)
       in
       List.iter
         (fun v ->
           let v = find v in
-          if not @@ VarMap.mem (var v) !index then strongconnect v)
+          if not @@ VertMap.mem (vert v) !index then strongconnect v)
         vs;
       (!scc_map, !sccs |> List.rev)
   end
@@ -494,16 +508,16 @@ module CopyNode = struct
       rare edge case where two distinct edges compose to identity along the same
       path back to the root as left inverses aren't necessarily unique. *)
   let is_id_cycle ~sccs root =
-    let scc = VarMap.find (var root) sccs in
-    let edges = ref VarMap.empty in
+    let scc = VertMap.find (vert root) sccs in
+    let edges = ref VertMap.empty in
     let rec dfs f n =
       let f, n = EQ.find_edge (f, n) in
-      if not @@ VarSet.mem (var n) scc then true
+      if not @@ VertSet.mem (vert n) scc then true
       else
-        match VarMap.get (var n) !edges with
+        match VertMap.get (vert n) !edges with
         | Some f' -> LF.equal f f'
         | None -> (
-            edges := VarMap.add (var n) f !edges;
+            edges := VertMap.add (vert n) f !edges;
             match copied_from n with
             | [] -> true
             | ls -> ls |> List.for_all (fun n' -> dfs f n'))
@@ -520,36 +534,36 @@ module CopyNode = struct
       If a non-identity cycle is found in the graph, None is returned, as else
       there would possibly be infinitely many paths. *)
   let leaves (keep : t -> bool) v : edge list option =
-    let status : status VarMap.t ref = ref VarMap.empty in
+    let status : status VertMap.t ref = ref VertMap.empty in
     let sccs = sccs_of v in
     let join =
-      VarMap.fold (fun v (f, n) acc ->
-          match VarMap.get v acc with
-          | Some (f', n') -> VarMap.add v (LF.join f f', n) acc
-          | None -> VarMap.add v (f, n) acc)
+      VertMap.fold (fun v (f, n) acc ->
+          match VertMap.get v acc with
+          | Some (f', n') -> VertMap.add v (LF.join f f', n) acc
+          | None -> VertMap.add v (f, n) acc)
     in
-    let rec dfs v f : edge VarMap.t option =
+    let rec dfs v f : edge VertMap.t option =
       let f, v = EQ.find_edge (f, v) in
-      match VarMap.get (var v) !status with
+      match VertMap.get (vert v) !status with
       (* We have already searched this node, and so its leaves will have
          already been added to the list! *)
-      | Some Searched -> Some VarMap.empty
+      | Some Searched -> Some VertMap.empty
       (* We have found a cycle! If all cycles are identity cycles, all is well
          and we can skip recursing on this node. *)
-      | Some Searching -> Option.return_if (is_id_cycle ~sccs v) VarMap.empty
+      | Some Searching -> Option.return_if (is_id_cycle ~sccs v) VertMap.empty
       | None -> (
           match copied_from v with
-          | [] -> Option.return_if (keep v) (VarMap.singleton (var v) (f, v))
+          | [] -> Option.return_if (keep v) (VertMap.singleton (vert v) (f, v))
           | ls ->
               let open List.Traverse (Option) in
-              status := VarMap.add (var v) Searching !status;
+              status := VertMap.add (vert v) Searching !status;
               ls
               |> fold_m
                    (fun acc l -> dfs l f |> Option.map (join acc))
-                   VarMap.empty
-              |> tap (fun _ -> status := VarMap.add (var v) Searched !status))
+                   VertMap.empty
+              |> tap (fun _ -> status := VertMap.add (vert v) Searched !status))
     in
-    dfs v LF.identity |> Option.map (VarMap.values %> Iter.to_list)
+    dfs v LF.identity |> Option.map (VertMap.values %> Iter.to_list)
 end
 
 (** Ocamlgraph representation of the above for debug utilities *)
@@ -559,10 +573,10 @@ module CopyGraph = struct
       (struct
         type t = CopyNode.body
 
-        let compare (b1 : t) (b2 : t) = Var.compare b1.v b2.v
-        let hash (b : t) = Var.hash b.v
-        let equal (b1 : t) (b2 : t) = Var.equal b1.v b2.v
-        let show (b : t) = Var.name b.v
+        let compare (b1 : t) (b2 : t) = Vertex.compare b1.v b2.v
+        let hash (b : t) = Vertex.hash b.v
+        let equal (b1 : t) (b2 : t) = Vertex.equal b1.v b2.v
+        let show (b : t) = match b.v with Var v -> Var.name v | Zero -> "Zero"
       end)
       (Label)
 
@@ -593,10 +607,11 @@ module Solver = struct
   let propagate_call node_of update_worklist s c ls =
     let open CopyNode in
     let open List.Traverse (Option) in
+    let open Option.Infix in
     ls
-    |> List.map (fun (f, (n : CopyNode.t)) ->
-        (f, StringMap.find (Var.name (var n)) c.args))
-    |> map_m (fun (f, e) ->
+    |> map_m (fun (f, (n : CopyNode.t)) ->
+        Vertex.name (vert n) >|= fun name -> (f, StringMap.find name c.args))
+    >>= map_m (fun (f, e) ->
         let f', v = LF.Extract.extract_expr e in
         Option.map (fun v -> (LF.compose f f', v)) v)
     |> Option.iter (fun leaves ->
@@ -696,15 +711,15 @@ module Solver = struct
   (** Solve for the graphs of all procedures in a given strongly connected
       component. *)
   let solve_component (prog : Program.t) call_graph summaries
-      (graphs : (ID.t, CopyNode.t VarMap.t) Hashtbl.t) component =
+      (graphs : (ID.t, CopyNode.t VertMap.t) Hashtbl.t) component =
     let open CopyNode in
     let node_of pid v =
-      let vm = Hashtbl.get_or_add graphs ~f:(const VarMap.empty) ~k:pid in
-      match VarMap.find_opt v vm with
+      let vm = Hashtbl.get_or_add graphs ~f:(const VertMap.empty) ~k:pid in
+      match VertMap.find_opt (Var v) vm with
       | Some n -> n
       | None ->
           let n = init v in
-          let vm = VarMap.add v n vm in
+          let vm = VertMap.add (Var v) n vm in
           Hashtbl.replace graphs pid vm;
           n
     in
@@ -738,7 +753,9 @@ module Solver = struct
       |> Iter.filter_map (fun node ->
           leaves
             (fun (n : t) ->
-              StringMap.mem (Var.name (var n)) (Procedure.formal_in_params proc))
+              Vertex.name (vert n)
+              |> Option.exists (fun name ->
+                  StringMap.mem name (Procedure.formal_in_params proc)))
             node
           |> Option.flat_map (fun leaves ->
               (not (List.is_empty leaves))
@@ -746,15 +763,19 @@ module Solver = struct
       |> Iter.iter (fun ((node : CopyNode.t), leaves) ->
           (* Store a summary of this outvar *)
           let m = Hashtbl.get_or summaries pid ~default:StringMap.empty in
-          let m = StringMap.add (Var.name (var node)) leaves m in
+          let m =
+            Vertex.name (vert node)
+            |> Option.fold (fun m name -> StringMap.add name leaves m) m
+          in
           Hashtbl.replace summaries pid m;
           (* Propagate calls within this scc *)
           Hashtbl.get_or callers pid ~default:[]
           |> List.iter (fun (call : call_info) ->
-              propagate_call node_of
-                (fun pid -> Worklist.add worklist call.caller_id)
-                (Var.name (var node))
-                call leaves))
+              Vertex.name (vert node)
+              |> Option.iter (fun name ->
+                  propagate_call node_of
+                    (fun pid -> Worklist.add worklist call.caller_id)
+                    name call leaves)))
     done
 
   type 'a skip_option = SSome of 'a | Skip | SNone [@@deriving map]
@@ -769,22 +790,22 @@ module Solver = struct
     (* Invariant: var node in !searched =>
         (find node) is not linear copied from any other variable and
         all (map find copied_from) are in !searched *)
-    let searched = ref VarSet.empty in
+    let searched = ref VertSet.empty in
     (* For ensuring each node is only searched once *)
-    let searching = ref VarSet.empty in
-    (* Ensures: var node in !searched *)
+    let searching = ref VertSet.empty in
+    (* Ensures: vert node in !searched *)
     (* Ensures: !searching == old(!searching) *)
     let rec search (node : t) =
-      if not @@ VarSet.mem (var node) !searched then (
-        searching := VarSet.add (var node) !searching;
+      if not @@ VertSet.mem (vert node) !searched then (
+        searching := VertSet.add (vert node) !searching;
         propagate node;
-        searching := VarSet.remove (var node) !searching;
-        searched := VarSet.add (var node) !searched)
+        searching := VertSet.remove (vert node) !searching;
+        searched := VertSet.add (vert node) !searched)
     (* Search targets and see if a common single parent + function exists *)
     and propagate node =
       match
         effective_parent LF.identity (copied_from node)
-          (ref (VarMap.singleton (var node) SNone))
+          (ref (VertMap.singleton (vert node) SNone))
       with
       | SSome ((LF.TopEdge | LF.Join _), l) -> propagate_copy node
       | SSome (f, l) ->
@@ -794,7 +815,7 @@ module Solver = struct
       | SNone -> ()
     (* Further propagate only copy edges *)
     and propagate_copy node =
-      match effective_copy_parent (copied_from node) (ref VarSet.empty) with
+      match effective_copy_parent (copied_from node) (ref VertSet.empty) with
       | SSome n -> EQ.join_eq node n
       | Skip -> failwith "the effective parent shouldn't ever be skip!"
       | _ -> ()
@@ -811,7 +832,7 @@ module Solver = struct
       let step ((f', n) : edge) =
         assert (EQ.is_parent n);
         let f = LF.compose f f' in
-        match VarMap.get (var n) !memo with
+        match VertMap.get (vert n) !memo with
         | Some (SSome (f'', n')) -> SSome (LF.compose f' f'', n')
         | Some Skip -> Skip
         | Some SNone when LF.is_id f -> Skip
@@ -825,9 +846,9 @@ module Solver = struct
            be returned as the parent. *)
         | Some SNone -> SSome (f', n)
         | None -> (
-            memo := VarMap.add (var n) SNone !memo;
+            memo := VertMap.add (vert n) SNone !memo;
             let r =
-              if VarSet.mem (var n) !searching then
+              if VertSet.mem (vert n) !searching then
                 effective_parent f (copied_from n) memo
               else (
                 search n;
@@ -835,7 +856,7 @@ module Solver = struct
             in
             (* If there was no parent then this node is now the parent *)
             let r = match r with SNone -> SSome (LF.identity, n) | e -> e in
-            memo := VarMap.add (var n) r !memo;
+            memo := VertMap.add (vert n) r !memo;
             match r with
             | SSome (f'', n') -> SSome (LF.compose f' f'', n')
             | a -> a)
@@ -853,10 +874,10 @@ module Solver = struct
     and effective_copy_parent (nodes : t list) visited =
       let step n =
         assert (EQ.is_eq_parent n);
-        if VarSet.mem (var n) !visited then Skip
+        if VertSet.mem (vert n) !visited then Skip
         else (
-          visited := VarSet.add (var n) !visited;
-          if VarSet.mem (var n) !searching then
+          visited := VertSet.add (vert n) !visited;
+          if VertSet.mem (vert n) !searching then
             effective_copy_parent (copied_from n) visited
           else (
             search n;
@@ -870,10 +891,10 @@ module Solver = struct
           | _ -> SNone)
       |> Option.get_or ~default:SNone
     in
-    VarMap.iter (const (search % snd % EQ.find)) g
+    VertMap.iter (const (search % snd % EQ.find)) g
 
   let solve (prog : Program.t) =
-    let graphs : (ID.t, CopyNode.t VarMap.t) Hashtbl.t = Hashtbl.create 100 in
+    let graphs : (ID.t, CopyNode.t VertMap.t) Hashtbl.t = Hashtbl.create 100 in
     let call_graph = Program.CallGraph.make_call_graph prog in
     let summaries = Hashtbl.create 100 in
     ( Trace_core.with_span ~__FILE__ ~__LINE__ "graph-creation" @@ fun _ ->
@@ -884,11 +905,7 @@ module Solver = struct
              | _ -> None))
       |> List.iter (solve_component prog call_graph summaries graphs) );
     ( Trace_core.with_span ~__FILE__ ~__LINE__ "phi-propagation" @@ fun _ ->
-      Hashtbl.iter
-        (fun id g ->
-          print_endline @@ ID.to_string id;
-          collapse_composites g)
-        graphs );
+      Hashtbl.iter (const collapse_composites) graphs );
     graphs
 end
 
@@ -897,7 +914,7 @@ let test_transform (p : Program.t) =
   Hashtbl.iter
     (fun pid g ->
       print_endline @@ "Graphvis for " ^ ID.show pid ^ ":";
-      let g = CopyGraph.make_graph (VarMap.values g) in
+      let g = CopyGraph.make_graph (VertMap.values g) in
       CopyGraph.Dot.output_graph stdout g)
     gs;
   p
