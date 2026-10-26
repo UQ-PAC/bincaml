@@ -8,9 +8,7 @@
   >      (var PC:bv64 := PC_in:bv64, var R16:bv64 := R16_in:bv64, var R17:bv64 := R17_in:bv64);
   >      goto (%FUN_750_code);
   >    ];
-  >    block %FUN_750_code { .address = 1872; .gtirb_block = "cdQ2GS2+QhaOa7OUvPWMRQ";
-  >        .succ = [ { .conditional = "false"; .direct = "false"; .target = "proxy:gq8no6SPS6K/NewOLhch1Q";
-  >                .type = "Type_Branch" } ] } [
+  >    block %FUN_750_code [
   >      var PC:bv64 := PC:bv64;
   >      assume eq(0x750:bv64, PC:bv64);
   >      goto (%block);
