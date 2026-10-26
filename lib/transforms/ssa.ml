@@ -390,6 +390,11 @@ module Construction = struct
 
       print_endline "\n\n";
 
+      Lang.Procedure.blocks_to_list procedure
+      |> List.iter (fun (i, b) -> print_endline (Procedure.Vert.show i));
+      Lang.Program.pretty_proc procedure
+      |> Containers_pp.Pretty.to_string ~width:100
+      |> print_endline;
 
       (* Update the procedure. *)
       procedure
@@ -407,11 +412,7 @@ module Construction = struct
           let initialised =
             let analysis = May_read_uninit.A.analyse procedure in
             fun vert var ->
-
-              May_read_uninit.A.A.M.iter (fun k x ->
-                  print_endline (Vert.show k);
-                ) analysis;
-              print_endline @@ "--> " ^(Vert.show vert);
+              print_endline @@ Procedure.Vert.show vert;
               May_read_uninit.A.A.M.find vert analysis
               |> May_read_uninit.ReadUninitAnalysis.read_var var
               |> function
