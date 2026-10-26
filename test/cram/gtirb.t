@@ -108,7 +108,8 @@
        goto (%_fini_code_3);
      ];
      block %_fini_code_3 [ assert false; goto (%ret_1); ];
-     block %ret_1 [ return; ]
+     block %ret_1 [ return; ];
+     block %ret [ return; ]
   ];
   proc @_init()  -> () {  }
     modifies $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64, $R29:bv64, $R30:bv64,
@@ -189,7 +190,9 @@
        goto (%_init_code_3);
      ];
      block %_init_code_3 [ assert false; goto (%ret_1); ];
-     block %ret_1 [ return; ]
+     block %ret_1 [ return; ];
+     block %ret [ return; ];
+     block %ret_2 [ return; ]
   ];
   proc @__do_global_dtors_aux()  -> () {  }
     modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
@@ -265,9 +268,9 @@
      block %block_8 [
        $PC:bv64 := if eq(extract(1,0, extract(1,0, bvlshr(extract(32,0, $R0),
          zero_extend(20, 0x0:bv12)))), 0x1:bv1) then 0x400770:bv64 else 0x400764:bv64;
-       goto (%__do_global_dtors_aux_code_4);
+       goto (%__do_global_dtors_aux_code_5);
      ];
-     block %__do_global_dtors_aux_code_4 [
+     block %__do_global_dtors_aux_code_5 [
        assert boolor(eq(0x400764:bv64, $PC), eq(0x400770:bv64, $PC));
        goto (%__do_global_dtors_aux_code_3,%__do_global_dtors_aux_code_1);
      ];
@@ -306,9 +309,9 @@
        var BTypeNext:bv2 := 0x0:bv2;
        var BranchTaken:bool := true;
        $PC:bv64 := $R30;
-       goto (%__do_global_dtors_aux_code_5);
+       goto (%__do_global_dtors_aux_code_6);
      ];
-     block %__do_global_dtors_aux_code_5 [ assert false; goto (%ret_2); ];
+     block %__do_global_dtors_aux_code_6 [ assert false; goto (%ret_2); ];
      block %ret_2 [ return; ];
      block %__do_global_dtors_aux_code_3 { .address = 4196196;
          .gtirb_block = "lwyID0MJQb6vgyjzPFtz8Q";
@@ -321,9 +324,9 @@
        $R30:bv64 := 0x400768:bv64;
        var BranchTaken:bool := true;
        $PC:bv64 := 0x4006e0:bv64;
-       goto (%__do_global_dtors_aux_code_6);
+       goto (%__do_global_dtors_aux_code_7);
      ];
-     block %__do_global_dtors_aux_code_6 [
+     block %__do_global_dtors_aux_code_7 [
        assert boolor(eq(0x4006e0:bv64, $PC));
        goto (%__do_global_dtors_aux_ext);
      ];
@@ -350,12 +353,25 @@
        var local_13:bv64 := 0x0:bv64;
        $mem:(bv64->bv8) := store le $mem:(bv64->bv8) bvadd($R19, 0x28:bv64) extract(8,0, $R0) 8;
        (var BranchTaken:bool := false, $PC:bv64 := 0x400770:bv64);
-       goto (%__do_global_dtors_aux_code_7);
+       goto (%__do_global_dtors_aux_code_8);
      ];
-     block %__do_global_dtors_aux_code_7 [
+     block %__do_global_dtors_aux_code_8 [
        assert boolor(eq(0x400770:bv64, $PC));
        goto (%__do_global_dtors_aux_code_1);
-     ]
+     ];
+     block %__do_global_dtors_aux_code_4 { .address = 4196220;
+         .gtirb_block = "mmpaLvZYQk2b8selWCLriA" } [
+       assume eq(0x40077c:bv64, $PC);
+       call @_aarch64_eval(0xd503201f:bv32, 0x40077c:bv64) { .asm = "nop ";
+           .error = "Failure(\"unsupported\")" };
+       assert false;
+       unreachable;
+     ];
+     block %ret [ return; ];
+     block %ret_1 [ return; ];
+     block %ret_3 [ return; ];
+     block %ret_4 [ return; ];
+     block %ret_5 [ return; ]
   ];
   proc @register_tm_clones()  -> () {  }
     modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64
@@ -549,7 +565,12 @@
        $PC:bv64 := $R16;
        goto (%register_tm_clones_code_7);
      ];
-     block %register_tm_clones_code_7 [ assert false; unreachable; ]
+     block %register_tm_clones_code_7 [ assert false; unreachable; ];
+     block %ret_1 [ return; ];
+     block %ret_2 [ return; ];
+     block %ret_3 [ return; ];
+     block %ret_4 [ return; ];
+     block %ret_5 [ return; ]
   ];
   proc @frame_dummy()  -> () {  }
     modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64
@@ -579,7 +600,8 @@
        call @register_tm_clones();
        assert false;
        unreachable;
-     ]
+     ];
+     block %ret [ return; ]
   ];
   proc @FUN_400660()  -> () {  }
     modifies $PC:bv64, $R16:bv64, $R17:bv64
@@ -624,7 +646,8 @@
        $PC:bv64 := $R17;
        goto (%FUN_400660_code_1);
      ];
-     block %FUN_400660_code_1 [ assert false; unreachable; ]
+     block %FUN_400660_code_1 [ assert false; unreachable; ];
+     block %ret [ return; ]
   ];
   proc @Sqrt()  -> () {  }
     modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
@@ -1003,7 +1026,15 @@
      block %Sqrt_code_11 [
        assert boolor(eq(0x4007e8:bv64, $PC));
        goto (%Sqrt_code_5);
-     ]
+     ];
+     block %Sqrt_ext [ assume eq(0x400820:bv64, $PC); assert false; unreachable; ];
+     block %ret [ return; ];
+     block %ret_1 [ return; ];
+     block %ret_2 [ return; ];
+     block %ret_4 [ return; ];
+     block %ret_5 [ return; ];
+     block %ret_6 [ return; ];
+     block %ret_7 [ return; ]
   ];
   proc @_start()  -> () {  }
     modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R2:bv64, $R29:bv64,
@@ -1088,9 +1119,9 @@
        $R30:bv64 := 0x4006b0:bv64;
        var BranchTaken:bool := true;
        $PC:bv64 := 0x400640:bv64;
-       goto (%_start_code_3);
+       goto (%_start_code_4);
      ];
-     block %_start_code_3 [
+     block %_start_code_4 [
        assert boolor(eq(0x400640:bv64, $PC));
        goto (%_start_ext);
      ];
@@ -1111,9 +1142,9 @@
        $R30:bv64 := 0x4006b4:bv64;
        var BranchTaken:bool := true;
        $PC:bv64 := 0x400660:bv64;
-       goto (%_start_code_4);
+       goto (%_start_code_5);
      ];
-     block %_start_code_4 [
+     block %_start_code_5 [
        assert boolor(eq(0x400660:bv64, $PC));
        goto (%_start_ext_2);
      ];
@@ -1122,6 +1153,42 @@
        call @FUN_400660();
        assert false;
        unreachable;
+     ];
+     block %_start_code { .address = 4196028;
+         .gtirb_block = "UtkQk4ONSE6hNEuDpZ95RQ" } [
+       assume eq(0x4006bc:bv64, $PC);
+       call @_aarch64_eval(0xd503201f:bv32, 0x4006bc:bv64) { .asm = "nop ";
+           .error = "Failure(\"unsupported\")" };
+       assert false;
+       unreachable;
+     ];
+     block %_start_code_3 { .address = 4196020;
+         .gtirb_block = "8D7O5dmBS1ek+5BDJ9mBtA";
+         .succ = [ { .address = 4196360; .conditional = "false"; .direct = "true";
+                 .target = "stmts:b8tsihT4Q6a/SWPo4w8HoA"; .type = "Type_Branch" } ] } [
+       assume eq(0x4006b4:bv64, $PC);
+       call @_aarch64_eval(0xd503201f:bv32, 0x4006b4:bv64) { .asm = "nop ";
+           .error = "Failure(\"unsupported\")" };
+       goto (%block_12);
+     ];
+     block %_start_ext_1 [
+       assume eq(0x400808:bv64, $PC);
+       call @main();
+       assert false;
+       unreachable;
+     ];
+     block %ret [ return; ];
+     block %ret_1 [ return; ];
+     block %ret_2 [ return; ];
+     block %ret_3 [ return; ];
+     block %block_12 { .asm = "b #0x150" } [
+       var BranchTaken:bool := true;
+       $PC:bv64 := 0x400808:bv64;
+       goto (%_start_code_6);
+     ];
+     block %_start_code_6 [
+       assert boolor(eq(0x400808:bv64, $PC));
+       goto (%_start_ext_1);
      ]
   ];
   proc @_dl_relocate_static_pie()  -> () {  }
@@ -1238,7 +1305,15 @@
        assert boolor(eq(0x400610:bv64, $PC));
        goto (%ret_3);
      ];
-     block %ret_3 [ return; ]
+     block %ret_3 [ return; ];
+     block %call_weak_fn_ext [
+       assume eq(0x400610:bv64, $PC);
+       assert false;
+       unreachable;
+     ];
+     block %ret [ return; ];
+     block %ret_1 [ return; ];
+     block %ret_2 [ return; ]
   ];
   proc @main()  -> () {  }
     modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
@@ -1335,7 +1410,9 @@
        goto (%main_code_3);
      ];
      block %main_code_3 [ assert false; goto (%ret_1); ];
-     block %ret_1 [ return; ]
+     block %ret_1 [ return; ];
+     block %ret [ return; ];
+     block %ret_2 [ return; ]
   ];
   proc @.L_400650()  -> () {  }
     modifies $PC:bv64, $R16:bv64, $R17:bv64
@@ -1380,7 +1457,8 @@
        $PC:bv64 := $R17;
        goto (%L_400650_code_1);
      ];
-     block %L_400650_code_1 [ assert false; unreachable; ]
+     block %L_400650_code_1 [ assert false; unreachable; ];
+     block %ret [ return; ]
   ];
   proc @FUN_400640()  -> () {  }
     modifies $PC:bv64, $R16:bv64, $R17:bv64
@@ -1425,7 +1503,8 @@
        $PC:bv64 := $R17;
        goto (%FUN_400640_code_1);
      ];
-     block %FUN_400640_code_1 [ assert false; unreachable; ]
+     block %FUN_400640_code_1 [ assert false; unreachable; ];
+     block %ret [ return; ]
   ];
   proc @deregister_tm_clones()  -> () {  }
     modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
@@ -1599,7 +1678,17 @@
        assert boolor(eq(0x400768:bv64, $PC));
        goto (%ret_5);
      ];
-     block %ret_5 [ return; ]
+     block %ret_5 [ return; ];
+     block %deregister_tm_clones_ext [
+       assume eq(0x400768:bv64, $PC);
+       assert false;
+       unreachable;
+     ];
+     block %ret [ return; ];
+     block %ret_1 [ return; ];
+     block %ret_2 [ return; ];
+     block %ret_3 [ return; ];
+     block %ret_4 [ return; ]
   ];
   proc @FUN_400620()  -> () {  }
     modifies $PC:bv64, $R16:bv64, $R17:bv64, $SP:bv64, $mem:(bv64->bv8)
@@ -1655,7 +1744,8 @@
        $PC:bv64 := $R17;
        goto (%FUN_400620_code_1);
      ];
-     block %FUN_400620_code_1 [ assert false; unreachable; ]
+     block %FUN_400620_code_1 [ assert false; unreachable; ];
+     block %ret [ return; ]
   ];
   prog entry @_start { .initial_memory = [ { .address = 4194872;
               .bytes = [ "H4sIAAAAAAAA/wFuAJH/L25peC9zdG9yZS92emlpdzRrMWtsODhwcXY0N25obGd6Zjg1bXZobmJpYS1nbGliYy1hYXJjaDY0LXVua25vd24tbGludXgtZ251LTIuNDAtNjYvbGliL2xkLWxpbnV4LWFhcmNoNjQuc28uMQC2zzwDbgAAAA==" ];

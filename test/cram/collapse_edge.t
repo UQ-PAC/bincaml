@@ -15,4 +15,9 @@
   ---
   >    block %c [ var b:bv64 := a:bv64; goto (%e); ];
   >    block %e ( var c_1:bv64 := phi(%c -> b:bv64) ) [
+  14c10,11
+  <    block %f [ return; ]
+  ---
+  >    block %f [ return; ];
+  >    block %inputs [ goto (%c); ]
   [1]

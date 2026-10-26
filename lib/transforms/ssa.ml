@@ -388,14 +388,6 @@ module Construction = struct
       (* Unify all return nodes into a single one. *)
       let procedure, rid = unify_returns procedure in
 
-      print_endline "\n\n";
-
-      Lang.Procedure.blocks_to_list procedure
-      |> List.iter (fun (i, b) -> print_endline (Procedure.Vert.show i));
-      Lang.Program.pretty_proc procedure
-      |> Containers_pp.Pretty.to_string ~width:100
-      |> print_endline;
-
       (* Update the procedure. *)
       procedure
       |> map_graph (fun g ->
@@ -412,7 +404,6 @@ module Construction = struct
           let initialised =
             let analysis = May_read_uninit.A.analyse procedure in
             fun vert var ->
-              print_endline @@ Procedure.Vert.show vert;
               May_read_uninit.A.A.M.find vert analysis
               |> May_read_uninit.ReadUninitAnalysis.read_var var
               |> function
