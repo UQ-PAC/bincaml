@@ -413,12 +413,10 @@ module CopyNode = struct
   open struct
     type status = Searching | Searched
 
-    (** Compute the strongly connected components in the graph reachable from
-        [v]. *)
-    let sccs v : VarSet.t VarMap.t =
-      let _, v = EQ.find v in
+    let sccs_with_find find vs =
       (* Tarjan's *)
-      let sccs = ref VarMap.empty in
+      let scc_map = ref VarMap.empty in
+      let sccs = ref [] in
       let index = ref VarMap.empty in
       let lowlink = ref VarMap.empty in
       let on_stack = ref VarSet.empty in
@@ -426,7 +424,6 @@ module CopyNode = struct
       let i = ref 0 in
 
       let rec strongconnect v =
-        let _, v = EQ.find v in
         index := VarMap.add (var v) !i !index;
         lowlink := VarMap.add (var v) !i !lowlink;
         i := !i + 1;
@@ -435,7 +432,7 @@ module CopyNode = struct
 
         copied_from v
         |> List.iter (fun w ->
-            let _, w = EQ.find w in
+            let w = find w in
             if not (VarMap.mem (var w) !index) then (
               strongconnect w;
               let ll =
@@ -460,11 +457,58 @@ module CopyNode = struct
           do
             ()
           done;
-          VarSet.iter (fun v -> sccs := VarMap.add v !scc !sccs) !scc)
+          sccs := !scc :: !sccs;
+          VarSet.iter (fun v -> scc_map := VarMap.add v !scc !scc_map) !scc)
       in
-      strongconnect v;
-      !sccs
+      List.iter
+        (fun v ->
+          let v = find v in
+          if not @@ VarMap.mem (var v) !index then strongconnect v)
+        vs;
+      (!scc_map, !sccs |> List.rev)
   end
+
+  (** Compute the strongly connected components in the subgraph reachable from
+      all vertices in [vs]. Returns a mapping of a variable to its scc and a
+      reverse topological ordering of the sccs. *)
+  let sccs = sccs_with_find (EQ.find %> snd)
+
+  (** Compute the strongly connected components if the subgraph reachable from
+      all variables in [vs] of the copy subgraph. Returns a mapping of a
+      variable to its scc and a reverse topological ordering of the sccs. *)
+  let copy_sccs = sccs_with_find EQ.find_eq
+
+  (** Compute the strongly connected components in the subgraph reachable from
+      [v]. *)
+  let sccs_of v = sccs [ v ] |> fst
+
+  (** Determines whether all cycles through the node `root` are identity cycles.
+
+      There is a non-id cycle at [root] iff there are two distinctly labelled
+      paths from root to another vertex which is in [root]'s scc. I think... The
+      reasoning is that you can then postcompose any path from that vertex back
+      to the root, and one of the two distinct now-obtained cycles must not be
+      the identity! I think................
+
+      It's at the very least an overapproximation... there may be a super super
+      rare edge case where two distinct edges compose to identity along the same
+      path back to the root as left inverses aren't necessarily unique. *)
+  let is_id_cycle ~sccs root =
+    let scc = VarMap.find (var root) sccs in
+    let edges = ref VarMap.empty in
+    let rec dfs f n =
+      let f, n = EQ.find_edge (f, n) in
+      if not @@ VarSet.mem (var n) scc then true
+      else
+        match VarMap.get (var n) !edges with
+        | Some f' -> LF.equal f f'
+        | None -> (
+            edges := VarMap.add (var n) f !edges;
+            match copied_from n with
+            | [] -> true
+            | ls -> ls |> List.for_all (fun n' -> dfs f n'))
+    in
+    dfs LF.identity root
 
   (** Returns all reachable "leaves" (nodes with no out-edges) from the given
       node. If distinct paths to the same leaf have different labels, they are
@@ -477,37 +521,7 @@ module CopyNode = struct
       there would possibly be infinitely many paths. *)
   let leaves (keep : t -> bool) v : edge list option =
     let status : status VarMap.t ref = ref VarMap.empty in
-    let sccs = sccs v in
-    (* Determines whether all cycles through the node `root` are identity
-       cycles.
-
-       There is a non-id cycle at [root] iff there are two distinctly labelled
-       paths from root to another vertex which is in [root]'s scc. I think...
-       The reasoning is that you can then postcompose any path from that vertex
-       back to the root, and one of the two distinct now-obtained cycles must
-       not be the identity! I think................
-
-       It's at the very least an overapproximation... there may be a super
-       super rare edge case where two distinct edges compose to identity along
-       the same path back to the root as left inverses aren't necessarily
-       unique. *)
-    let is_id_cycle root =
-      let scc = VarMap.find (var root) sccs in
-      let edges = ref VarMap.empty in
-      let rec dfs f n =
-        let f, n = EQ.find_edge (f, n) in
-        if not @@ VarSet.mem (var n) scc then true
-        else
-          match VarMap.get (var n) !edges with
-          | Some f' -> LF.equal f f'
-          | None -> (
-              edges := VarMap.add (var n) f !edges;
-              match copied_from n with
-              | [] -> true
-              | ls -> ls |> List.for_all (fun n' -> dfs f n'))
-      in
-      dfs LF.identity root
-    in
+    let sccs = sccs_of v in
     let join =
       VarMap.fold (fun v (f, n) acc ->
           match VarMap.get v acc with
@@ -522,7 +536,7 @@ module CopyNode = struct
       | Some Searched -> Some VarMap.empty
       (* We have found a cycle! If all cycles are identity cycles, all is well
          and we can skip recursing on this node. *)
-      | Some Searching -> Option.return_if (is_id_cycle v) VarMap.empty
+      | Some Searching -> Option.return_if (is_id_cycle ~sccs v) VarMap.empty
       | None -> (
           match copied_from v with
           | [] -> Option.return_if (keep v) (VarMap.singleton (var v) (f, v))
@@ -552,7 +566,9 @@ module CopyGraph = struct
       end)
       (Label)
 
-  let make_graph = make_graph CopyNode.copied_from
+  let make_graph =
+    make_graph (fun v ->
+        if CopyNode.EQ.is_parent v then CopyNode.copied_from v else [])
 end
 
 type call_info = {
@@ -741,9 +757,13 @@ module Solver = struct
                 call leaves))
     done
 
-  type 'a skip_option = SSome of 'a | Skip | SNone
+  type 'a skip_option = SSome of 'a | Skip | SNone [@@deriving map]
 
-  (** Collapse copies through phis into copies *)
+  (** Find the earliest variable each variable is a function of, by adding edges
+      from variables with multiple out edges if all such edges have the same
+      parent.
+
+      For example if x = phi(y, z) and y = w, z = w, then x = w. *)
   let collapse_composites g =
     let open CopyNode in
     (* Invariant: var node in !searched =>
@@ -864,7 +884,11 @@ module Solver = struct
              | _ -> None))
       |> List.iter (solve_component prog call_graph summaries graphs) );
     ( Trace_core.with_span ~__FILE__ ~__LINE__ "phi-propagation" @@ fun _ ->
-      Hashtbl.iter (const collapse_composites) graphs );
+      Hashtbl.iter
+        (fun id g ->
+          print_endline @@ ID.to_string id;
+          collapse_composites g)
+        graphs );
     graphs
 end
 
