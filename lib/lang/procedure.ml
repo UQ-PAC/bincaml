@@ -836,13 +836,23 @@ let iter_blocks_dominator p =
         f v;
         sorted_dom_tree v |> List.iter (preorder f)
       in
-      let order = Iter.from_iter (fun f -> preorder f Entry)
-      |> Iter.mapi Pair.make
-      |> Iter.filter_map (function Vert.Begin id -> Some id | _ -> None)
-      |> IDMap.of_iter in
-      let ids = iter_blocks |> Iter.map fst |> Iter.filter (fun x -> not (IDMap.find_opt x order)) in
-      (* SORT THINGS INSIDE ORDER BY ORDER. OTHER THINGS CAN BE SORTED BY VERT.COMPARE  *)
-      ()
+      let dom_order =
+        Iter.from_iter (fun f -> preorder f Entry)
+        |> Iter.filter_map (function Vert.Begin id -> Some id | _ -> None)
+        |> Iter.mapi (flip Pair.make)
+        |> IDMap.of_iter
+      in
+      let unreachable =
+        iter_blocks p |> Iter.map fst
+        |> Iter.filter (not % flip IDMap.mem dom_order)
+      in
+      let reachable =
+        IDMap.bindings dom_order
+        |> List.sort CCOrd.(map snd int)
+        |> List.to_iter |> Iter.map fst
+      and unreachable = Iter.sort ~cmp:ID.compare unreachable in
+
+      Iter.append reachable unreachable
   | None -> Iter.empty
 
 let pretty show_lvar show_var show_expr p =
