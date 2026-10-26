@@ -821,22 +821,28 @@ let pretty_spec show_var show_expr (p : ('a, 'b) proc_spec) =
 
 let iter_blocks_dominator p =
   let module Dom = Graph.Dominator.Make (G) in
-  let module Dfs = Graph.Traverse.Dfs (G) in
   match graph p with
   | Some g ->
       let idom = Dom.compute_idom g Entry in
       let dom_tree = Dom.idom_to_dom_tree g idom in
-      let dom_g = G.fold_vertex (flip G.add_vertex) g G.empty in
-      let dom_g =
-        G.fold_vertex
-          (fun v g ->
-            List.fold_left
-              (fun g dominated -> G.add_edge g v dominated)
-              g (dom_tree v))
-          dom_g dom_g
+      let sort_direct_children_first parent =
+        CCOrd.(pair int Vert.compare)
+        |> CCOrd.map (fun x -> ((if G.mem_edge g parent x then 0 else 1), x))
       in
-      Iter.from_iter (flip Dfs.prefix dom_g)
+      let sorted_dom_tree v =
+        dom_tree v |> List.sort (sort_direct_children_first v)
+      in
+      let rec preorder f v =
+        f v;
+        sorted_dom_tree v |> List.iter (preorder f)
+      in
+      let order = Iter.from_iter (fun f -> preorder f Entry)
+      |> Iter.mapi Pair.make
       |> Iter.filter_map (function Vert.Begin id -> Some id | _ -> None)
+      |> IDMap.of_iter in
+      let ids = iter_blocks |> Iter.map fst |> Iter.filter (fun x -> not (IDMap.find_opt x order)) in
+      (* SORT THINGS INSIDE ORDER BY ORDER. OTHER THINGS CAN BE SORTED BY VERT.COMPARE  *)
+      ()
   | None -> Iter.empty
 
 let pretty show_lvar show_var show_expr p =
