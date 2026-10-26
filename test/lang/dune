@@ -2,6 +2,7 @@
 
 (library
  (name expr_gen)
+ (package bincaml)
  (modules expr_gen)
  (libraries
   qcheck-core
@@ -33,13 +34,15 @@
 
 (library
  (name test_expr_eval_expect)
+ (package bincaml)
  (modules
   test_expr_eval_expect
   test_stmt
   test_interp
   test_expr_hash
-  test_hm_inline)
- (libraries loader)
+  test_hm_inline
+  test_attrib_conv)
+ (libraries loader bincaml.gtirb)
  (inline_tests)
  (preprocess
   (pps ppx_expect)))

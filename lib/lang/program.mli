@@ -34,6 +34,7 @@ val get_id_by_name : string -> t -> ID.t
 val set_entry_proc : ID.t -> t -> t
 val set_spec : prog_spec -> t -> t
 val set_attrib : Attrib.attrib_map -> t -> t
+val merge_attrib : Attrib.attrib_map -> t -> t
 val spec : t -> prog_spec
 val modulename : t -> string
 val attrib : t -> Attrib.attrib_map

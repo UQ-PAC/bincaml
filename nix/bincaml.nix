@@ -17,6 +17,7 @@
   containers-data,
   iter,
   ppx_deriving,
+  ppx_protocol_conv,
   ocamlgraph,
   intPQueue,
   cmdliner,
@@ -30,6 +31,8 @@
   stb_image,
   linenoise,
   unionFind,
+  decompress,
+  base64,
 
   capstone_arm64_disas,
   aslp_lifter_ocaml,
@@ -86,13 +89,16 @@ buildDunePackage {
     ocaml-protoc-plugin
     menhir
   ];
+  buildInputs = [
+    ppx_deriving
+  ];
   propagatedBuildInputs = [
     ocaml-protoc-plugin
     angstrom
     zarith
     ppx_expect
+    ppx_protocol_conv
     pp_loc
-    ppx_deriving
     containers
     containers-data
     ocamlgraph
@@ -107,6 +113,8 @@ buildDunePackage {
     patricia-tree
     logs
     mtime
+    base64
+    decompress
     unionFind
     terminal_size
     kittyimg

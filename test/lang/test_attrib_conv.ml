@@ -1,0 +1,266 @@
+let sample_byte_string = "bytes!!! get encoded1234"
+
+(** You can check this with [echo ASDF | base64 -d | gunzip] *)
+let sample_byte_string_encoded =
+  "H4sIAAAAAAAA/wEYAOf/Ynl0ZXMhISEgZ2V0IGVuY29kZWQxMjM0oaypOxgAAAA="
+
+let%expect_test "attrib to adt" =
+  let ast =
+    Loader.Loadir.ast_of_string
+    @@ Printf.sprintf
+         {|
+proc @main() -> () [ block %%ret [ return; ] ];
+
+prog entry @main {
+  .symbols = {
+    .externalFunctions = [
+      { .name = "_ITM_deregisterTMCloneTable"; .offset = 0x41ffd0 };
+      { .name = "abort"; .offset = 0x420010 }
+    ];
+    .globals = [
+      { .name = "_DYNAMIC"; .address = 0x41fdd8; .size = 0x0 };
+      { .name = "x"; .address = 0x420030; .size = 0x40 }
+    ];
+    .funcEntries = [
+      { .name = "_start"; .address = 0x400680; .size = 0x1e0 };
+    ];
+    .globalOffsets = [  ]
+  };
+  .initial_memory = [
+  {
+    .name = ".interp";
+    .address = 0x400238;
+    .size = 0x6e;
+    .readOnly = false;
+    .bytes = [ "%s" ];
+  };
+]
+} ; |}
+         sample_byte_string_encoded
+  in
+  let prog = ast.prog in
+  let attrib = `Assoc (Lang.Program.attrib prog) in
+
+  Lang.Program.pretty_to_chan stdout prog;
+  print_endline "";
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Attrib.attrib_pretty attrib);
+
+  let parsed =
+    Gtirb_frontend.Gtirb_attribs.gtirb_attribs_of_attrib_conv_exn attrib
+  in
+  print_endline "";
+  print_endline @@ Gtirb_frontend.Gtirb_attribs.show_gtirb_attribs parsed;
+
+  [%expect
+    {|
+    proc @main()  -> () {  }
+
+
+    [ block %ret [ return; ] ];
+    prog entry @main { .initial_memory = [ { .address = 4194872;
+                .bytes = [ "H4sIAAAAAAAA/wEYAOf/Ynl0ZXMhISEgZ2V0IGVuY29kZWQxMjM0oaypOxgAAAA=" ];
+                .name = ".interp"; .readOnly = false; .size = 110 } ];
+        .symbols = { .externalFunctions = [ { .name = "_ITM_deregisterTMCloneTable";
+                    .offset = 4325328 }; { .name = "abort"; .offset = 4325392 } ];
+            .funcEntries = [ { .address = 4195968; .name = "_start"; .size = 480 } ];
+            .globalOffsets = [  ];
+            .globals = [ { .address = 4324824; .name = "_DYNAMIC"; .size = 0 };
+                { .address = 4325424; .name = "x"; .size = 64 } ] } };
+    { .initial_memory = [ { .address = 4194872;
+                .bytes = [ "H4sIAAAAAAAA/wEYAOf/Ynl0ZXMhISEgZ2V0IGVuY29kZWQxMjM0oaypOxgAAAA=" ];
+                .name = ".interp"; .readOnly = false; .size = 110 } ];
+        .symbols = { .externalFunctions = [ { .name = "_ITM_deregisterTMCloneTable";
+                    .offset = 4325328 }; { .name = "abort"; .offset = 4325392 } ];
+            .funcEntries = [ { .address = 4195968; .name = "_start"; .size = 480 } ];
+            .globalOffsets = [  ];
+            .globals = [ { .address = 4324824; .name = "_DYNAMIC"; .size = 0 };
+                { .address = 4325424; .name = "x"; .size = 64 } ] } }
+
+    { Gtirb_attribs.symbols =
+      { Gtirb_attribs.external_functions = [];
+        globals =
+        [{ Gtirb_attribs.name = "_DYNAMIC"; address = 4324824L; size = 0L };
+          { Gtirb_attribs.name = "x"; address = 4325424L; size = 64L }];
+        func_entries = []; global_offsets = [] };
+      initial_memory =
+      [{ Gtirb_attribs.name = ".interp"; address = 4194872L; size = 110L;
+         read_only = false; bytes = "bytes!!! get encoded1234" }
+        ]
+      }
+    |}]
+
+let%expect_test "adt to attrib" =
+  let section =
+    {
+      Gtirb_frontend.Gtirb_attribs.name = ".interp";
+      address = 4194872L;
+      size = 110L;
+      read_only = false;
+      bytes = Bytes.unsafe_of_string sample_byte_string;
+    }
+  in
+
+  assert (
+    Gtirb_frontend.Gtirb_attribs.section_to_attrib_conv section
+    |> Option.some
+    |> Lang.Attrib.find_opt ".bytes"
+    = Some (`String sample_byte_string));
+
+  let parsed =
+    {
+      Gtirb_frontend.Gtirb_attribs.symbols =
+        {
+          external_functions = [];
+          globals =
+            [
+              { name = "_DYNAMIC"; address = 4324824L; size = 0L };
+              { name = "x"; address = 4325424L; size = 64L };
+            ];
+          func_entries = [];
+          global_offsets = [];
+        };
+      initial_memory = [ section ];
+    }
+  in
+
+  print_endline
+  @@ Containers_pp.Pretty.to_string ~width:80
+  @@ Lang.Attrib.attrib_pretty
+  @@ Gtirb_frontend.Gtirb_attribs.gtirb_attribs_to_attrib_conv parsed;
+  [%expect
+    {|
+    { .initial_memory = [ { .address = 4194872; .bytes = "bytes!!! get encoded1234";
+                .name = ".interp"; .size = 110 } ];
+        .symbols = { .globals = [ { .address = 4324824; .name = "_DYNAMIC"; .size = 0 };
+                { .address = 4325424; .name = "x"; .size = 64 } ] } }
+    |}]
+
+(* {:https://github.com/UQ-PAC/bincaml-test/blob/8ba042b146f4814d08b396a6d28f31ff7994faa9/conds.il#L313} *)
+let%test "can parse scala basil conds.il" =
+  let ast =
+    Loader.Loadir.ast_of_string
+      {|
+proc @main() -> () [ block %ret [ return; ] ];
+
+prog entry @main {
+  .initial_memory = [
+  {
+    .name = ".bss";
+    .address = 0x420028;
+    .size = 0x10;
+    .readOnly = false;
+    .bytes = [ "H4sIAAAAAAAA/2NgQAUAVUu77BAAAAA=" ]
+  }
+]
+} ; |}
+  in
+  let prog = ast.prog in
+  let attrib = `Assoc (Lang.Program.attrib prog) in
+
+  let parsed =
+    Gtirb_frontend.Gtirb_attribs.gtirb_attribs_of_attrib_conv_exn attrib
+  in
+
+  parsed.initial_memory
+  |> List.for_all (fun section ->
+      let bytes = section.Gtirb_frontend.Gtirb_attribs.bytes in
+      Bytes.equal bytes (Bytes.init 16 (fun _ -> '\x00')))
+
+let%expect_test "can round trip escaped strings" =
+  let s = "(((\x00\x01\xff)))" in
+  let s_encoded = "(((\\x00\\x01\\xff)))" in
+  let prog =
+    Printf.sprintf
+      {|
+proc @main() -> () [ block %%ret [ return; ] ];
+
+prog entry @main {
+  .initial_memory = [
+  {
+    .name = ".bss";
+    .address = 0x420028;
+    .size = 0x10;
+    .readOnly = false;
+    .bytes = "%s";
+  }
+]
+} ; |}
+      s_encoded
+  in
+  (*  let prog =
+    prog |> Lang.Program.prog_pretty |> Containers_pp.Pretty.to_string ~width:80
+  in
+  let prog = prog |> Loader.Loadir.ast_of_string |> fun x -> x.prog in
+  let prog =
+    prog |> Lang.Program.prog_pretty |> Containers_pp.Pretty.to_string ~width:80
+      in *)
+  let prog = prog |> Loader.Loadir.ast_of_string |> fun x -> x.prog in
+
+  let attrib = Lang.Program.attrib prog in
+  assert (
+    let xs =
+      Some (`Assoc attrib)
+      |> Lang.Attrib.find_opt ".initial_memory"
+      |> Option.get
+    in
+    match xs with
+    | `List xs ->
+        List.for_all
+          (fun x ->
+            Some x |> Lang.Attrib.find_str_opt ".bytes" |> Option.get = s)
+          xs
+    | _ -> failwith "initial_memory should be list");
+
+  Containers_pp.Pretty.to_format ~width:80 Format.std_formatter
+    (Lang.Program.prog_pretty prog);
+  [%expect
+    {|
+    proc @main()  -> () {  }
+
+
+    [ block %ret [ return; ] ];
+    prog entry @main { .initial_memory = [ { .address = 4325416;
+                .bytes = "(((\000\001\255)))"; .name = ".bss"; .readOnly = false;
+                .size = 16 } ] };
+    |}]
+
+let%test "can round trip ALL escaped bytes" =
+  Iter.int_range ~start:0 ~stop:255
+  |> Iter.for_all (fun i ->
+      let s = Printf.sprintf "(((\\x%02x)))" i |> Scanf.unescaped in
+      let s_encoded = String.escaped s in
+      let prog =
+        Printf.sprintf
+          {|
+proc @main() -> () [ block %%ret [ return; ] ];
+
+prog entry @main {
+  .initial_memory = [
+  {
+    .name = ".bss";
+    .address = 0x420028;
+    .size = 0x10;
+    .readOnly = false;
+    .bytes = "%s";
+  }
+]
+} ; |}
+          s_encoded
+      in
+      let prog = prog |> Loader.Loadir.ast_of_string |> fun x -> x.prog in
+
+      let attrib = Lang.Program.attrib prog in
+
+      let xs =
+        Some (`Assoc attrib)
+        |> Lang.Attrib.find_opt ".initial_memory"
+        |> Option.get
+      in
+      match xs with
+      | `List xs ->
+          List.for_all
+            (fun x ->
+              Some x |> Lang.Attrib.find_str_opt ".bytes" |> Option.get = s)
+            xs
+      | _ -> failwith "initial_memory should be list")

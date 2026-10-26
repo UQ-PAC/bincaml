@@ -10,6 +10,7 @@
   gfir
   gfir_to_bincaml
   conf
+  gtirb_attribs
   gtirb_frontend)
  (libraries
   bincaml.gtirb_proto
@@ -38,4 +39,5 @@
    ppx_deriving.iter
    ppx_deriving.fold
    ppx_deriving.enum
+   ppx_protocol_conv
    ppx_expect)))

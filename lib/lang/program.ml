@@ -28,7 +28,7 @@ let decl_binding = function
   | Variable { binding } -> Var.name binding
   | Function { binding } -> Var.name binding
   | Procedure { definition } -> ID.to_string (Procedure.id definition)
-  | Implicit (VariantCase _) -> failwith "variant case has no binding :("
+  | Implicit (VariantCase { variant }) -> variant
 
 let pretty_proc p =
   let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in
@@ -36,24 +36,45 @@ let pretty_proc p =
   let show_expr e = BasilExpr.pretty e in
   Procedure.pretty show_lvar show_var show_expr p
 
+open struct
+  (** Converts the given {!Attrib.t} to a pretty-printer and prepends a space,
+      if it is non-None. Otherwise, {!Containers_pp.nil}. *)
+  let pretty_fragment_attrib : Attrib.t option -> Containers_pp.t = function
+    | Some attrib -> Containers_pp.(sp ^ Attrib.attrib_pretty attrib)
+    | None -> Containers_pp.nil
+
+  let pretty_fragment_attrib_map : Attrib.attrib_map -> Containers_pp.t =
+   fun map ->
+    pretty_fragment_attrib
+      (if StringMap.is_empty map then None else Some (`Assoc map))
+end
+
 let pretty_declaration d =
   let open Containers_pp in
+  let attrib_text =
+    pretty_fragment_attrib_map
+    @@ Option.get_or ~default:StringMap.empty
+         (match d with
+         | Procedure _ -> None (* procedure attribs handled in [pretty_proc] *)
+         | _ -> attrib_of_declaration d)
+  in
+
   match d with
-  | Implicit _ -> failwith "unsupp"
-  | Variable { binding; attrib; classification } ->
+  | Implicit _ -> failwith "pretty_declaration: Implicit is unsupported"
+  | Variable { binding; classification } ->
       let classification =
         classification |> Option.to_list
         |> List.map (fun e -> text " classification " ^ Expr.BasilExpr.pretty e)
         |> append_l
       in
-      text (Var.to_decl_string_il binding) ^ classification
+      text (Var.to_decl_string_il binding) ^ classification ^ attrib_text
   | Function { binding; attrib; definition = Axiom body } ->
       text "axiom "
       ^ text (Var.name binding)
-      ^ text " " ^ Expr.BasilExpr.pretty body
-  | Function { binding; attrib; definition = Uninterpreted } ->
-      text "val " ^ text (Var.to_string binding)
-  | Function { binding; attrib; definition = Function body } -> (
+      ^ attrib_text ^+ Expr.BasilExpr.pretty body
+  | Function { binding; definition = Uninterpreted } ->
+      text "val " ^ text (Var.to_string binding) ^ attrib_text
+  | Function { binding; definition = Function body } -> (
       let open AbstractExpr in
       match BasilExpr.unfix body with
       | Lambda _ -> Expr.BasilExpr.pretty_let_single binding body None
@@ -63,7 +84,7 @@ let pretty_declaration d =
           ^ text (Var.name binding)
           ^ args ^+ text ":"
           ^+ text (Types.to_string rtype)
-          ^+ text "="
+          ^ attrib_text ^+ text "="
           ^+ nest 2 (Expr.BasilExpr.pretty body))
   | Type { binding; typ } -> text "type " ^ text (Types.to_string_decl typ)
   | Procedure { definition } -> pretty_proc definition
@@ -90,6 +111,7 @@ let set_spec spec (p : t) = { p with spec }
 let set_entry_proc e (p : t) = { p with entry_proc = Some e }
 let attrib (p : t) = p.attrib
 let set_attrib attrib (p : t) = { p with attrib }
+let merge_attrib a p = set_attrib (Attrib.merge_map_shadow (attrib p) a) p
 let modulename (p : t) = p.modulename
 
 let entry_proc_exn p =
@@ -234,12 +256,15 @@ let prog_pretty (p : t) =
     |> Iter.map (fun (n, v) -> pretty_declaration v)
     |> Iter.to_list
   in
-  let n =
-    p.entry_proc
-    |> Option.map (fun i -> text "prog entry " ^ text @@ ID.to_string i)
-    |> Option.to_list
+  let entry =
+    match p.entry_proc with
+    | Some entry ->
+        let entry = text (ID.to_string entry)
+        and attrib = pretty_fragment_attrib_map p.attrib in
+        Some (text "prog entry " ^ entry ^ attrib)
+    | None -> None
   in
-  let decls = decls @ n in
+  let decls = decls @ Option.to_list entry in
 
   append_l ~sep:(text ";\n") decls ^ text ";\n"
 

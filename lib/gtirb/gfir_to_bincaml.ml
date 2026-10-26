@@ -32,7 +32,7 @@ let add_proxy_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap) uuid
     |> Iter.map (fun addr -> addr_equal_expr addr)
     |> Iter.to_list
     |> function
-    | [] -> Expr.BasilExpr.boolconst true
+    | [] -> Expr.BasilExpr.boolconst false
     | args -> Expr.BasilExpr.applyintrin ~op:`OR args
   in
   let name =
@@ -62,7 +62,9 @@ let add_new_simple_block ?(name_suffix = "") ?(attrib = StringMap.empty)
     succ_addr uuid
     |> Iter.map (fun addr -> addr_equal_expr addr)
     |> Iter.to_list
-    |> Expr.BasilExpr.applyintrin ~op:`OR
+    |> function
+    | [] -> Expr.BasilExpr.boolconst false
+    | xs -> Expr.BasilExpr.applyintrin ~op:`OR xs
   in
   let ensure = Stmt.Instr_Assert { body = ensure; attrib = Attrib.empty } in
   let stmts = Option.to_list guard @ stmts @ [ ensure ] in
@@ -327,10 +329,39 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   let proc = Gfir.G.fold_edges_e (cfg_edge_to_ir_edge blocks) p.cfg proc in
   Lang.Program.add_proc proc m
 
+let section_to_bincaml_section (sec : Section.t) : Gtirb_attribs.section option
+    =
+  let { Section.name; byte_intervals; section_flags } = sec in
+  let read_only = not (List.mem SectionFlag.Writable section_flags) in
+  match byte_intervals with
+  | { address; size; contents; _ } :: rest ->
+      if not (List.is_empty rest) then
+        Logs.warn (fun m ->
+            m "gtirb section had more than one byte interval. selecting first.");
+      let address = Int64.of_int address and size = Int64.of_int size in
+      Some { name; address; size; read_only; bytes = contents }
+  | [] ->
+      Logs.warn (fun m -> m "gtirb section had no byte intervals. ignoring.");
+      None
+
+let module_to_bincaml_attrib (m : Module.t) : Gtirb_attribs.gtirb_attribs =
+  let initial_memory = List.filter_map section_to_bincaml_section m.sections
+  and symbols = Gtirb_attribs.empty_symbols in
+  { initial_memory; symbols }
+
 (** Convert Gtirb Protobuf module to a Bincaml IR program*)
 let module_to_ir_prog ir_cfg (m : Module.t) =
   let prog = Lang.Program.empty ~name:m.name () in
   let prog = Lang.Program.decl_global prog conf.pc_var in
+
+  (* Add program-level attributes for section and symbols. *)
+  let prog =
+    Lang.Program.set_attrib
+      (module_to_bincaml_attrib m |> Gtirb_attribs.gtirb_attribs_to_attrib_conv
+     |> Lang.Attrib.to_attrib_map)
+      prog
+  in
+
   (* (1) build Gfir CFG *)
   let entry_proc, procs = gtirb_to_gfir prog ir_cfg m in
   (* collect map of all blocks in order to fixup interprocedural control-flow

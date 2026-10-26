@@ -42,7 +42,7 @@
        return;
      ]
   ];
-  prog entry @main;
+  prog entry @main { .invariants = [ "NoPhis" ] };
 
   $ cat intra.il
   var $global:bv64;
@@ -78,7 +78,7 @@
        return;
      ]
   ];
-  prog entry @main;
+  prog entry @main { .invariants = [ "NoPhis" ] };
 
   $ cat inter.il
   proc @main(global_in:bv64, inp:bv64)  -> () {  }
@@ -120,7 +120,7 @@
      ];
      block %Return [ var out2:bv64 := out2_1:bv64; return; ]
   ];
-  prog entry @main;
+  prog entry @main { .invariants = [ "SSA"; "NoPhis"; "Params" ] };
 
   $ diff inter.il intra.il
   1,2c1,3
@@ -186,4 +186,10 @@
   >      var out2:bv64 := bvadd(g:bv64, g:bv64);
   >      return;
   >    ]
+  40c34
+  < prog entry @main { .invariants = [ "SSA"; "NoPhis"; "Params" ] };
+  \ No newline at end of file
+  ---
+  > prog entry @main { .invariants = [ "NoPhis" ] };
+  \ No newline at end of file
   [1]

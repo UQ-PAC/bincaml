@@ -14,7 +14,6 @@
   (load-il gtirb-output.il)
   (dump-il dumped.il)
   (run-transforms aslp-semantics)
-  bincaml: [WARNING] Invariants not satisfied during 'aslp-semantics'. Needs [GtirbArm] but only have [].
   (dump-il semantics.il)
   (log-level debug)
   (run-transforms type-check check-read-uninitialised-withlocals)
@@ -108,7 +107,7 @@
        $PC:bv64 := $R30;
        goto (%_fini_code_3);
      ];
-     block %_fini_code_3 [ assert boolor(); goto (%ret_1); ];
+     block %_fini_code_3 [ assert false; goto (%ret_1); ];
      block %ret_1 [ return; ]
   ];
   proc @_init()  -> () {  }
@@ -189,7 +188,7 @@
        $PC:bv64 := $R30;
        goto (%_init_code_3);
      ];
-     block %_init_code_3 [ assert boolor(); goto (%ret_1); ];
+     block %_init_code_3 [ assert false; goto (%ret_1); ];
      block %ret_1 [ return; ]
   ];
   proc @__do_global_dtors_aux()  -> () {  }
@@ -309,7 +308,7 @@
        $PC:bv64 := $R30;
        goto (%__do_global_dtors_aux_code_5);
      ];
-     block %__do_global_dtors_aux_code_5 [ assert boolor(); goto (%ret_2); ];
+     block %__do_global_dtors_aux_code_5 [ assert false; goto (%ret_2); ];
      block %ret_2 [ return; ];
      block %__do_global_dtors_aux_code_3 { .address = 4196196;
          .gtirb_block = "lwyID0MJQb6vgyjzPFtz8Q";
@@ -479,7 +478,7 @@
        $PC:bv64 := $R30;
        goto (%register_tm_clones_code_5);
      ];
-     block %register_tm_clones_code_5 [ assert boolor(); goto (%ret); ];
+     block %register_tm_clones_code_5 [ assert false; goto (%ret); ];
      block %ret [ return; ];
      block %register_tm_clones_code_3 { .address = 4196148;
          .gtirb_block = "tXIOhSQ+R1WA/9VL5+6KQQ";
@@ -550,7 +549,7 @@
        $PC:bv64 := $R16;
        goto (%register_tm_clones_code_7);
      ];
-     block %register_tm_clones_code_7 [ assert boolor(); unreachable; ]
+     block %register_tm_clones_code_7 [ assert false; unreachable; ]
   ];
   proc @frame_dummy()  -> () {  }
     modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64
@@ -578,7 +577,7 @@
      block %frame_dummy_ext [
        assume eq(0x400710:bv64, $PC);
        call @register_tm_clones();
-       assert boolor();
+       assert false;
        unreachable;
      ]
   ];
@@ -625,7 +624,7 @@
        $PC:bv64 := $R17;
        goto (%FUN_400660_code_1);
      ];
-     block %FUN_400660_code_1 [ assert boolor(); unreachable; ]
+     block %FUN_400660_code_1 [ assert false; unreachable; ]
   ];
   proc @Sqrt()  -> () {  }
     modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
@@ -1121,7 +1120,7 @@
      block %_start_ext_2 [
        assume eq(0x400660:bv64, $PC);
        call @FUN_400660();
-       assert boolor();
+       assert false;
        unreachable;
      ]
   ];
@@ -1145,7 +1144,7 @@
        $PC:bv64 := $R30;
        goto (%_dl_relocate_static_pie_code_1);
      ];
-     block %_dl_relocate_static_pie_code_1 [ assert boolor(); goto (%ret); ];
+     block %_dl_relocate_static_pie_code_1 [ assert false; goto (%ret); ];
      block %ret [ return; ]
   ];
   proc @call_weak_fn()  -> () {  }
@@ -1218,7 +1217,7 @@
      block %call_weak_fn_ext_1 [
        assume eq(0x400650:bv64, $PC);
        call @.L_400650();
-       assert boolor();
+       assert false;
        unreachable;
      ];
      block %call_weak_fn_code_2 { .address = 4196052;
@@ -1335,7 +1334,7 @@
        $PC:bv64 := $R30;
        goto (%main_code_3);
      ];
-     block %main_code_3 [ assert boolor(); goto (%ret_1); ];
+     block %main_code_3 [ assert false; goto (%ret_1); ];
      block %ret_1 [ return; ]
   ];
   proc @.L_400650()  -> () {  }
@@ -1381,7 +1380,7 @@
        $PC:bv64 := $R17;
        goto (%L_400650_code_1);
      ];
-     block %L_400650_code_1 [ assert boolor(); unreachable; ]
+     block %L_400650_code_1 [ assert false; unreachable; ]
   ];
   proc @FUN_400640()  -> () {  }
     modifies $PC:bv64, $R16:bv64, $R17:bv64
@@ -1426,7 +1425,7 @@
        $PC:bv64 := $R17;
        goto (%FUN_400640_code_1);
      ];
-     block %FUN_400640_code_1 [ assert boolor(); unreachable; ]
+     block %FUN_400640_code_1 [ assert false; unreachable; ]
   ];
   proc @deregister_tm_clones()  -> () {  }
     modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
@@ -1581,7 +1580,7 @@
        $PC:bv64 := $R16;
        goto (%deregister_tm_clones_code_6);
      ];
-     block %deregister_tm_clones_code_6 [ assert boolor(); unreachable; ];
+     block %deregister_tm_clones_code_6 [ assert false; unreachable; ];
      block %deregister_tm_clones_code_3 { .address = 4196108;
          .gtirb_block = "cdQ2GS2+QhaOa7OUvPWMRQ";
          .succ = [ { .address = 4196200; .conditional = "false"; .direct = "true";
@@ -1656,6 +1655,73 @@
        $PC:bv64 := $R17;
        goto (%FUN_400620_code_1);
      ];
-     block %FUN_400620_code_1 [ assert boolor(); unreachable; ]
+     block %FUN_400620_code_1 [ assert false; unreachable; ]
   ];
-  prog entry @_start;
+  prog entry @_start { .initial_memory = [ { .address = 4194872;
+              .bytes = [ "H4sIAAAAAAAA/wFuAJH/L25peC9zdG9yZS92emlpdzRrMWtsODhwcXY0N25obGd6Zjg1bXZobmJpYS1nbGliYy1hYXJjaDY0LXVua25vd24tbGludXgtZ251LTIuNDAtNjYvbGliL2xkLWxpbnV4LWFhcmNoNjQuc28uMQC2zzwDbgAAAA==" ];
+              .name = ".interp"; .read_only = true; .size = 110 };
+          { .address = 4194984;
+              .bytes = "\004\000\000\000\016\000\000\000\001\000\000\000GNU\000\000\000\000\000\003\000\000\000\n\000\000\000\000\000\000\000";
+              .name = ".note.ABI-tag"; .read_only = true; .size = 32 };
+          { .address = 4195016;
+              .bytes = "\003\000\000\000\006\000\000\000\003\000\000\000\005\000\000\000\004\000\000\000\000\000\000\000\000\000\000\000\001\000\000\000\000\000\000\000\000\000\000\000\002\000\000\000";
+              .name = ".hash"; .read_only = true; .size = 44 };
+          { .address = 4195064;
+              .bytes = "\001\000\000\000\001\000\000\000\001\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000";
+              .name = ".gnu.hash"; .read_only = true; .size = 28 };
+          { .address = 4195096;
+              .bytes = [ "H4sIAAAAAAAA/wGQAG//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAABIAAAAAAAAAAAAAAAAAAAAAAAAAQwEAACAAAAAAAAAAAAAAAAAAAAAAAAAAXwEAACAAAAAAAAAAAAAAAAAAAAAAAAAAEwAAABIAAAAAAAAAAAAAAAAAAAAAAAAAbgEAACAAAAAAAAAAAAAAAAAAAAAAAAAAz1/lSpAAAAA=" ];
+              .name = ".dynsym"; .read_only = true; .size = 144 };
+          { .address = 4195240;
+              .bytes = [ "H4sIAAAAAAAA/wGIAXf+AF9fbGliY19zdGFydF9tYWluAGFib3J0AGxpYmMuc28uNgBHTElCQ18yLjE3AEdMSUJDXzIuMzQAL25peC9zdG9yZS92NDc4YXJkbGQ4em4zY2pwYWk2YXh2azBpbGMzbnpmay1uaXgtc2hlbGwvbGliOi9uaXgvc3RvcmUvdnppaXc0azFrbDg4cHF2NDduaGxnemY4NW12aG5iaWEtZ2xpYmMtYWFyY2g2NC11bmtub3duLWxpbnV4LWdudS0yLjQwLTY2L2xpYjovbml4L3N0b3JlL2o1cjg0a2d5MGh2amNuMm5kM3Z6Y2ZkYWFqMDVyeDJtLWFhcmNoNjQtdW5rbm93bi1saW51eC1nbnUtZ2NjLTE0LTIwMjQxMTE2LWxpYi9hYXJjaDY0LXVua25vd24tbGludXgtZ251L2xpYgBfSVRNX2RlcmVnaXN0ZXJUTUNsb25lVGFibGUAX19nbW9uX3N0YXJ0X18AX0lUTV9yZWdpc3RlclRNQ2xvbmVUYWJsZQBHb7AIiAEAAA==" ];
+              .name = ".dynstr"; .read_only = true; .size = 392 };
+          { .address = 4195632;
+              .bytes = "\000\000\002\000\001\000\001\000\003\000\001\000";
+              .name = ".gnu.version"; .read_only = true; .size = 12 };
+          { .address = 4195648;
+              .bytes = "\001\000\002\000\025\000\000\000\016\000\000\000\000\000\000\000\151\145\150\006\000\000\003\000#\000\000\000\016\000\000\000\180\145\150\006\000\000\002\000.\000\000\000\000\000\000\000";
+              .name = ".gnu.version_r"; .read_only = true; .size = 48 };
+          { .address = 4195696;
+              .bytes = "\208\255A\000\000\000\000\000\001\004\000\000\002\000\000\000\000\000\000\000\000\000\000\000\216\255A\000\000\000\000\000\001\004\000\000\003\000\000\000\000\000\000\000\000\000\000\000\224\255A\000\000\000\000\000\001\004\000\000\005\000\000\000\000\000\000\000\000\000\000\000";
+              .name = ".rela.dyn"; .read_only = true; .size = 72 };
+          { .address = 4195768;
+              .bytes = "\000\000B\000\000\000\000\000\002\004\000\000\001\000\000\000\000\000\000\000\000\000\000\000\b\000B\000\000\000\000\000\002\004\000\000\003\000\000\000\000\000\000\000\000\000\000\000\016\000B\000\000\000\000\000\002\004\000\000\004\000\000\000\000\000\000\000\000\000\000\000";
+              .name = ".rela.plt"; .read_only = true; .size = 72 };
+          { .address = 4195840;
+              .bytes = "\031 \003\213\253{\191\169\253\003\000\145.\000\000\148\253{\193\168\192\003_\214";
+              .name = ".init"; .read_only = true; .size = 24 };
+          { .address = 4195872;
+              .bytes = [ "H4sIAAAAAAAA/wFQAK//8Hu/qfAAAPAR/kf5EOI/kSACH9YfIAPVHyAD1R8gA9UQAQCQEQJA+RACAJEgAh/WEAEAkBEGQPkQIgCRIAIf1hABAJARCkD5EEIAkSACH9buTJ1aUAAAAA==" ];
+              .name = ".plt"; .read_only = true; .size = 80 };
+          { .address = 4195968;
+              .bytes = [ "H4sIAAAAAAAA/wGoAVf+HyAD1R0AgNIeAIDS5QMAquEDQPniIwCR5gMAkQAAAJAA0BqRAwCA0gQAgNLl//+X7P//lx8gA9VUAAAUHyAD1cADX9bgAADwAOxH+UAAALTg//8XwANf1h8gA9UfIAPVAAEAkACgAJEBAQCQIaAAkT8AAOvAAABU4QAA8CHoR/lhAAC08AMBqgACH9bAA1/WAAEAkACgAJEBAQCQIaAAkSEAAMsi/H/TQQyBiyH8QZPBAAC04gAA8ELwR/liAAC08AMCqgACH9bAA1/W/Xu+qf0DAJHzCwD5EwEAkGCiQDmAAAA33///lyAAgFJgogA58wtA+f17wqjAA1/WHyAD1eT//xf/wwDR4AcA+f8XAPngB0D5AAQAkeATAPkTAAAU4RdA+eATQPkgAACLAfx/0yAAAIsA/EGT4B8AueAfQLkAfAAbAHxAk+EHQPk/AADriwAAVOAfgLngFwD5AwAAFOAfgLngEwD54BdA+QAEAJHhE0D5PwAA60H9/1TgF0D5/8MAkcADX9b9e76p/QMAkeAfALnhCwD54B+Audr//5f9e8KowANf1uZUFvyoAQAA" ];
+              .name = ".text"; .read_only = true; .size = 424 };
+          { .address = 4196392;
+              .bytes = "\031 \003\213\253{\191\169\253\003\000\145\253{\193\168\192\003_\214";
+              .name = ".fini"; .read_only = true; .size = 20 };
+          { .address = 4196412; .bytes = "\001\000\002\000"; .name = ".rodata";
+              .read_only = true; .size = 4 };
+          { .address = 4196416;
+              .bytes = "\001\027\003;L\000\000\000\b\000\000\000@\254\255\255d\000\000\000\128\254\255\255x\000\000\000\160\254\255\255\144\000\000\000\208\254\255\255\164\000\000\000\012\255\255\255\184\000\000\000@\255\255\255\220\000\000\000D\255\255\255\240\000\000\000\200\255\255\255\b\001\000\000";
+              .name = ".eh_frame_hdr"; .read_only = true; .size = 76 };
+          { .address = 4196496;
+              .bytes = [ "H4sIAAAAAAAA/wHcACP/EAAAAAAAAAABelIABHgeARsMHwAQAAAAGAAAANT9//88AAAAAEEHHhQAAAAsAAAAAP7//wQAAAAAAAAAAAAAABAAAABEAAAACP7//zAAAAAAAAAAEAAAAFgAAAAk/v//PAAAAAAAAAAgAAAAbAAAAEz+//8wAAAAAEEOIJ0EngNCkwJI3t3TDgAAAAAQAAAAkAAAAFz+//8EAAAAAAAAABQAAACkAAAATP7//4QAAAAAQQ4wXw4AABwAAAC8AAAAuP7//yAAAAAAQQ4gnQSeA0be3Q4AAAAAAAAAAF4eu/HcAAAA" ];
+              .name = ".eh_frame"; .read_only = true; .size = 220 };
+          { .address = 4324808; .bytes = "\128\007@\000\000\000\000\000";
+              .name = ".init_array"; .size = 8 };
+          { .address = 4324816; .bytes = "L\007@\000\000\000\000\000";
+              .name = ".fini_array"; .size = 8 };
+          { .address = 4324824;
+              .bytes = [ "H4sIAAAAAAAA/wHwAQ/+AQAAAAAAAAAZAAAAAAAAAB0AAAAAAAAAOQAAAAAAAAAMAAAAAAAAAAAGQAAAAAAADQAAAAAAAAAoCEAAAAAAABkAAAAAAAAAyP1BAAAAAAAbAAAAAAAAAAgAAAAAAAAAGgAAAAAAAADQ/UEAAAAAABwAAAAAAAAACAAAAAAAAAAEAAAAAAAAAMgCQAAAAAAA9f7/bwAAAAD4AkAAAAAAAAUAAAAAAAAAqANAAAAAAAAGAAAAAAAAABgDQAAAAAAACgAAAAAAAACIAQAAAAAAAAsAAAAAAAAAGAAAAAAAAAAVAAAAAAAAAAAAAAAAAAAAAwAAAAAAAADo/0EAAAAAAAIAAAAAAAAASAAAAAAAAAAUAAAAAAAAAAcAAAAAAAAAFwAAAAAAAAC4BUAAAAAAAAcAAAAAAAAAcAVAAAAAAAAIAAAAAAAAAEgAAAAAAAAACQAAAAAAAAAYAAAAAAAAAP7//28AAAAAQAVAAAAAAAD///9vAAAAAAEAAAAAAAAA8P//bwAAAAAwBUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEHlYjfwAQAA" ];
+              .name = ".dynamic"; .size = 496 };
+          { .address = 4325320;
+              .bytes = "\216\253A\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000";
+              .name = ".got"; .size = 32 };
+          { .address = 4325352;
+              .bytes = "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000 \006@\000\000\000\000\000 \006@\000\000\000\000\000 \006@\000\000\000\000\000";
+              .name = ".got.plt"; .size = 48 };
+          { .address = 4325400;
+              .bytes = "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000";
+              .name = ".data"; .size = 16 };
+          { .address = 4325416; .bytes = ""; .name = ".bss"; .size = 8 } ];
+      .invariants = [ "GtirbArm" ] };

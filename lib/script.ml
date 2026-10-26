@@ -315,7 +315,9 @@ let load_gtirb st fname =
       let p =
         match p with
         | Ok e ->
-            let e = Program.set_attrib Invariants.(to_attrib [ GtirbArm ]) e in
+            let e =
+              Program.merge_attrib Invariants.(to_attrib [ GtirbArm ]) e
+            in
             Loader.Loadir.(
               Some
                 { prog = e; curr_proc = None; params_order = Hashtbl.create 0 })
@@ -356,12 +358,12 @@ let cmds_list =
     ( "run-transform",
       run_transform,
       "<t1> <t2> ...",
-      "run IL transforms in sequnce" );
+      "run IL transforms in sequence" );
     ("list-passes", list_passes, "", "List transform passes");
     ( "run-transforms",
       run_transform,
       "<t1> <t2> ...",
-      "run IL transforms in sequnce" );
+      "run IL transforms in sequence" );
     ("log-level", log_level, "<level> <sources list>", "set log level");
     ( "list-blocs-il",
       list_blocks_il,
@@ -371,7 +373,7 @@ let cmds_list =
       write_proc_cfg,
       "<proc> ?file",
       "Write dot cfg of <proc> to file or stdout" );
-    ("dump-history", save_history, "file.sexp", "Print the IL of a proc");
+    ("dump-history", save_history, "file.sexp", "Write script history");
     ("dump-proc-il", dump_proc_il, "procname", "Print the IL of a proc");
     ("!", run_bash_command, "", "run bash command");
     ("help", (fun a b -> a), "", "print help message");

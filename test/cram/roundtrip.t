@@ -1,16 +1,20 @@
 
   $ bincaml script roundtrip.sexp
   (load-il ../../examples/irreducible_loop_1.il)
+  (run-transforms hindley-milner-elaborate)
   (dump-il before.il)
   (load-il before.il)
   (dump-il after.il)
   (load-il ../../examples/x-output.il)
+  (run-transforms hindley-milner-elaborate)
   (dump-il before2.il)
   (load-il before2.il)
   (dump-il after2.il)
   (load-il memassign.il)
+  (run-transforms hindley-milner-elaborate)
   (dump-il beforemem.il)
   (load-il beforemem.il)
+  (run-transforms hindley-milner-elaborate)
   (dump-il aftermem.il)
   (load-il ptrrec1.il)
   (dump-il ptrrec2.il)
@@ -56,7 +60,7 @@ Memassign repr
      ]
   ];
   let $a : uninterpSort = UninterpSort;
-  let $b : record = (Record)(0x1:bv64, 0x2:bv64, 0x3:bv64);
+  let $b : record = (Record)(0x1:bv64, 0x2:bv32, 0x3:bv64);
   let $three : bv64 = let func (a:bv64) : bv64 = (bvadd(a:bv64, 0x1:bv64)) in ((func:(bv64->bv64))(($mul_2)(0x2:bv64,
            0x1:bv64)));
   prog entry @main_4196164;
