@@ -261,8 +261,13 @@ module DFGAnalysis = Dataflow_graph.AnalysisFwd (Domain)
 let global_range (prog : Program.t) =
   StringMap.get ".initial_memory" (Program.attrib prog)
   |> Iter.of_opt
-  |> Iter.flat_map_l (function `List sections -> sections | _ -> [])
-  |> Iter.filter_map (function
+  |> Iter.flat_map_l (function
+    | `List sections -> sections
+    | _ ->
+        Logs.warn (fun m ->
+            m ".initial_memory attribute has non-list value, ignoring.");
+        [])
+  |> Iter.map (function
     | `Assoc sec ->
         let open Option.Infix in
         let+ addr = Attrib.find_int_map ".address" sec
@@ -271,6 +276,12 @@ let global_range (prog : Program.t) =
           (Bitvec.create ~size:64 addr)
           (Bitvec.create ~size:64 (Z.add addr (Z.sub size Z.one)))
     | _ -> None)
+  |> Iter.filter_map (function
+    | None ->
+        Logs.warn (fun m ->
+            m ".initial_memory list element has incorrect shape, ignoring.");
+        None
+    | x -> x)
   |> Iter.fold WrappedIntervalsLattice.join WrappedIntervalsLattice.Bot
 
 let try_make_global (prog : Program.t) =
