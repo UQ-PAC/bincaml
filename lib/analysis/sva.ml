@@ -160,23 +160,19 @@ module StateAbstraction = Intra_analysis.MapState (SVAAbstractionBasil)
 module Eval = Intra_analysis.EvalStmt (SVAAbstractionBasil)
 
 let try_make_local proc_id (param : Var.t) =
-  let open Option in
   let proc_name = ID.name proc_id in
-  let+ size =
-    match Var.typ param with
-    | Types.Boolean -> Some 1
-    | Types.Bitvector size -> Some size
-    | _ -> None
-  in
-  let sym =
-    match Var.name param with
-    | s
-      when String.starts_with ~prefix:"R31" s
-           || String.starts_with ~prefix:"SP" s ->
-        SymBase.Stack proc_name
-    | _ -> Par { name = proc_name; param; proc_id = Some proc_id }
-  and interval = IntervalDomain.init (Bitvec.zero ~size) in
-  (param, sym, interval)
+  match Types.bit_width (Var.typ param) with
+  | None -> None
+  | Some size ->
+      let sym =
+        match Var.name param with
+        | s
+          when String.starts_with ~prefix:"R31" s
+               || String.starts_with ~prefix:"SP" s ->
+            SymBase.Stack proc_name
+        | _ -> Par { name = proc_name; param; proc_id = Some proc_id }
+      and interval = IntervalDomain.init (Bitvec.zero ~size) in
+      Some (param, sym, interval)
 
 module Domain = struct
   include StateAbstraction
