@@ -819,6 +819,26 @@ let pretty_spec show_var show_expr (p : ('a, 'b) proc_spec) =
                 (List.map (fun v -> text "guarantee " ^ show_expr v) x))
             p.guarantee))
 
+let iter_blocks_dominator p =
+  let module Dom = Graph.Dominator.Make (G) in
+  let module Dfs = Graph.Traverse.Dfs (G) in
+  match graph p with
+  | Some g ->
+      let idom = Dom.compute_idom g Entry in
+      let dom_tree = Dom.idom_to_dom_tree g idom in
+      let dom_g = G.fold_vertex (flip G.add_vertex) g G.empty in
+      let dom_g =
+        G.fold_vertex
+          (fun v g ->
+            List.fold_left
+              (fun g dominated -> G.add_edge g v dominated)
+              g (dom_tree v))
+          dom_g dom_g
+      in
+      Iter.from_iter (flip Dfs.prefix dom_g)
+      |> Iter.filter_map (function Vert.Begin id -> Some id | _ -> None)
+  | None -> Iter.empty
+
 let pretty show_lvar show_var show_expr p =
   Trace_core.with_span ~__FILE__ ~__LINE__ "pretty-proc" @@ fun _ ->
   let open Containers_pp in
@@ -840,9 +860,8 @@ let pretty show_lvar show_var show_expr p =
   let return_stmt = text "return" in
   let spec = pretty_spec show_var show_expr (specification p) in
   let pretty_block graph block_id block =
-    let succ = G.succ_e graph (Vert.End block_id) in
     let succ =
-      match succ with
+      match G.succ_e graph (Vert.End block_id) with
       | [] -> [ text "unreachable" ]
       | [ (b, re, Return) ] -> (
           match re with
@@ -875,23 +894,10 @@ let pretty show_lvar show_var show_expr p =
     in
     Block.pretty show_lvar show_var show_expr ~block_id ~terminator:succ block
   in
-  let module Dom = Graph.Dominator.Make (G) in
   let blocks =
     match graph p with
     | Some g ->
-        let idom = Dom.compute_idom g Entry in
-        let dom_tree = Dom.idom_to_dom_tree g idom in
-        let cmp v =
-          CCOrd.map (fun succ -> (G.mem_edge g v succ, succ))
-          @@ CCOrd.(pair (opp bool) Vert.compare)
-        in
-        let sorted_dom_tree v = dom_tree v |> List.sort (cmp v) in
-        let rec preorder f v =
-          f v;
-          sorted_dom_tree v |> List.iter (preorder f)
-        in
-        Iter.from_iter (fun f -> preorder f Entry)
-        |> Iter.filter_map (function Vert.Begin id -> Some id | _ -> None)
+        iter_blocks_dominator p
         |> Iter.map (fun id ->
             (id, get_block p id |> Option.get_exn_or "bad graph"))
         |> Iter.map (fun (id, block) -> pretty_block g id block)
