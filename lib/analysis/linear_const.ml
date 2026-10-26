@@ -391,6 +391,11 @@ module Label = struct
   let compose = flip compose
 end
 
+(* NOTE: this method can't easily extended to simultaneously perform constant
+   propagation, because expressions with two variables may be reduced to
+   expressions with one variable from const prop! detecting this live sounds
+   tricky *)
+
 module CopyNode = struct
   module EQ = Bincaml_util.Labelled_unionfind.MakeEquiv (Label)
 
