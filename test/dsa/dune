@@ -12,6 +12,13 @@
  (action
   (run make "SRCS=%{dep:bayat2.c}" -f %{dep:../Makefile} %{targets})))
 
+(rule
+ (targets lattner1.il)
+ (deps %{bin:bincaml})
+ (mode fallback)
+ (action
+  (run make "SRCS=%{dep:lattner1.c}" -f %{dep:../Makefile} %{targets})))
+
 (library
  (name dsa_tests)
  (package bincaml)
