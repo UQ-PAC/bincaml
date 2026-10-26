@@ -587,12 +587,14 @@ module Graph = struct
 
   (** Return the best linear function representing the expression e if one
       exists *)
-  let fun_of g e =
+  let fun_of (g : t) e =
     let f, v = LF.Extract.extract_expr e in
     v
     |> Option.map (fun v ->
-        let v = VarMap.find v g in
-        CopyNode.EQ.find_edge (f, v))
+        VarMap.get v g
+        |> Option.map (fun v -> CopyNode.EQ.find_edge (f, v))
+        |> Option.map (fun (f, v) -> (f, CopyNode.var v))
+        |> Option.get_or ~default:(f, v))
 end
 
 module Solver = struct
@@ -716,8 +718,9 @@ module Solver = struct
   let solve_component (prog : Program.t) call_graph summaries
       (graphs : (ID.t, CopyNode.t VarMap.t) Hashtbl.t) component =
     let open CopyNode in
+    List.iter (fun pid -> Hashtbl.add graphs pid VarMap.empty) component;
     let node_of pid v =
-      let vm = Hashtbl.get_or_add graphs ~f:(const VarMap.empty) ~k:pid in
+      let vm = Hashtbl.find graphs pid in
       match VarMap.find_opt v vm with
       | Some n -> n
       | None ->
