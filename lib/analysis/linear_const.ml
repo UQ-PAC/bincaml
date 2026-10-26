@@ -582,6 +582,19 @@ type call_info = {
   args : Program.e StringMap.t;
 }
 
+module Graph = struct
+  type t = CopyNode.t VarMap.t
+
+  (** Return the best linear function representing the expression e if one
+      exists *)
+  let fun_of g e =
+    let f, v = LF.Extract.extract_expr e in
+    v
+    |> Option.map (fun v ->
+        let v = VarMap.find v g in
+        CopyNode.EQ.find_edge (f, v))
+end
+
 module Solver = struct
   (** Add edges from a phi assignment to the graph. *)
   let add_phi node_of (phi : Var.t Block.phi) =
@@ -878,7 +891,7 @@ module Solver = struct
     VarMap.iter (const (search % snd % EQ.find)) g
 
   let solve (prog : Program.t) =
-    let graphs : (ID.t, CopyNode.t VarMap.t) Hashtbl.t = Hashtbl.create 100 in
+    let graphs : (ID.t, Graph.t) Hashtbl.t = Hashtbl.create 100 in
     let call_graph = Program.CallGraph.make_call_graph prog in
     let summaries = Hashtbl.create 100 in
     ( Trace_core.with_span ~__FILE__ ~__LINE__ "graph-creation" @@ fun _ ->
@@ -889,11 +902,7 @@ module Solver = struct
              | _ -> None))
       |> List.iter (solve_component prog call_graph summaries graphs) );
     ( Trace_core.with_span ~__FILE__ ~__LINE__ "phi-propagation" @@ fun _ ->
-      Hashtbl.iter
-        (fun id g ->
-          print_endline @@ ID.to_string id;
-          collapse_composites g)
-        graphs );
+      Hashtbl.iter (const collapse_composites) graphs );
     graphs
 end
 
