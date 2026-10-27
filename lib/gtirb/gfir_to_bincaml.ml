@@ -292,17 +292,17 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
     fun uuid ->
       UUIDMap.find uuid verts_by_uuid
       |> G.succ_e p.cfg |> Iter.of_list
-      |> Iter.filter_map (function
+      |> Iter.map (function
         | _, None, _ -> failwith "gfir edges should all have labels"
-        | src, Some edge, tgt -> (
-            match edge.Edge.type' with
-            | Edge.Type_Return -> Some `Ret
-            | Type_Branch | Type_Fallthrough | Type_Call ->
-                let open Option in
-                let tgt = UUIDMap.find (Vert.uuid tgt) all_blocks in
-                let* addr = Gtirb.address tgt in
-                Some (`Addr addr)
-            | Type_Syscall | Type_Sysret -> None))
+        | src, Some edge, tgt -> (edge.Edge.type', tgt))
+      |> Iter.filter_map (function
+        | Edge.Type_Return, _ -> Some `Ret
+        | (Type_Branch | Type_Fallthrough | Type_Call), tgt ->
+            let open Option in
+            let* tgt = UUIDMap.find (Vert.uuid tgt) all_blocks in
+            let+ addr = Gtirb.address tgt in
+            `Addr addr
+        | (Type_Syscall | Type_Sysret), _ -> None)
   in
   let name = Lang.Program.declare_name ("@" ^ p.name) m in
   let proc = Lang.Procedure.create ~requires name () in
