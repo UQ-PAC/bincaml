@@ -11,6 +11,7 @@
   gfir_to_bincaml
   conf
   gtirb_attribs
+  gtirb_graph
   gtirb_frontend)
  (libraries
   bincaml.gtirb_proto
