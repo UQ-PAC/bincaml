@@ -333,14 +333,12 @@ let add_block p id ?(attrib = Attrib.empty) ?(phis = [])
 
 let fresh_block_graph p graph ?name ?(phis = [])
     ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
-  let open Block in
   let name = Option.get_or ~default:"%block" name in
   let id = (block_ids p).fresh ~name () in
   (add_block_graph graph id ~phis ~stmts ~successors (), id)
 
 let fresh_block p ?attrib ?name ?(phis = [])
     ~(stmts : ('var, 'var, 'expr) Stmt.t list) ?(successors = []) () =
-  let open Block in
   let name = Option.get_or ~default:"%block" name in
   let id = (block_ids p).fresh ~name () in
   (add_block ?attrib p id ~phis ~stmts ~successors (), id)

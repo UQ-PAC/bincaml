@@ -285,7 +285,11 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
     try
       Gfir.(
         verts
-        |> Iter.flat_map (fun v -> G.succ p.cfg v |> List.to_iter)
+        |> Iter.flat_map (fun v -> G.succ_e p.cfg v |> List.to_iter)
+        |> Iter.map (fun (a, b, c) ->
+            print_endline @@ Edge.show b;
+            c
+          )
         |> Iter.filter_map (fun v -> UUIDMap.find_opt (Vert.uuid v) all_blocks)
         |> Iter.filter_map Gtirb.address)
     with Invalid_argument _ -> Iter.empty
