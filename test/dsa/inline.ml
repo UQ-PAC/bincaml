@@ -117,8 +117,6 @@ let%expect_test "lattner1" =
       print_endline @@ Analysis.Dsa.dot_string g;
       print_endline "")
     proc_names;
-  [%expect.unreachable];
-  [%expect.unreachable];
   [%expect {| error(Not_found) |}]
 
 let%expect_test "lattner2_indirect" =
@@ -130,7 +128,7 @@ let%expect_test "lattner2_indirect" =
     Bincaml.Passes.PassManager.(run_transform prog lift_intrinsics_aarch64)
   in
 
-  CCResult.pp CCFormat.unit Format.std_formatter
+  (CCResult.pp CCFormat.unit Format.std_formatter
   @@ CCResult.guard_str
   @@ fun () ->
   (*let prog =
@@ -157,7 +155,5 @@ let%expect_test "lattner2_indirect" =
       print_endline @@ name;
       print_endline @@ Analysis.Dsa.dot_string g;
       print_endline "")
-    proc_names
-;;
-
-[%expect {| error(Not_found) |}]
+    proc_names);
+  [%expect {| error(Not_found) |}]
