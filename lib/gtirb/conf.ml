@@ -2,8 +2,8 @@ open Lang.Common
 
 type config = {
   opcode_length : int;  (** arm64 opcode size constant *)
-  pc_var : Var.t; (* variable to use as PC*)
-  return_var : Var.t; (* variable that holds the return address *)
+  pc_var : Var.t;  (** variable to use as PC*)
+  return_var : Var.t;  (** variable that holds the return address *)
   disas : bool;  (** include disassembly of opcodes if llvm-mc is available *)
   direct : bool;
       (** when true, don't attempt to perform any cleanup of gtirb's cfg *)
