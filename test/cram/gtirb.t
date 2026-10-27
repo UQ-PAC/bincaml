@@ -156,7 +156,7 @@
      block %_init_ext [
        assume eq(0x4006c4:bv64, $PC);
        call @call_weak_fn();
-       assert false;
+       assert boolor(eq(0x400610:bv64, $PC));
        goto (%_init_code_1);
      ];
      block %_init_code_1 { .address = 4195856;
@@ -333,7 +333,7 @@
      block %__do_global_dtors_aux_ext [
        assume eq(0x4006e0:bv64, $PC);
        call @deregister_tm_clones();
-       assert false;
+       assert boolor(eq(0x400768:bv64, $PC));
        goto (%__do_global_dtors_aux_code_2);
      ];
      block %__do_global_dtors_aux_code_2 { .address = 4196200;
@@ -1103,7 +1103,7 @@
      block %_start_ext [
        assume eq(0x400640:bv64, $PC);
        call @FUN_400640();
-       assert false;
+       assert boolor(eq(0x4006b0:bv64, $PC));
        goto (%_start_code_1);
      ];
      block %_start_code_1 { .address = 4196016;
@@ -1308,7 +1308,7 @@
      block %main_ext [
        assume eq(0x400784:bv64, $PC);
        call @Sqrt();
-       assert false;
+       assert boolor(eq(0x400820:bv64, $PC));
        goto (%main_code_1);
      ];
      block %main_code_1 { .address = 4196384;
