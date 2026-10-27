@@ -24,6 +24,7 @@ open struct
     | `Ret ->
         Lang.Expr.BasilExpr.(
           binexp ~op:`EQ (rvar conf.return_var) (rvar conf.pc_var))
+    | `True -> Lang.Expr.BasilExpr.boolconst true
 
   let sanitize_proc_name p =
     List.fold_left (fun a sub -> String.replace ~sub ~by:"" a) p [ "@"; "." ]
@@ -288,23 +289,27 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
       Iter.from_iter (flip Gfir.G.iter_vertex p.cfg)
       |> Iter.map (Pair.dup_map Vert.uuid)
       |> Iter.map Pair.swap |> UUIDMap.of_iter
+    and default_succ_edge =
+      { Edge.conditional = false; direct = true; type' = Type_Fallthrough }
     in
     fun uuid ->
       UUIDMap.find_opt uuid verts_by_uuid
       |> Option.map_or ~default:[] (G.succ_e p.cfg)
-      |> Iter.of_list
+      |> List.to_iter
       |> Iter.map (function
         (* fallthrough edges are inserted as unlabelled. *)
-        | _, None, tgt -> (Edge.Type_Fallthrough, tgt)
-        | _, Some edge, tgt -> (edge.Edge.type', tgt))
+        | _, None, tgt -> (default_succ_edge, tgt)
+        | _, Some edge, tgt -> (edge, tgt))
       |> Iter.filter_map (function
-        | Edge.Type_Return, _ -> Some `Ret
-        | (Type_Branch | Type_Fallthrough | Type_Call), tgt ->
+        | { Edge.type' = Edge.Type_Return }, _ -> Some `Ret
+        | { type' = Type_Branch; conditional = _; direct = false }, _ ->
+            Some `True
+        | { type' = Type_Branch | Type_Fallthrough | Type_Call }, tgt ->
             let open Option in
             let* tgt = UUIDMap.find_opt (Vert.uuid tgt) all_blocks in
             let+ addr = Gtirb.address tgt in
             `Addr addr
-        | (Type_Syscall | Type_Sysret), _ -> None)
+        | { type' = Type_Syscall | Type_Sysret }, _ -> None)
   in
   let name = Lang.Program.declare_name ("@" ^ p.name) m in
   let proc = Lang.Procedure.create ~requires name () in
