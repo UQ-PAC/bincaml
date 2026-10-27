@@ -15,13 +15,15 @@ open Conf
 module Result = OResult
 
 open struct
-  let addr_equal_expr =
-    function `Addr addr ->
-    Lang.Expr.BasilExpr.(
-      binexp ~op:`EQ (bvconst (Bitvec.of_int ~size:64 addr)) (rvar conf.pc_var))
-           | `Ret ->
-    Lang.Expr.BasilExpr.(
-      binexp ~op:`EQ (rvar conf.return_var) (rvar conf.pc_var))
+  let addr_equal_expr = function
+    | `Addr addr ->
+        Lang.Expr.BasilExpr.(
+          binexp ~op:`EQ
+            (bvconst (Bitvec.of_int ~size:64 addr))
+            (rvar conf.pc_var))
+    | `Ret ->
+        Lang.Expr.BasilExpr.(
+          binexp ~op:`EQ (rvar conf.return_var) (rvar conf.pc_var))
 
   let sanitize_proc_name p =
     List.fold_left (fun a sub -> String.replace ~sub ~by:"" a) p [ "@"; "." ]
@@ -56,7 +58,7 @@ let add_new_simple_block ?(name_suffix = "") ?(attrib = StringMap.empty)
   let open Option in
   let guard =
     let* addr = addr in
-    let guard = addr_equal_expr addr in
+    let guard = addr_equal_expr (`Addr addr) in
     let guard =
       Stmt.Instr_Assume { body = guard; branch = false; attrib = Attrib.empty }
     in
@@ -147,7 +149,7 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
       | Code { address } | Data { address } ->
           add_new_simple_block ~name_suffix:"_code" ~attrib succ_addr
             (proc, blockmap)
-            (Gtirb.uuid b, Some (`Addr address), instrs)
+            (Gtirb.uuid b, Some address, instrs)
       | Proxy uuid -> add_proxy_block ~attrib succ_addr (proc, blockmap) uuid)
   | Data _ | Proxy _ -> (proc, blockmap)
 
@@ -314,14 +316,14 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   let proc, blocks =
     Iter.from_iter (fun f -> Gfir.G.iter_vertex f p.cfg)
     |> Iter.filter_map (function
-      |( Gfir.Vert.External uuid | Gfir.Vert.Proxy uuid
-      | Gfir.Vert.Stmts { uuid; _ } )as vert ->
-        let open Option in
-        let* block = UUIDMap.find_opt uuid all_blocks in
-        let* addr = Gtirb.address block in
-        let stmts = (match vert with
-          | Stmts { stmts } -> stmts | _ -> []) in
-            Some (uuid, Some (`Addr addr), stmts )
+      | Gfir.Vert.External uuid | Gfir.Vert.Proxy uuid ->
+          Option.map
+            (fun (b : Gtirb.block) -> (uuid, Gtirb.address b, []))
+            (UUIDMap.find_opt uuid all_blocks)
+      | Gfir.Vert.Stmts { uuid; stmts } ->
+          Option.map
+            (fun (b : Gtirb.block) -> (uuid, Gtirb.address b, stmts))
+            (UUIDMap.find_opt uuid all_blocks)
       | _ -> None)
     |> Iter.fold
          (add_new_simple_block ~name_suffix:"_ext" succ_addr)
