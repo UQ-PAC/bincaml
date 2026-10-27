@@ -60,7 +60,7 @@
   > (load-il unreachable.il)
   > (run-transforms simple-params)
   > (run-transforms simple-ssa)
-  > (dump-il /dev/stdout)
+  > (dump-il)
   > EOF
   proc @FUN_750(PC_in:bv64, R16_in:bv64, R17_in:bv64)
      -> (PC_out:bv64, R16_out:bv64, R17_out:bv64) {  }
