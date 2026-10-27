@@ -21,9 +21,7 @@ open struct
           binexp ~op:`EQ
             (bvconst (Bitvec.of_int ~size:64 addr))
             (rvar conf.pc_var))
-    | `Ret ->
-        Lang.Expr.BasilExpr.(
-          binexp ~op:`EQ (rvar conf.return_var) (rvar conf.pc_var))
+    | `True -> Lang.Expr.BasilExpr.boolconst true
 
   let sanitize_proc_name p =
     List.fold_left (fun a sub -> String.replace ~sub ~by:"" a) p [ "@"; "." ]
@@ -298,7 +296,7 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
         | _, None, tgt -> (Edge.Type_Fallthrough, tgt)
         | _, Some edge, tgt -> (edge.Edge.type', tgt))
       |> Iter.filter_map (function
-        | Edge.Type_Return, _ -> Some `Ret
+        | Edge.Type_Return, _ -> Some `True
         | (Type_Branch | Type_Fallthrough | Type_Call), tgt ->
             let open Option in
             let* tgt = UUIDMap.find_opt (Vert.uuid tgt) all_blocks in
