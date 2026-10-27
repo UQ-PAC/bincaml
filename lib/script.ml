@@ -330,7 +330,7 @@ let dbg_gtirb st fname =
   file_opt a (fun chan ->
       let p = Gtirb_frontend.load_gtirb_gfir gtirb in
       p |> Option.to_iter
-      |> Iter.flat_map Gtirb_frontend.UUIDMap.to_iter
+      |> Iter.flat_map Gtirb_frontend.UUID.Map.to_iter
       |> Iter.map snd
       |> Iter.iter (fun (p : Gtirb_frontend.Gfir.temp_proc) ->
           print_endline p.name;

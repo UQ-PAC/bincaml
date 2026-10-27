@@ -8,8 +8,6 @@ open Module.Gtirb.Proto
 open Section.Gtirb.Proto
 open CFG.Gtirb.Proto
 open Load_auxdata
-module UUIDMap = UUIDMap
-module UUIDSet = UUIDSet
 open Gfir
 open Conf
 module Result = OResult
@@ -41,7 +39,7 @@ let add_proxy_block ?(attrib = StringMap.empty) succ_addr (proc, blockmap) uuid
   let ensure = Stmt.Instr_Assert { body = ensure; attrib = Attrib.empty } in
   let stmts = ensure :: [] in
   let proc, nb = Procedure.fresh_block proc ~attrib ~name ~stmts () in
-  let blockmap = UUIDMap.add uuid nb blockmap in
+  let blockmap = UUID.Map.add uuid nb blockmap in
   (proc, blockmap)
 
 (* Update (procedure, uuidmap) with a newly created IR block containing stmts
@@ -74,17 +72,17 @@ let add_new_simple_block ?(name_suffix = "") ?(attrib = StringMap.empty)
     ^ name_suffix
   in
   let proc, nb = Procedure.fresh_block proc ~attrib ~name ~stmts () in
-  let blockmap = UUIDMap.add uuid nb blockmap in
+  let blockmap = UUID.Map.add uuid nb blockmap in
   (proc, blockmap)
 
 let address_of_uuid all_blocks uuid =
-  match UUIDMap.find_opt uuid all_blocks with
+  match UUID.Map.find_opt uuid all_blocks with
   | Some (Gtirb.Code { address } | Data { address }) -> Some address
   | _ -> None
 
 (* Update (procedure, uuidmap) with a newly created IR block with opcodes and
      PC address contract *)
-let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
+let add_new_code_block (all_blocks : block UUID.Map.t) temp_proc succ_addr
     (proc, blockmap) (b : Gtirb.block) =
   let open Lang in
   let open Option in
@@ -211,12 +209,12 @@ let replace_call_edges procids =
 
     (2) the external vertices have been cleaned up and converted to the
     appropriate code vertices. representing the effects *)
-let cfg_edge_to_ir_edge (blocks : IDSet.elt UUIDMap.t) (src, l, tgt) proc =
+let cfg_edge_to_ir_edge (blocks : IDSet.elt UUID.Map.t) (src, l, tgt) proc =
   let open Option in
   let open Lang in
   let module G = Procedure.G in
   let get_vert_block src =
-    UUIDMap.get (Vert.uuid src) blocks |> function
+    UUID.Map.get (Vert.uuid src) blocks |> function
     | Some e -> `Block e
     | _ -> `None
   in
@@ -245,14 +243,14 @@ let cfg_edge_to_ir_edge (blocks : IDSet.elt UUIDMap.t) (src, l, tgt) proc =
 
 (** lift interprocedural control flow to call statement blocks in the CFG *)
 let transform_cfg_calls procs =
-  UUIDMap.map
+  UUID.Map.map
     (fun p ->
       let calls =
-        UUIDMap.to_iter procs
+        UUID.Map.to_iter procs
         |> Iter.flat_map (fun (uid, p) ->
-            p.entries |> UUIDSet.to_iter |> Iter.map (fun u -> (u, p.id)))
-        |> UUIDMap.of_iter
-        |> fun m uuid -> UUIDMap.get uuid m
+            p.entries |> UUID.Set.to_iter |> Iter.map (fun u -> (u, p.id)))
+        |> UUID.Map.of_iter
+        |> fun m uuid -> UUID.Map.get uuid m
       in
       let cfg = p.cfg in
       let cfg = replace_call_edges calls cfg in
@@ -262,8 +260,8 @@ let transform_cfg_calls procs =
 
 let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   let entry_addrs =
-    UUIDSet.to_iter p.entries
-    |> Iter.filter_map (fun x -> UUIDMap.find x p.code_blocks |> Gtirb.address)
+    UUID.Set.to_iter p.entries
+    |> Iter.filter_map (fun x -> UUID.Map.find x p.code_blocks |> Gtirb.address)
   in
   (* Possible entry addresses *)
   let requires =
@@ -286,7 +284,7 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
       Gfir.(
         verts
         |> Iter.flat_map (fun v -> G.succ p.cfg v |> List.to_iter)
-        |> Iter.filter_map (fun v -> UUIDMap.find_opt (Vert.uuid v) all_blocks)
+        |> Iter.filter_map (fun v -> UUID.Map.find_opt (Vert.uuid v) all_blocks)
         |> Iter.filter_map Gtirb.address)
     with Invalid_argument _ -> Iter.empty
   in
@@ -294,10 +292,10 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   let proc = Lang.Procedure.create ~requires name () in
 
   let proc, blocks =
-    p.code_blocks |> UUIDMap.to_iter |> Iter.map snd
+    p.code_blocks |> UUID.Map.to_iter |> Iter.map snd
     |> Iter.fold
          (add_new_code_block all_blocks p succ_addr)
-         (proc, UUIDMap.empty)
+         (proc, UUID.Map.empty)
   in
   let proc, blocks =
     Iter.from_iter (fun f -> Gfir.G.iter_vertex f p.cfg)
@@ -305,11 +303,11 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
       | Gfir.Vert.External uuid | Gfir.Vert.Proxy uuid ->
           Option.map
             (fun (b : Gtirb.block) -> (uuid, Gtirb.address b, []))
-            (UUIDMap.find_opt uuid all_blocks)
+            (UUID.Map.find_opt uuid all_blocks)
       | Gfir.Vert.Stmts { uuid; stmts } ->
           Option.map
             (fun (b : Gtirb.block) -> (uuid, Gtirb.address b, stmts))
-            (UUIDMap.find_opt uuid all_blocks)
+            (UUID.Map.find_opt uuid all_blocks)
       | _ -> None)
     |> Iter.fold
          (add_new_simple_block ~name_suffix:"_ext" succ_addr)
@@ -317,9 +315,9 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   in
 
   let proc =
-    UUIDSet.fold
+    UUID.Set.fold
       (fun uuid acc ->
-        let b = UUIDMap.find uuid blocks in
+        let b = UUID.Map.find uuid blocks in
         Lang.Procedure.(
           map_graph
             (fun g -> G.add_edge g Lang.Procedure.Vert.Entry (Begin b))
@@ -367,9 +365,9 @@ let module_to_ir_prog ir_cfg (m : Module.t) =
   (* collect map of all blocks in order to fixup interprocedural control-flow
      *)
   let all_blocks =
-    UUIDMap.values procs
+    UUID.Map.values procs
     |> Iter.map (fun c -> c.code_blocks)
-    |> Iter.fold (UUIDMap.union (fun _ _ c -> Some c)) UUIDMap.empty
+    |> Iter.fold (UUID.Map.union (fun _ _ c -> Some c)) UUID.Map.empty
   in
   (* (2) convert jumps to procedure-external vertices to stub blocks with call
      statements, and reroute the fall through edges as a successor of this stub
@@ -383,10 +381,10 @@ let module_to_ir_prog ir_cfg (m : Module.t) =
       - ensuring the pc at the end is the address of a successor
   *)
   let prog =
-    UUIDMap.fold
+    UUID.Map.fold
       (fun _ proc prog -> temp_proc_to_ir_proc all_blocks prog proc)
       procs prog
   in
   let prog = Lang.Spec_modifies.set_modsets prog in
-  let entry_proc = UUIDMap.find entry_proc procs in
+  let entry_proc = UUID.Map.find entry_proc procs in
   Lang.Program.set_entry_proc entry_proc.id prog

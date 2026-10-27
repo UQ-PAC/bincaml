@@ -7,8 +7,6 @@ open Module.Gtirb.Proto
 open Section.Gtirb.Proto
 open CFG.Gtirb.Proto
 open Load_auxdata
-module UUIDMap = UUIDMap
-module UUIDSet = UUIDSet
 
 module AD = Load_auxdata.Loaders
 (** Auxdata parsers *)
@@ -126,9 +124,9 @@ type temp_proc = {
   name : string;  (** human-readable procedure name *)
   id : ID.t;  (** procedure ID attached to a program (matches name) *)
   uuid : UUID.t;  (** generic function UUID*)
-  entries : UUIDSet.t;  (** entry block uuids *)
-  blocks : UUIDSet.t;  (** UUIDs of blocks internal to this procedure *)
-  code_blocks : Gtirb.block UUIDMap.t;  (** block definitions *)
+  entries : UUID.Set.t;  (** entry block uuids *)
+  blocks : UUID.Set.t;  (** UUIDs of blocks internal to this procedure *)
+  code_blocks : Gtirb.block UUID.Map.t;  (** block definitions *)
   cfg : G.t;  (** intraprocedural control-flow graph *)
 }
 (** Gfir procedure; basic blocks containing sequences of opcodes or statemetns
@@ -145,7 +143,7 @@ end
 (** Build ocamlgraph CFG for procedure from Gtirb CFG *)
 let make_proc_cfg block_member_of block_proxy (gtirb_cfg : CFG.t)
     (p : temp_proc) =
-  let block_proxy i = UUIDMap.mem i block_proxy in
+  let block_proxy i = UUID.Map.mem i block_proxy in
   let conv_vert e =
     if block_member_of ~proc:p.uuid e then Vert.Internal e
     else if block_proxy e then Proxy e
@@ -170,26 +168,26 @@ let make_proc_cfg block_member_of block_proxy (gtirb_cfg : CFG.t)
 let make_temp_proc prog all_blocks func_blocks func_entry_blocks proxy_blocks
     block_is_member_of gtirb_cfg uuid (name : string) =
   let entries =
-    UUIDMap.get uuid func_entry_blocks |> function
+    UUID.Map.get uuid func_entry_blocks |> function
     | Some b -> b
     | None ->
         Logs.warn (fun m ->
             m "No entry blocks for proc: %s %s" (UUID.show uuid) name);
-        UUIDSet.empty
+        UUID.Set.empty
   in
   let blocks, code_blocks =
-    UUIDMap.get uuid func_blocks |> function
+    UUID.Map.get uuid func_blocks |> function
     | Some b ->
         ( b,
-          UUIDSet.to_iter b
+          UUID.Set.to_iter b
           |> Iter.filter_map (fun id ->
-              UUIDMap.get id all_blocks |> fun a ->
+              UUID.Map.get id all_blocks |> fun a ->
               Option.bind a (fun b -> Some (id, b)))
-          |> UUIDMap.of_iter )
+          |> UUID.Map.of_iter )
     | None ->
         Logs.warn (fun m ->
             m "No entry blocks for proc: %s %s" (UUID.show uuid) name);
-        (UUIDSet.empty, UUIDMap.empty)
+        (UUID.Set.empty, UUID.Map.empty)
   in
   let id = Lang.Program.declare_name ("@" ^ name) prog in
   let proc = { uuid; name; id; entries; blocks; code_blocks; cfg = G.empty } in
@@ -205,19 +203,19 @@ let gtirb_to_gfir prog (gtirb_cfg : CFG.t) (m : Module.t) =
     |> List.map (fun (m : ProxyBlock.Gtirb.Proto.ProxyBlock.t) ->
         let u = UUID.of_bytes m in
         (u, Gtirb.Proxy u))
-    |> UUIDMap.of_list
+    |> UUID.Map.of_list
   in
 
   let sym =
     m.symbols
     |> List.map (fun (s : Symbol.Gtirb.Proto.Symbol.t) ->
         (UUID.of_bytes s.uuid, s.name))
-    |> UUIDMap.of_list
+    |> UUID.Map.of_list
   in
   let all_blocks =
     List.map (fun (b : Gtirb.block) -> (Gtirb.uuid b, b)) blocks
-    |> UUIDMap.of_list
-    |> UUIDMap.union
+    |> UUID.Map.of_list
+    |> UUID.Map.union
          (fun _ _ c -> failwith "proxy should be disjoint")
          proxy_blocks
   in
@@ -225,33 +223,33 @@ let gtirb_to_gfir prog (gtirb_cfg : CFG.t) (m : Module.t) =
     m.aux_data |> StringMap.of_list |> StringMap.filter_map (fun _ v -> v)
   in
   let func_names =
-    AD.function_names auxdata |> or_error UUIDMap.empty
-    |> UUIDMap.filter_map (fun _ u -> UUIDMap.find_opt u sym)
+    AD.function_names auxdata |> or_error UUID.Map.empty
+    |> UUID.Map.filter_map (fun _ u -> UUID.Map.find_opt u sym)
   in
-  let func_blocks = AD.function_blocks auxdata |> or_error UUIDMap.empty in
+  let func_blocks = AD.function_blocks auxdata |> or_error UUID.Map.empty in
   (* construct map from block to function *)
   let block_functions =
-    func_blocks |> UUIDMap.to_iter
+    func_blocks |> UUID.Map.to_iter
     |> Iter.flat_map (fun (func, blocks) ->
-        UUIDSet.to_iter blocks |> Iter.map (fun b -> (b, func)))
-    |> UUIDMap.of_iter
+        UUID.Set.to_iter blocks |> Iter.map (fun b -> (b, func)))
+    |> UUID.Map.of_iter
   in
   (* block function membership predicate *)
   let block_is_member_of ~proc block =
     Option.(
-      UUIDMap.get block block_functions
+      UUID.Map.get block block_functions
       >|= (fun b -> UUID.equal b proc)
       |> get_or ~default:false)
   in
   (* for each procedure collect its blocks marked as entry blocks*)
   let func_entry_blocks =
-    AD.function_entries auxdata |> or_error UUIDMap.empty
+    AD.function_entries auxdata |> or_error UUID.Map.empty
   in
 
-  let entry = UUIDMap.find (UUID.of_bytes m.entry_point) block_functions in
+  let entry = UUID.Map.find (UUID.of_bytes m.entry_point) block_functions in
   (* build initial procs *)
   let procs =
-    UUIDMap.mapi
+    UUID.Map.mapi
       (make_temp_proc prog all_blocks func_blocks func_entry_blocks proxy_blocks
          block_is_member_of gtirb_cfg)
       func_names
