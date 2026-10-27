@@ -62,6 +62,12 @@
   > (run-transforms simple-ssa)
   > (dump-il)
   > EOF
+  (load-il unreachable.il)
+  bincaml: [WARNING] Warn: global undeclared $mem. assuming mutable unshared
+  bincaml: [WARNING] Warn: global undeclared $mem. assuming mutable unshared
+  (run-transforms simple-params)
+  (run-transforms simple-ssa)
+  (dump-il)
   proc @FUN_750(PC_in:bv64, R16_in:bv64, R17_in:bv64)
      -> (PC_out:bv64, R16_out:bv64, R17_out:bv64) {  }
     captures $mem:(bv64->bv8)
