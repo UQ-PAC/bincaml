@@ -11,4 +11,5 @@ phony:
 	ddisasm $^ --ir $@
 
 %.il: %.gtirb
-	printf '%s\n' "(load-gtirb $^)" "(dump-il $@)" | bincaml script -
+	printf '%s\n' "(load-gtirb $^)" "(dump-il temp_$@)" | bincaml script -
+	mv temp_$@ $@

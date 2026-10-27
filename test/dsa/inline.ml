@@ -117,7 +117,8 @@ let%expect_test "lattner1" =
       print_endline "")
     proc_names;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   (* CR expect_test_collector: This test expectation appears to contain a backtrace.
      This is strongly discouraged as backtraces are fragile.
      Please change this test to not include a backtrace. *)
@@ -153,7 +154,7 @@ let%expect_test "lattner1" =
   Called from Iter.foldi in file "src/Iter.ml", lines 83-85, characters 2-13
   Called from Lang__Program.map_procedures in file "lib/lang/program.ml", lines 131-134, characters 6-17
   Called from Bincaml__Passes.PassManager.run_transform.(fun) in file "lib/passes.ml", line 617, characters 16-20
-  Called from Dsa_tests__Inline.(fun) in file "test/dsa/inline.ml", line 681, characters 41-64
+  Called from Dsa_tests__Inline.(fun) in file "test/dsa/inline.ml", line 108, characters 41-64
   Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 142, characters 10-28
 
   Trailing output
