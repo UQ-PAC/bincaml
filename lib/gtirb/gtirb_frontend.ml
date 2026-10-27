@@ -1,6 +1,7 @@
 open Lang.Common
 open Option
-module Gtirb_graph = Gtirb_graph
+module UUIDMap = Load_auxdata.UUIDMap
+module UUIDSet = Load_auxdata.UUIDSet
 
 module Gfir = Gfir
 (** Intermediate representation used by the frontend *)
@@ -32,10 +33,10 @@ let load_gtirb_gfir filename =
   let cfg =
     List.fold_left
       (fun a m ->
-        UUID.Map.union
+        UUIDMap.union
           (fun _ _ _ -> failwith "procedure present in two modules")
           a
           (snd @@ Gfir.gtirb_to_gfir p c m))
-      UUID.Map.empty g.modules
+      UUIDMap.empty g.modules
   in
   Some cfg
