@@ -36,12 +36,12 @@
   var $R17:bv64;
   var $R19:bv64;
   var $R29:bv64;
+  var $R30:bv64;
   var $PSTATE_N:bv1;
   var $PSTATE_Z:bv1;
   var $PSTATE_C:bv1;
   var $PSTATE_V:bv1;
   var $PC:bv64;
-  var $R30:bv64;
   proc @_fini()  -> () {  }
     modifies $PC:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
     captures $PC:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)

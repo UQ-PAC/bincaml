@@ -367,7 +367,6 @@ let module_to_bincaml_attrib (m : Module.t) : Gtirb_attribs.gtirb_attribs =
 let module_to_ir_prog ir_cfg (m : Module.t) =
   let prog = Lang.Program.empty ~name:m.name () in
   let prog = Lang.Program.decl_global prog conf.pc_var in
-  let prog = Lang.Program.decl_global prog conf.return_var in
 
   (* Add program-level attributes for section and symbols. *)
   let prog =
