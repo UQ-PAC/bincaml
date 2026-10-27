@@ -10,54 +10,6 @@
   > (load-il "semantics.il")
   > EOF
   (load-gtirb ../../examples/gtirb/binsearch_sqrt.gtirb)
-  (Some { conditional = false; direct = true; type' = Type_Fallthrough })
-  (Some { conditional = false; direct = false; type' = Type_Return })
-  (Some { conditional = false; direct = true; type' = Type_Call })
-  (Some { conditional = false; direct = false; type' = Type_Return })
-  None
-  (Some { conditional = true; direct = true; type' = Type_Fallthrough })
-  (Some { conditional = true; direct = true; type' = Type_Branch })
-  (Some { conditional = false; direct = false; type' = Type_Return })
-  (Some { conditional = false; direct = true; type' = Type_Fallthrough })
-  (Some { conditional = false; direct = true; type' = Type_Call })
-  None
-  (Some { conditional = false; direct = false; type' = Type_Return })
-  (Some { conditional = false; direct = false; type' = Type_Branch })
-  (Some { conditional = true; direct = true; type' = Type_Fallthrough })
-  (Some { conditional = true; direct = true; type' = Type_Branch })
-  (Some { conditional = true; direct = true; type' = Type_Fallthrough })
-  (Some { conditional = true; direct = true; type' = Type_Branch })
-  (Some { conditional = false; direct = true; type' = Type_Branch })
-  (Some { conditional = false; direct = false; type' = Type_Branch })
-  (Some { conditional = false; direct = true; type' = Type_Fallthrough })
-  (Some { conditional = false; direct = true; type' = Type_Branch })
-  (Some { conditional = false; direct = true; type' = Type_Branch })
-  (Some { conditional = false; direct = true; type' = Type_Return })
-  (Some { conditional = true; direct = true; type' = Type_Fallthrough })
-  (Some { conditional = true; direct = true; type' = Type_Branch })
-  (Some { conditional = true; direct = true; type' = Type_Branch })
-  (Some { conditional = true; direct = true; type' = Type_Fallthrough })
-  (Some { conditional = false; direct = true; type' = Type_Call })
-  (Some { conditional = false; direct = true; type' = Type_Call })
-  (Some { conditional = false; direct = true; type' = Type_Branch })
-  None
-  (Some { conditional = false; direct = false; type' = Type_Return })
-  (Some { conditional = true; direct = true; type' = Type_Branch })
-  (Some { conditional = true; direct = true; type' = Type_Fallthrough })
-  (Some { conditional = false; direct = true; type' = Type_Branch })
-  (Some { conditional = false; direct = true; type' = Type_Return })
-  (Some { conditional = false; direct = true; type' = Type_Call })
-  (Some { conditional = false; direct = false; type' = Type_Return })
-  None
-  (Some { conditional = false; direct = false; type' = Type_Branch })
-  (Some { conditional = false; direct = false; type' = Type_Branch })
-  (Some { conditional = true; direct = true; type' = Type_Branch })
-  (Some { conditional = true; direct = true; type' = Type_Fallthrough })
-  (Some { conditional = true; direct = true; type' = Type_Branch })
-  (Some { conditional = true; direct = true; type' = Type_Fallthrough })
-  (Some { conditional = false; direct = false; type' = Type_Branch })
-  (Some { conditional = false; direct = true; type' = Type_Return })
-  (Some { conditional = false; direct = false; type' = Type_Branch })
   (dump-il gtirb-output.il)
   (load-il gtirb-output.il)
   (dump-il dumped.il)
@@ -84,12 +36,12 @@
   var $R17:bv64;
   var $R19:bv64;
   var $R29:bv64;
-  var $R30:bv64;
   var $PSTATE_N:bv1;
   var $PSTATE_Z:bv1;
   var $PSTATE_C:bv1;
   var $PSTATE_V:bv1;
   var $PC:bv64;
+  var $R30:bv64;
   proc @_fini()  -> () {  }
     modifies $PC:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
     captures $PC:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
@@ -155,7 +107,7 @@
        $PC:bv64 := $R30;
        goto (%_fini_code_3);
      ];
-     block %_fini_code_3 [ assert false; goto (%ret_1); ];
+     block %_fini_code_3 [ assert boolor(eq($R30, $PC)); goto (%ret_1); ];
      block %ret_1 [ return; ]
   ];
   proc @_init()  -> () {  }
@@ -204,7 +156,7 @@
      block %_init_ext [
        assume eq(0x4006c4:bv64, $PC);
        call @call_weak_fn();
-       assert boolor(eq(0x400610:bv64, $PC));
+       assert false;
        goto (%_init_code_1);
      ];
      block %_init_code_1 { .address = 4195856;
@@ -236,7 +188,7 @@
        $PC:bv64 := $R30;
        goto (%_init_code_3);
      ];
-     block %_init_code_3 [ assert false; goto (%ret_1); ];
+     block %_init_code_3 [ assert boolor(eq($R30, $PC)); goto (%ret_1); ];
      block %ret_1 [ return; ]
   ];
   proc @__do_global_dtors_aux()  -> () {  }
@@ -356,7 +308,10 @@
        $PC:bv64 := $R30;
        goto (%__do_global_dtors_aux_code_5);
      ];
-     block %__do_global_dtors_aux_code_5 [ assert false; goto (%ret_2); ];
+     block %__do_global_dtors_aux_code_5 [
+       assert boolor(eq($R30, $PC));
+       goto (%ret_2);
+     ];
      block %ret_2 [ return; ];
      block %__do_global_dtors_aux_code_3 { .address = 4196196;
          .gtirb_block = "lwyID0MJQb6vgyjzPFtz8Q";
@@ -378,7 +333,7 @@
      block %__do_global_dtors_aux_ext [
        assume eq(0x4006e0:bv64, $PC);
        call @deregister_tm_clones();
-       assert boolor(eq(0x400768:bv64, $PC));
+       assert false;
        goto (%__do_global_dtors_aux_code_2);
      ];
      block %__do_global_dtors_aux_code_2 { .address = 4196200;
@@ -526,7 +481,10 @@
        $PC:bv64 := $R30;
        goto (%register_tm_clones_code_5);
      ];
-     block %register_tm_clones_code_5 [ assert false; goto (%ret); ];
+     block %register_tm_clones_code_5 [
+       assert boolor(eq($R30, $PC));
+       goto (%ret);
+     ];
      block %ret [ return; ];
      block %register_tm_clones_code_3 { .address = 4196148;
          .gtirb_block = "tXIOhSQ+R1WA/9VL5+6KQQ";
@@ -841,7 +799,7 @@
        $PC:bv64 := $R30;
        goto (%Sqrt_code_8);
      ];
-     block %Sqrt_code_8 [ assert boolor(eq(0x400820:bv64, $PC)); goto (%ret_3); ];
+     block %Sqrt_code_8 [ assert boolor(eq($R30, $PC)); goto (%ret_3); ];
      block %ret_3 [ return; ];
      block %Sqrt_code_4 { .address = 4196256;
          .gtirb_block = "rCSSdLZcRB2TKAu9h+WCqg";
@@ -1145,7 +1103,7 @@
      block %_start_ext [
        assume eq(0x400640:bv64, $PC);
        call @FUN_400640();
-       assert boolor(eq(0x4006b0:bv64, $PC));
+       assert false;
        goto (%_start_code_1);
      ];
      block %_start_code_1 { .address = 4196016;
@@ -1192,7 +1150,10 @@
        $PC:bv64 := $R30;
        goto (%_dl_relocate_static_pie_code_1);
      ];
-     block %_dl_relocate_static_pie_code_1 [ assert false; goto (%ret); ];
+     block %_dl_relocate_static_pie_code_1 [
+       assert boolor(eq($R30, $PC));
+       goto (%ret);
+     ];
      block %ret [ return; ]
   ];
   proc @call_weak_fn()  -> () {  }
@@ -1282,10 +1243,7 @@
        $PC:bv64 := $R30;
        goto (%call_weak_fn_code_5);
      ];
-     block %call_weak_fn_code_5 [
-       assert boolor(eq(0x400610:bv64, $PC));
-       goto (%ret_3);
-     ];
+     block %call_weak_fn_code_5 [ assert boolor(eq($R30, $PC)); goto (%ret_3); ];
      block %ret_3 [ return; ]
   ];
   proc @main()  -> () {  }
@@ -1350,7 +1308,7 @@
      block %main_ext [
        assume eq(0x400784:bv64, $PC);
        call @Sqrt();
-       assert boolor(eq(0x400820:bv64, $PC));
+       assert false;
        goto (%main_code_1);
      ];
      block %main_code_1 { .address = 4196384;
@@ -1382,7 +1340,7 @@
        $PC:bv64 := $R30;
        goto (%main_code_3);
      ];
-     block %main_code_3 [ assert false; goto (%ret_1); ];
+     block %main_code_3 [ assert boolor(eq($R30, $PC)); goto (%ret_1); ];
      block %ret_1 [ return; ]
   ];
   proc @.L_400650()  -> () {  }
@@ -1644,7 +1602,7 @@
        goto (%deregister_tm_clones_code_7);
      ];
      block %deregister_tm_clones_code_7 [
-       assert boolor(eq(0x400768:bv64, $PC));
+       assert boolor(eq($R30, $PC));
        goto (%ret_5);
      ];
      block %ret_5 [ return; ]

@@ -290,16 +290,18 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
       |> Iter.map Pair.swap |> UUIDMap.of_iter
     in
     fun uuid ->
-      UUIDMap.find uuid verts_by_uuid
-      |> G.succ_e p.cfg |> Iter.of_list
+      UUIDMap.find_opt uuid verts_by_uuid
+      |> Option.map_or ~default:[] (G.succ_e p.cfg)
+      |> Iter.of_list
       |> Iter.map (function
-        | _, None, _ -> failwith "gfir edges should all have labels"
-        | src, Some edge, tgt -> (edge.Edge.type', tgt))
+        (* fallthrough edges are inserted as unlabelled. *)
+        | _, None, tgt -> (Edge.Type_Fallthrough, tgt)
+        | _, Some edge, tgt -> (edge.Edge.type', tgt))
       |> Iter.filter_map (function
         | Edge.Type_Return, _ -> Some `Ret
         | (Type_Branch | Type_Fallthrough | Type_Call), tgt ->
             let open Option in
-            let* tgt = UUIDMap.find (Vert.uuid tgt) all_blocks in
+            let* tgt = UUIDMap.find_opt (Vert.uuid tgt) all_blocks in
             let+ addr = Gtirb.address tgt in
             `Addr addr
         | (Type_Syscall | Type_Sysret), _ -> None)
@@ -367,6 +369,7 @@ let module_to_bincaml_attrib (m : Module.t) : Gtirb_attribs.gtirb_attribs =
 let module_to_ir_prog ir_cfg (m : Module.t) =
   let prog = Lang.Program.empty ~name:m.name () in
   let prog = Lang.Program.decl_global prog conf.pc_var in
+  let prog = Lang.Program.decl_global prog conf.return_var in
 
   (* Add program-level attributes for section and symbols. *)
   let prog =
