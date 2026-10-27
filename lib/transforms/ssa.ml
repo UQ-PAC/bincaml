@@ -380,7 +380,7 @@ module Construction = struct
   (** Transform a procedure into SSA form. *)
   let ssa_proc ?(skipping = Skip.empty) (procedure : Program.proc) =
     let procedure = intro_ssi_assigns procedure (Skip.keep skipping) in
-    if Procedure.graph procedure |> Option.is_some then (
+    if Procedure.graph procedure |> Option.is_some then
       (* Destruct any previous phi nodes. Hacky but ideally
          reconstruction is used instead of repeated SSA anyway. *)
       let procedure = Destruction.simple_destruction procedure in
@@ -419,7 +419,7 @@ module Construction = struct
 
           (* Rename variables. Skip renaming special return block. *)
           rename_procedure ~skipping rid procedure g tree doms)
-      |> tap (check_ssa ~skipping))
+      |> tap (check_ssa ~skipping)
     else procedure
 end
 

@@ -819,6 +819,11 @@ let pretty_spec show_var show_expr (p : ('a, 'b) proc_spec) =
                 (List.map (fun v -> text "guarantee " ^ show_expr v) x))
             p.guarantee))
 
+(** Iterates over blocks of the given procedure in by performing a pre-order
+    traversal of the dominator tree. For each block, direct successors are
+    visited before indirect dominatees.
+
+    This is intended to be an order which is sensible for printing. *)
 let iter_blocks_dominator p =
   let module Dom = Graph.Dominator.Make (G) in
   match graph p with
@@ -836,23 +841,17 @@ let iter_blocks_dominator p =
         f v;
         sorted_dom_tree v |> List.iter (preorder f)
       in
+
       let dom_order =
         Iter.from_iter (fun f -> preorder f Entry)
         |> Iter.filter_map (function Vert.Begin id -> Some id | _ -> None)
-        |> Iter.mapi (flip Pair.make)
-        |> IDMap.of_iter
+        |> List.of_iter
       in
-      let unreachable =
-        iter_blocks p |> Iter.map fst
-        |> Iter.filter (not % flip IDMap.mem dom_order)
+      let all_vertices = iter_blocks p |> Iter.map fst |> IDSet.of_iter in
+      let unreachable_vertices =
+        List.fold_left (flip IDSet.remove) all_vertices dom_order
       in
-      let reachable =
-        IDMap.bindings dom_order
-        |> List.sort CCOrd.(map snd int)
-        |> List.to_iter |> Iter.map fst
-      and unreachable = Iter.sort ~cmp:ID.compare unreachable in
-
-      Iter.append reachable unreachable
+      Iter.append (List.to_iter dom_order) (IDSet.to_iter unreachable_vertices)
   | None -> Iter.empty
 
 let pretty show_lvar show_var show_expr p =
