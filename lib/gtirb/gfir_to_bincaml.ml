@@ -15,9 +15,13 @@ open Conf
 module Result = OResult
 
 open struct
-  let addr_equal_expr addr =
+  let addr_equal_expr =
+    function `Addr addr ->
     Lang.Expr.BasilExpr.(
       binexp ~op:`EQ (bvconst (Bitvec.of_int ~size:64 addr)) (rvar conf.pc_var))
+           | `Ret ->
+    Lang.Expr.BasilExpr.(
+      binexp ~op:`EQ (rvar conf.return_var) (rvar conf.pc_var))
 
   let sanitize_proc_name p =
     List.fold_left (fun a sub -> String.replace ~sub ~by:"" a) p [ "@"; "." ]
@@ -143,7 +147,7 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
       | Code { address } | Data { address } ->
           add_new_simple_block ~name_suffix:"_code" ~attrib succ_addr
             (proc, blockmap)
-            (Gtirb.uuid b, Some address, instrs)
+            (Gtirb.uuid b, Some (`Addr address), instrs)
       | Proxy uuid -> add_proxy_block ~attrib succ_addr (proc, blockmap) uuid)
   | Data _ | Proxy _ -> (proc, blockmap)
 
@@ -277,22 +281,26 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   in
 
   (* Addresses of successor blocks to [uuid] *)
-  let succ_addr uuid =
-    let verts =
-      Iter.from_iter (fun f -> Gfir.G.iter_vertex f p.cfg)
-      |> Iter.filter (fun x -> UUID.equal (Vert.uuid x) uuid)
+  let succ_addr =
+    let verts_by_uuid =
+      Iter.from_iter (flip Gfir.G.iter_vertex p.cfg)
+      |> Iter.map (Pair.dup_map Vert.uuid)
+      |> Iter.map Pair.swap |> UUIDMap.of_iter
     in
-    try
-      Gfir.(
-        verts
-        |> Iter.flat_map (fun v -> G.succ_e p.cfg v |> List.to_iter)
-        |> Iter.map (fun (a, b, c) ->
-            print_endline @@ Edge.show b;
-            c
-          )
-        |> Iter.filter_map (fun v -> UUIDMap.find_opt (Vert.uuid v) all_blocks)
-        |> Iter.filter_map Gtirb.address)
-    with Invalid_argument _ -> Iter.empty
+    fun uuid ->
+      UUIDMap.find uuid verts_by_uuid
+      |> G.succ_e p.cfg |> Iter.of_list
+      |> Iter.filter_map (function
+        | _, None, _ -> failwith "gfir edges should all have labels"
+        | src, Some edge, tgt -> (
+            match edge.Edge.type' with
+            | Edge.Type_Return -> Some `Ret
+            | Type_Branch | Type_Fallthrough | Type_Call ->
+                let open Option in
+                let tgt = UUIDMap.find (Vert.uuid tgt) all_blocks in
+                let* addr = Gtirb.address tgt in
+                Some (`Addr addr)
+            | Type_Syscall | Type_Sysret -> None))
   in
   let name = Lang.Program.declare_name ("@" ^ p.name) m in
   let proc = Lang.Procedure.create ~requires name () in
@@ -306,14 +314,14 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   let proc, blocks =
     Iter.from_iter (fun f -> Gfir.G.iter_vertex f p.cfg)
     |> Iter.filter_map (function
-      | Gfir.Vert.External uuid | Gfir.Vert.Proxy uuid ->
-          Option.map
-            (fun (b : Gtirb.block) -> (uuid, Gtirb.address b, []))
-            (UUIDMap.find_opt uuid all_blocks)
-      | Gfir.Vert.Stmts { uuid; stmts } ->
-          Option.map
-            (fun (b : Gtirb.block) -> (uuid, Gtirb.address b, stmts))
-            (UUIDMap.find_opt uuid all_blocks)
+      |( Gfir.Vert.External uuid | Gfir.Vert.Proxy uuid
+      | Gfir.Vert.Stmts { uuid; _ } )as vert ->
+        let open Option in
+        let* block = UUIDMap.find_opt uuid all_blocks in
+        let* addr = Gtirb.address block in
+        let stmts = (match vert with
+          | Stmts { stmts } -> stmts | _ -> []) in
+            Some (uuid, Some (`Addr addr), stmts )
       | _ -> None)
     |> Iter.fold
          (add_new_simple_block ~name_suffix:"_ext" succ_addr)
