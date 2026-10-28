@@ -2,6 +2,9 @@ open Lang.Common
 open Option
 module UUIDMap = Load_auxdata.UUIDMap
 module UUIDSet = Load_auxdata.UUIDSet
+module Gtirb_graph = Gtirb_graph
+
+let a = Gtirb_graph.Graph.make_rel
 
 module Gfir = Gfir
 (** Intermediate representation used by the frontend *)
@@ -18,6 +21,9 @@ let load_gtirb_prog filename =
   let* c = g.cfg |> Option.to_result "No CFG" in
   (* convert protobuf to program *)
   let p = List.map (Gfir_to_bincaml.module_to_ir_prog c) g.modules in
+  Gtirb_graph.Graph_dot.output_graph
+    (open_out (filename ^ ".dot"))
+    (Gtirb_graph.Loader.graph_of_module (List.hd g.modules));
   match p with
   | h :: [] -> Ok h
   | _ :: _ -> Error "got more than one module"
