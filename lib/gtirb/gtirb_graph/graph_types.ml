@@ -6,13 +6,25 @@
     @canonical Gtirb_frontend.Gtirb_graph.vert *)
 type vert = Uuid of UUID.t [@@deriving show { with_path = false }]
 
+(** Data stored by a UUID of a particular kind.*)
+type self_data =
+  | Block_data of
+      [ `Proxy
+      | `Code of int * (Gtirb_proto.CodeBlock.Gtirb.Proto.DecodeMode.t[@opaque])
+      | `Data of int ]
+      (** Information about a block. In the Code and Data variants, the int is
+          the size. *)
+  | Symbol_data of { name : string; at_end : bool; int_value : int option }
+  | Function_data of unit
+[@@deriving show { with_path = false }]
+
 (** A relation between two {!vert}s. For example, an edge [a -> b] with label
     [Function_has_entry] means that the function [a] has entry [b].
 
     @canonical Gtirb_frontend.Gtirb_graph.relation
 
     An edge from [Uuid id -> Uuid id] (a self-loop) can be used for annotating
-    data about [id] itself. These are the variants which end in [_data]. *)
+    data about [id] itself. The {!Data} variant is used for this purpose. *)
 type relation =
   | Function_has_name
       (** The UUID of a Symbol whose name field contains the name of the
@@ -36,13 +48,9 @@ type relation =
       flags: (Gtirb_proto.Section.Gtirb.Proto.SectionFlag.t[@opaque]) list
     }
   | Section_has_byteinterval *)
-  | Block_data of
-      [ `Proxy
-      | `Code of int * (Gtirb_proto.CodeBlock.Gtirb.Proto.DecodeMode.t[@opaque])
-      | `Data of int ]
-      (** Information about a block. In the Code and Data variants, the int is
-          the size. *)
-  | Symbol_data of { name : string; at_end : bool; int_value : int option }
+  | Self of self_data
+      (** Self data about a particular UUID. This edge must only appear on
+          self-loops. *)
   | Symbol_refers_to
   | Symbol_is_forwarded_to
       (** Redirects one Symbol to another. This is useful to resolve
@@ -59,13 +67,15 @@ type relation =
 let make_rel (kind : relation) (a, b) = (a, kind, b)
 let make_uuid_rel (kind : relation) (a, b) = (Uuid a, kind, Uuid b)
 
-let make_self_rel (kind : relation) a =
+let make_self_rel (kind : self_data) a =
   let v = Uuid a in
-  (v, kind, v)
+  (v, Self kind, v)
 
 (** {3 Derived functions} *)
 
 let pp_vert = pp_vert
 let show_vert = show_vert
+let pp_self_data = pp_self_data
+let show_self_data = show_self_data
 let pp_relation = pp_relation
 let show_relation = show_relation

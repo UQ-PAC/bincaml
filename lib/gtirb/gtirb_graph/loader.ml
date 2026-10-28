@@ -35,7 +35,10 @@ let edges_of_function_blocks =
 let edges_of_function_names auxdata =
   let function_names = Load_auxdata.(load_exn Loaders.function_names) auxdata in
   UUIDMap.to_iter function_names
-  |> Iter.map (Graph_types.make_uuid_rel Function_has_name)
+  |> Iter.flat_map (fun pair ->
+      Iter.doubleton
+        (Graph_types.make_uuid_rel Function_has_name pair)
+        (Graph_types.make_self_rel (Function_data ()) (fst pair)))
 
 let edges_of_symbol_forwarding auxdata =
   let symbol_forwarding =
