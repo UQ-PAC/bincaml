@@ -69,7 +69,8 @@ let edges_of_symbol_list (syms : Gtirb_proto.Symbol.Gtirb.Proto.Symbol.t list) =
 
 (** {2 Section and block information} *)
 
-let edges_of_blocks (bs : Gtirb_proto.ByteInterval.Gtirb.Proto.Block.t Iter.t) =
+let edges_of_concrete_blocks
+    (bs : Gtirb_proto.ByteInterval.Gtirb.Proto.Block.t Iter.t) =
   bs
   |> Iter.filter_map (function { Block.value } ->
       (match value with
@@ -79,6 +80,11 @@ let edges_of_blocks (bs : Gtirb_proto.ByteInterval.Gtirb.Proto.Block.t Iter.t) =
       | `Data { uuid; size } -> Some (uuid, `Data size)))
   |> Iter.map (fun (uuid, data) ->
       Graph_types.make_self_rel (Block_data data) (UUID.of_bytes uuid))
+
+let edges_of_proxy_blocks (uuids : bytes list) =
+  uuids |> List.to_iter
+  |> Iter.map (fun uuid ->
+      Graph_types.make_self_rel (Block_data `Proxy) (UUID.of_bytes uuid))
 
 (** {2 Entry point} *)
 
@@ -96,12 +102,13 @@ let graph_of_module (m : Gtirb_proto.Module.Gtirb.Proto.Module.t) =
   edges_of_function_blocks auxdata |> Iter.iter (Graph_internal.add_edge_e g);
   edges_of_symbol_forwarding auxdata |> Iter.iter (Graph_internal.add_edge_e g);
   edges_of_symbol_list m.symbols |> Iter.iter (Graph_internal.add_edge_e g);
+  edges_of_proxy_blocks m.proxies |> Iter.iter (Graph_internal.add_edge_e g);
 
   (* TODO: do sections and byteintervals too *)
   List.to_iter m.Module.sections
   |> Iter.flat_map_l (fun s -> s.Section.byte_intervals)
   |> Iter.flat_map_l (fun bi -> bi.ByteInterval.blocks)
-  |> edges_of_blocks
+  |> edges_of_concrete_blocks
   |> Iter.iter (Graph_internal.add_edge_e g);
 
   g
