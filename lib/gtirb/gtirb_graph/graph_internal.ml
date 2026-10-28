@@ -1,6 +1,5 @@
-(** {2 Ocamlgraph functions}
-
-    Be careful with using these! *)
+(** Ocamlgraph representation of the GTIRB graph. Use higher-level functions if
+    possible! *)
 
 open Graph_types
 

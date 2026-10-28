@@ -1,4 +1,4 @@
-(** Loads information from a GTIRB IR into the *)
+(** Loads information from a GTIRB IR into the graph. *)
 
 open Bincaml_util.Common
 
@@ -7,31 +7,30 @@ open struct
   module UUIDSet = Load_auxdata.UUIDSet
 end
 
-let edges_of_function_entries auxdata =
-  let function_entries =
-    Load_auxdata.Loaders.function_entries auxdata
-    |> Result.to_option
-    |> Option.get_exn_or "function_entries auxdata invalid"
-  in
-  UUIDMap.to_iter function_entries
-  |> Iter.flat_map (fun (func, entries) ->
-      UUIDSet.to_iter entries |> Iter.map (Pair.make func))
-  |> Iter.map (Graph_types.make_uuid_rel Function_has_entry)
+(** Helper function for generating graph edges from an auxdata field of type
+    [std::map<gtirb::UUID, std::set<gtirb::UUID>>] (that is, a {!UUIDSet.t}
+    {!UUIDMap.t} in ocaml). *)
+let edges_of_uuid_multimap auxdata_scheme rel_kind auxdata =
+  Load_auxdata.load_exn auxdata_scheme auxdata
+  |> UUIDMap.to_iter
+  |> Iter.flat_map (fun (k, vs) -> UUIDSet.to_iter vs |> Iter.map (Pair.make k))
+  |> Iter.map (Graph_types.make_uuid_rel rel_kind)
+
+let edges_of_function_entries =
+  edges_of_uuid_multimap Load_auxdata.Loaders.function_entries
+    Function_has_entry
+
+let edges_of_function_blocks =
+  edges_of_uuid_multimap Load_auxdata.Loaders.function_blocks Function_has_block
 
 let edges_of_function_names auxdata =
-  let function_names =
-    Load_auxdata.Loaders.function_names auxdata
-    |> Result.to_option
-    |> Option.get_exn_or "function_names auxdata invalid"
-  in
+  let function_names = Load_auxdata.(load_exn Loaders.function_names) auxdata in
   UUIDMap.to_iter function_names
   |> Iter.map (Graph_types.make_uuid_rel Function_has_name)
 
 let edges_of_symbol_forwarding auxdata =
   let symbol_forwarding =
-    Load_auxdata.Loaders.symbol_forwarding auxdata
-    |> Result.to_option
-    |> Option.get_exn_or "symbol_forwarding auxdata invalid"
+    Load_auxdata.(load_exn Loaders.symbol_forwarding) auxdata
   in
   UUIDMap.to_iter symbol_forwarding
   |> Iter.map (Graph_types.make_uuid_rel Symbol_is_forwarded_to)
@@ -69,6 +68,7 @@ let graph_of_module (m : Gtirb_proto.Module.Gtirb.Proto.Module.t) =
 
   edges_of_function_entries auxdata |> Iter.iter (Graph_internal.add_edge_e g);
   edges_of_function_names auxdata |> Iter.iter (Graph_internal.add_edge_e g);
+  edges_of_function_blocks auxdata |> Iter.iter (Graph_internal.add_edge_e g);
   edges_of_symbol_forwarding auxdata |> Iter.iter (Graph_internal.add_edge_e g);
   edges_of_symbol_list m.symbols |> Iter.iter (Graph_internal.add_edge_e g);
   g

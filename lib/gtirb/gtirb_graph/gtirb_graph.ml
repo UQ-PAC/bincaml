@@ -2,7 +2,9 @@
 
 (** {2 Modules} *)
 
+module Graph_internal = Graph_internal
 module Graph_dot = Graph_dot
+module Graph_types = Graph_types
 module Loader = Loader
 
 (** {2 Types} *)
