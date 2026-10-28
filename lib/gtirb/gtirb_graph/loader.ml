@@ -16,7 +16,7 @@ let edges_of_function_entries auxdata =
   UUIDMap.to_iter function_entries
   |> Iter.flat_map (fun (func, entries) ->
       UUIDSet.to_iter entries |> Iter.map (Pair.make func))
-  |> Iter.map (Graph.make_uuid_rel Function_has_entry)
+  |> Iter.map (Graph_types.make_uuid_rel Function_has_entry)
 
 let edges_of_function_names auxdata =
   let function_names =
@@ -25,7 +25,7 @@ let edges_of_function_names auxdata =
     |> Option.get_exn_or "function_names auxdata invalid"
   in
   UUIDMap.to_iter function_names
-  |> Iter.map (Graph.make_uuid_rel Function_has_name)
+  |> Iter.map (Graph_types.make_uuid_rel Function_has_name)
 
 let edges_of_symbol_forwarding auxdata =
   let symbol_forwarding =
@@ -34,7 +34,7 @@ let edges_of_symbol_forwarding auxdata =
     |> Option.get_exn_or "symbol_forwarding auxdata invalid"
   in
   UUIDMap.to_iter symbol_forwarding
-  |> Iter.map (Graph.make_uuid_rel Symbol_is_forwarded_to)
+  |> Iter.map (Graph_types.make_uuid_rel Symbol_is_forwarded_to)
 
 let edges_of_symbol_list (syms : Gtirb_proto.Symbol.Gtirb.Proto.Symbol.t list) =
   let module Symbol = Gtirb_proto.Symbol.Gtirb.Proto.Symbol in
@@ -43,7 +43,7 @@ let edges_of_symbol_list (syms : Gtirb_proto.Symbol.Gtirb.Proto.Symbol.t list) =
     |> Iter.filter_map (function
       | { Symbol.uuid; optional_payload = `Referent_uuid referent; _ } ->
           Some
-            (Graph.make_uuid_rel Symbol_refers_to
+            (Graph_types.make_uuid_rel Symbol_refers_to
                UUID.(of_bytes uuid, of_bytes referent))
       | _ -> None)
   and datas =
@@ -52,14 +52,14 @@ let edges_of_symbol_list (syms : Gtirb_proto.Symbol.Gtirb.Proto.Symbol.t list) =
         let int_value =
           match optional_payload with `Value i -> Some i | _ -> None
         in
-        Graph.make_self_rel
+        Graph_types.make_self_rel
           (Symbol_data { name; at_end; int_value })
           (UUID.of_bytes uuid))
   in
   Iter.append datas referents
 
 let graph_of_module (m : Gtirb_proto.Module.Gtirb.Proto.Module.t) =
-  let g = Graph.create () in
+  let g = Graph_internal.create () in
 
   let auxdata =
     m.aux_data
@@ -67,8 +67,8 @@ let graph_of_module (m : Gtirb_proto.Module.Gtirb.Proto.Module.t) =
     |> StringMap.of_list
   in
 
-  edges_of_function_entries auxdata |> Iter.iter (Graph.add_edge_e g);
-  edges_of_function_names auxdata |> Iter.iter (Graph.add_edge_e g);
-  edges_of_symbol_forwarding auxdata |> Iter.iter (Graph.add_edge_e g);
-  edges_of_symbol_list m.symbols |> Iter.iter (Graph.add_edge_e g);
+  edges_of_function_entries auxdata |> Iter.iter (Graph_internal.add_edge_e g);
+  edges_of_function_names auxdata |> Iter.iter (Graph_internal.add_edge_e g);
+  edges_of_symbol_forwarding auxdata |> Iter.iter (Graph_internal.add_edge_e g);
+  edges_of_symbol_list m.symbols |> Iter.iter (Graph_internal.add_edge_e g);
   g

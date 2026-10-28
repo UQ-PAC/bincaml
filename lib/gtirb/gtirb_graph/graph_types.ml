@@ -35,9 +35,16 @@ type relation =
           of global variables at runtime. *)
 [@@deriving show { with_path = false }]
 
+(** {2 Helper functions} *)
+
+let make_rel (kind : relation) (a, b) = (a, kind, b)
+let make_uuid_rel (kind : relation) (a, b) = (Uuid a, kind, Uuid b)
+let make_self_rel (kind : relation) a = (Uuid a, kind, Self)
+
 (** {3 Derived functions} *)
 
 let pp_vert = pp_vert
 let show_vert = show_vert
 let pp_relation = pp_relation
 let show_relation = show_relation
+

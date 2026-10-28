@@ -4,8 +4,6 @@ module UUIDMap = Load_auxdata.UUIDMap
 module UUIDSet = Load_auxdata.UUIDSet
 module Gtirb_graph = Gtirb_graph
 
-let a = Gtirb_graph.Graph.make_rel
-
 module Gfir = Gfir
 (** Intermediate representation used by the frontend *)
 
