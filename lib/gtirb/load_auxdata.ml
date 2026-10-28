@@ -84,10 +84,21 @@ let load a (ad : Gtirb_proto.AuxData.Gtirb.Proto.AuxData.t StringMap.t) =
   let b = d.data |> Bytes.to_string in
   Angstrom.parse_string ~consume:All a.decoder b
 
+let load_exn a (ad : Gtirb_proto.AuxData.Gtirb.Proto.AuxData.t StringMap.t) =
+  let d =
+    match StringMap.find_opt a.name ad with
+    | Some x -> x
+    | None -> failwith ("could not find aux section: " ^ a.name)
+  in
+  let b = d.data |> Bytes.to_string in
+  match Angstrom.parse_string ~consume:All a.decoder b with
+  | Ok x -> x
+  | Error _ -> failwith ("could not parse aux section: " ^ a.name)
+
 module Loaders = struct
   let section_properties =
     let decoder = uuid_map (sequence (pair LE.any_int64 LE.any_int64)) in
-    { name = "sectionProperties"; decoder } |> load
+    { name = "sectionProperties"; decoder }
 
   (** The UUID of a gtrb::Symbol whose name field contains the name of the
       function.
@@ -100,30 +111,30 @@ module Loaders = struct
       AuxData tables. *)
   let function_names =
     let decoder = uuid_map uuid in
-    { name = "functionNames"; decoder } |> load
+    { name = "functionNames"; decoder }
 
   let symbol_forwarding =
     let decoder = uuid_map uuid in
-    { name = "symbolForwarding"; decoder } |> load
+    { name = "symbolForwarding"; decoder }
 
   (** The CodeBlock to which a [DT_INIT] entry in an ELF file's .dynamic section
       refers *)
-  let elf_dynamic_init = load { name = "elfDynamicInit"; decoder = uuid }
+  let elf_dynamic_init = { name = "elfDynamicInit"; decoder = uuid }
 
   (** The CodeBlock to which a [DT_FINI] entry in an ELF file's .dynamic section
       refers. *)
-  let elf_dynamic_fini = load { name = "elfDynamicFini"; decoder = uuid }
+  let elf_dynamic_fini = { name = "elfDynamicFini"; decoder = uuid }
 
   (** The string value which the [DT_SONAME] entry in an ELF file's .dynamic
       section contains. *)
-  let elf_soname = load { name = "elfSoname"; decoder = str }
+  let elf_soname = { name = "elfSoname"; decoder = str }
 
   (**Stack executable flag specified by [PT_GNU_STACK] segment in ELF files. *)
-  let elf_stackexec = load { name = "elfStackExec"; decoder = bool }
+  let elf_stackexec = { name = "elfStackExec"; decoder = bool }
 
   (**The size of the [PT_GNU_STACK] segment in ELF files, which may influence
      the runtime stack size in certain environments. *)
-  let elf_stacksize = load { name = "elfStackSize"; decoder = LE.any_int64 }
+  let elf_stacksize = { name = "elfStackSize"; decoder = LE.any_int64 }
 
   (** The set of UUIDs of all the blocks (gtirb::CodeBlock) in the function.
 
@@ -134,7 +145,7 @@ module Loaders = struct
       across all function-related AuxData tables. *)
   let function_blocks =
     let decoder = uuid_map uuid_set in
-    { name = "functionBlocks"; decoder } |> load
+    { name = "functionBlocks"; decoder }
 
   (** The set of UUIDs of all the entry blocks (gtirb::CodeBlock) for the
       function.
@@ -146,14 +157,14 @@ module Loaders = struct
       function-related AuxData tables. *)
   let function_entries =
     let decoder = uuid_map uuid_set in
-    { name = "functionEntries"; decoder } |> load
+    { name = "functionEntries"; decoder }
 
   (** Maps the gtirb::UUID of a gtirb::DataBlock -> The type of the data,
       expressed as a std::string containing a C++ type specifier.
 
       An entry in this table indicates that the given gtirb::DataBlock contains
       content that exhibits the given C++ type. *)
-  let types = load { name = "types"; decoder = uuid_map str }
+  let types = { name = "types"; decoder = uuid_map str }
 
   (** Maps the gtirb::UUID of a gtirb::CodeBlock, gtirb::DataBlock, or
       gtirb::Section -> Alignment requirements for the block/data
@@ -162,7 +173,7 @@ module Loaders = struct
       An entry in this table indicates that the given object's address is
       required to be evenly divisible by the alignment value. Typically the
       alignment value is a power of 2. *)
-  let alignment = load { name = "alignment"; decoder = uuid_map LE.any_int64 }
+  let alignment = { name = "alignment"; decoder = uuid_map LE.any_int64 }
 
   (** The gtirb::Offset of a comment -> A comment string relevant to the
       specified offset in the specified GTIRB entry.
@@ -172,8 +183,7 @@ module Loaders = struct
       applies. Comments can contain arbitrary content and are likely generated
       by analysis tools. They often do not (but may) represent comments present
       in the original source code of the binary. *)
-  let comments =
-    load { name = "comments"; decoder = sequence (pair offset str) }
+  let comments = { name = "comments"; decoder = sequence (pair offset str) }
 
   (** Padding here may be 0's or it may be valid instructions. An entry in this
       table indicates that an analysis has determined that at the given
@@ -184,14 +194,13 @@ module Loaders = struct
       gtirb::DataBlock for the same portion of address space that a padding
       entry covers. *)
   let padding =
-    load { name = "padding"; decoder = sequence (pair offset LE.any_int64) }
+    { name = "padding"; decoder = sequence (pair offset LE.any_int64) }
 
   let elf_symbol_table_idx_info =
     {
       name = "elfSymbolTabIdxInfo";
       decoder = uuid_map (sequence (pair str LE.any_int64));
     }
-    |> load
 
   (** On ELF targets only: Map from symbols to their type, binding, and
       visibility categories. *)
@@ -200,5 +209,4 @@ module Loaders = struct
       name = "elfSymbolInfo";
       decoder = uuid_map (quintuple LE.any_int64 str str str LE.any_int64);
     }
-    |> load
 end
