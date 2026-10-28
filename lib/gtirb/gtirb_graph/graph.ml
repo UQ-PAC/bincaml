@@ -18,6 +18,15 @@ module Internal =
       let default = Unknown_edge_type
     end)
 
+(** {2 Helper functions} *)
+
+let make_rel (kind : relation) (a, b) = (a, kind, b)
+let make_uuid_rel (kind : relation) (a, b) = (Uuid a, kind, Uuid b)
+
+(** {2 Ocamlgraph functions}
+
+    Be careful with using these! *)
+
 include (
   Internal :
     Dependencies.Graph.Sig.I
@@ -25,11 +34,8 @@ include (
       with type V.t := vert
       with type vertex := vert
       with type V.label := vert
+      with module V := Internal.V
       with type E.t := vert * relation * vert
       with type E.label := relation
-      with type E.vertex := vert)
-
-(** {2 Helper functions} *)
-
-let make_rel (kind : relation) (a, b) = (a, kind, b)
-let make_uuid_rel (kind : relation) (a, b) = (Uuid a, kind, Uuid b)
+      with type E.vertex := vert
+      with module E := Internal.E)
