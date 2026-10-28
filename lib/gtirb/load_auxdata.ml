@@ -85,13 +85,7 @@ let load a (ad : Gtirb_proto.AuxData.Gtirb.Proto.AuxData.t StringMap.t) =
   Angstrom.parse_string ~consume:All a.decoder b
 
 let load_exn a (ad : Gtirb_proto.AuxData.Gtirb.Proto.AuxData.t StringMap.t) =
-  let d =
-    match StringMap.find_opt a.name ad with
-    | Some x -> x
-    | None -> failwith ("could not find aux section: " ^ a.name)
-  in
-  let b = d.data |> Bytes.to_string in
-  match Angstrom.parse_string ~consume:All a.decoder b with
+  match load a ad with
   | Ok x -> x
   | Error _ -> failwith ("could not parse aux section: " ^ a.name)
 
