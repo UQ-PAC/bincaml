@@ -225,10 +225,13 @@ let gtirb_to_gfir prog (gtirb_cfg : CFG.t) (m : Module.t) =
     m.aux_data |> StringMap.of_list |> StringMap.filter_map (fun _ v -> v)
   in
   let func_names =
-    AD.function_names auxdata |> or_error UUIDMap.empty
+    Load_auxdata.load AD.function_names auxdata
+    |> or_error UUIDMap.empty
     |> UUIDMap.filter_map (fun _ u -> UUIDMap.find_opt u sym)
   in
-  let func_blocks = AD.function_blocks auxdata |> or_error UUIDMap.empty in
+  let func_blocks =
+    Load_auxdata.load AD.function_blocks auxdata |> or_error UUIDMap.empty
+  in
   (* construct map from block to function *)
   let block_functions =
     func_blocks |> UUIDMap.to_iter
@@ -245,7 +248,7 @@ let gtirb_to_gfir prog (gtirb_cfg : CFG.t) (m : Module.t) =
   in
   (* for each procedure collect its blocks marked as entry blocks*)
   let func_entry_blocks =
-    AD.function_entries auxdata |> or_error UUIDMap.empty
+    Load_auxdata.load AD.function_entries auxdata |> or_error UUIDMap.empty
   in
 
   let entry = UUIDMap.find (UUID.of_bytes m.entry_point) block_functions in
