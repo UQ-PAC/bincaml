@@ -8,14 +8,24 @@ type vert =
   | Uuid of UUID.t
 [@@deriving show { with_path = false }]
 
+type block_data =
+  | Proxy
+  | Code of {
+      size : int;
+      decode : Gtirb_proto.CodeBlock.Gtirb.Proto.DecodeMode.t; [@opaque]
+    }
+  | Data of { size : int }
+[@@deriving show { with_path = false }]
+
 (** @canonical Gtirb_frontend.Gtirb_graph.relation *)
 type relation =
   | Unknown_edge_type
   | Function_has_name
   | Function_has_entry
   | Function_has_block
+  | Block_data of block_data
   | Symbol_refers_to
-  | Symbol_data of { name : string; at_end : bool; value : int option }
+  | Symbol_data of { name : string; at_end : bool; int_value : int option }
   | Symbol_is_forwarded_to
       (** Redirects one Symbol to another. This is useful to resolve
           indirections related to dynamic linking. For example, in ELF files it

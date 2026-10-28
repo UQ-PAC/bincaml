@@ -22,6 +22,7 @@ module Internal =
 
 let make_rel (kind : relation) (a, b) = (a, kind, b)
 let make_uuid_rel (kind : relation) (a, b) = (Uuid a, kind, Uuid b)
+let make_self_rel (kind : relation) a = (Uuid a, kind, Self)
 
 (** {2 Ocamlgraph functions}
 
