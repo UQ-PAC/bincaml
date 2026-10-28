@@ -5,7 +5,14 @@ open Bincaml_util.Common
 open struct
   module UUIDMap = Load_auxdata.UUIDMap
   module UUIDSet = Load_auxdata.UUIDSet
+  module Symbol = Gtirb_proto.Symbol.Gtirb.Proto.Symbol
+  module Module = Gtirb_proto.Module.Gtirb.Proto.Module
+  module Section = Gtirb_proto.Section.Gtirb.Proto.Section
+  module ByteInterval = Gtirb_proto.ByteInterval.Gtirb.Proto.ByteInterval
+  module Block = Gtirb_proto.ByteInterval.Gtirb.Proto.Block
 end
+
+(** {2 Helper functions} *)
 
 (** Helper function for generating graph edges from an auxdata field of type
     [std::map<gtirb::UUID, std::set<gtirb::UUID>>] (that is, a {!UUIDSet.t}
@@ -15,6 +22,8 @@ let edges_of_uuid_multimap auxdata_scheme rel_kind auxdata =
   |> UUIDMap.to_iter
   |> Iter.flat_map (fun (k, vs) -> UUIDSet.to_iter vs |> Iter.map (Pair.make k))
   |> Iter.map (Graph_types.make_uuid_rel rel_kind)
+
+(** {2 Function information} *)
 
 let edges_of_function_entries =
   edges_of_uuid_multimap Load_auxdata.Loaders.function_entries
@@ -35,8 +44,9 @@ let edges_of_symbol_forwarding auxdata =
   UUIDMap.to_iter symbol_forwarding
   |> Iter.map (Graph_types.make_uuid_rel Symbol_is_forwarded_to)
 
+(** {2 Symbol information} *)
+
 let edges_of_symbol_list (syms : Gtirb_proto.Symbol.Gtirb.Proto.Symbol.t list) =
-  let module Symbol = Gtirb_proto.Symbol.Gtirb.Proto.Symbol in
   let referents =
     List.to_iter syms
     |> Iter.filter_map (function
@@ -57,6 +67,21 @@ let edges_of_symbol_list (syms : Gtirb_proto.Symbol.Gtirb.Proto.Symbol.t list) =
   in
   Iter.append datas referents
 
+(** {2 Section and block information} *)
+
+let edges_of_blocks (bs : Gtirb_proto.ByteInterval.Gtirb.Proto.Block.t Iter.t) =
+  bs
+  |> Iter.filter_map (function { Block.value } ->
+      (match value with
+      | `not_set -> None
+      | `Code { uuid; size; decode_mode } ->
+          Some (uuid, `Code (size, decode_mode))
+      | `Data { uuid; size } -> Some (uuid, `Data size)))
+  |> Iter.map (fun (uuid, data) ->
+      Graph_types.make_self_rel (Block_data data) (UUID.of_bytes uuid))
+
+(** {2 Entry point} *)
+
 let graph_of_module (m : Gtirb_proto.Module.Gtirb.Proto.Module.t) =
   let g = Graph_internal.create () in
 
@@ -71,4 +96,12 @@ let graph_of_module (m : Gtirb_proto.Module.Gtirb.Proto.Module.t) =
   edges_of_function_blocks auxdata |> Iter.iter (Graph_internal.add_edge_e g);
   edges_of_symbol_forwarding auxdata |> Iter.iter (Graph_internal.add_edge_e g);
   edges_of_symbol_list m.symbols |> Iter.iter (Graph_internal.add_edge_e g);
+
+  (* TODO: do sections and byteintervals too *)
+  List.to_iter m.Module.sections
+  |> Iter.flat_map_l (fun s -> s.Section.byte_intervals)
+  |> Iter.flat_map_l (fun bi -> bi.ByteInterval.blocks)
+  |> edges_of_blocks
+  |> Iter.iter (Graph_internal.add_edge_e g);
+
   g

@@ -6,29 +6,44 @@
     @canonical Gtirb_frontend.Gtirb_graph.vert *)
 type vert = Uuid of UUID.t [@@deriving show { with_path = false }]
 
-type block_data =
-  | Proxy
-  | Code of {
-      size : int;
-      decode : Gtirb_proto.CodeBlock.Gtirb.Proto.DecodeMode.t; [@opaque]
-    }
-  | Data of { size : int }
-[@@deriving show { with_path = false }]
-
-(** A relation between two {!vert}s.
+(** A relation between two {!vert}s. For example, an edge [a -> b] with label
+    [Function_has_entry] means that the function [a] has entry [b].
 
     @canonical Gtirb_frontend.Gtirb_graph.relation
 
     An edge from [Uuid id -> Uuid id] (a self-loop) can be used for annotating
     data about [id] itself. These are the variants which end in [_data]. *)
 type relation =
-  | Unknown_edge_type
   | Function_has_name
+      (** The UUID of a Symbol whose name field contains the name of the
+          function.
+
+          Note: There may be more than one gtirb::Symbol associated with the
+          address(es) corresponding to the entry point(s) of a function. This
+          table identifies a canonical gtirb::Symbol to be used for each
+          function. Note that there is no function notion in the core GTIRB IR.
+          A function's UUID is just a unique identifier that is consistently
+          used across all function-related AuxData tables. *)
   | Function_has_entry
+      (** This table identifies all gtirb::CodeBlocks that represent entry
+          points to each function. A single function may have more than one
+          entry point. Note that there is no function notion in the core GTIRB
+          IR. A function's UUID is just a unique identifier that is consistently
+          used across all function-related AuxData tables. *)
   | Function_has_block
-  | Block_data of block_data
-  | Symbol_refers_to
+  (*| Section_data of {
+      name: string;
+      flags: (Gtirb_proto.Section.Gtirb.Proto.SectionFlag.t[@opaque]) list
+    }
+  | Section_has_byteinterval *)
+  | Block_data of
+      [ `Proxy
+      | `Code of int * (Gtirb_proto.CodeBlock.Gtirb.Proto.DecodeMode.t[@opaque])
+      | `Data of int ]
+      (** Information about a block. In the Code and Data variants, the int is
+          the size. *)
   | Symbol_data of { name : string; at_end : bool; int_value : int option }
+  | Symbol_refers_to
   | Symbol_is_forwarded_to
       (** Redirects one Symbol to another. This is useful to resolve
           indirections related to dynamic linking. For example, in ELF files it
@@ -36,6 +51,7 @@ type relation =
           the function Symbols called in such entries. It also resolves indirect
           references via the Global Offset Table (GOT) used to resolve addresses
           of global variables at runtime. *)
+  | Unknown_edge_type
 [@@deriving show { with_path = false }]
 
 (** {2 Helper functions} *)
