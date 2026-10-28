@@ -4,7 +4,7 @@
 open Graph_types
 
 include
-  Dependencies.Graph.Imperative.Digraph.ConcreteLabeled
+  Graph.Imperative.Digraph.ConcreteLabeled
     (struct
       type t = vert
 

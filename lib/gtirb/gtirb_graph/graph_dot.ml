@@ -2,7 +2,7 @@
 
 let escape = Printf.sprintf {|%S|}
 
-include Dependencies.Graph.Graphviz.Dot (struct
+include Graph.Graphviz.Dot (struct
   include Graph_internal
 
   let edge_attributes (_, edge, _) =
