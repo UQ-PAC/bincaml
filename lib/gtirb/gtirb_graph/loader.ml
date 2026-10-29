@@ -98,6 +98,10 @@ let edges_of_proxy_blocks (uuids : bytes list) =
   |> Iter.map (fun uuid ->
       Graph_types.make_self_rel (Block_data `Proxy) (UUID.of_bytes uuid))
 
+(** {2 Control-flow graph information} *)
+
+let edges_of_ipcfg (cfg : Gtirb_proto'.CFG.t) = 2
+
 (** {2 Entry point} *)
 
 let graph_of_module (m : Gtirb_proto'.Module.t) =

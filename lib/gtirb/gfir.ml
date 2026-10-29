@@ -19,21 +19,7 @@ open Conf
 
 (** edges just copied directly from gtirb protobuf CFG *)
 module Edge = struct
-  type edge_type = EdgeType.t =
-    | Type_Branch
-    | Type_Call
-    | Type_Fallthrough
-    | Type_Return
-    | Type_Syscall
-    | Type_Sysret
-  [@@deriving eq, ord, show { with_path = false }]
-
-  type edge_label = EdgeLabel.t = {
-    conditional : bool;
-    direct : bool;
-    type' : edge_type;
-  }
-  [@@deriving eq, ord, show { with_path = false }]
+  open Gtirb_types
 
   type t = edge_label option [@@deriving eq, ord, show { with_path = false }]
 

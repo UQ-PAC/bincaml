@@ -1,6 +1,7 @@
 open Bincaml_util.Common
 module OResult = Result
 open Gtirb_proto
+open Gtirb_types
 open Ocaml_protoc_plugin
 open IR.Gtirb.Proto
 open ByteInterval.Gtirb.Proto
