@@ -8,12 +8,14 @@ open struct
 
   (** Local module alias for shortening module namespace paths. *)
   module Gtirb_proto' = struct
+    module IR = Gtirb_proto.IR.Gtirb.Proto.IR
     module Symbol = Gtirb_proto.Symbol.Gtirb.Proto.Symbol
     module Module = Gtirb_proto.Module.Gtirb.Proto.Module
     module Section = Gtirb_proto.Section.Gtirb.Proto.Section
     module ByteInterval = Gtirb_proto.ByteInterval.Gtirb.Proto.ByteInterval
     module Block = Gtirb_proto.ByteInterval.Gtirb.Proto.Block
     module CFG = Gtirb_proto.CFG.Gtirb.Proto.CFG
+    module Edge = Gtirb_proto.CFG.Gtirb.Proto.Edge
   end
 end
 
@@ -100,32 +102,51 @@ let edges_of_proxy_blocks (uuids : bytes list) =
 
 (** {2 Control-flow graph information} *)
 
-let edges_of_ipcfg (cfg : Gtirb_proto'.CFG.t) = 2
+let edges_of_ipcfg (cfg : Gtirb_proto'.CFG.t) =
+  List.to_iter cfg.edges
+  |> Iter.map (function
+      | { Gtirb_proto'.Edge.source_uuid; target_uuid; label } ->
+      Graph_types.make_uuid_rel
+        (Control_flow (label |> Option.get))
+        UUID.(of_bytes source_uuid, of_bytes target_uuid))
 
 (** {2 Entry point} *)
 
-let graph_of_module (m : Gtirb_proto'.Module.t) =
-  let g = Graph_internal.create () in
-
+let edges_of_module (m : Gtirb_proto'.Module.t) =
   let auxdata =
     m.aux_data
     |> List.filter_map (function k, Some v -> Some (k, v) | _ -> None)
     |> StringMap.of_list
   in
 
-  edges_of_function_entries auxdata |> Iter.iter (Graph_internal.add_edge_e g);
-  edges_of_function_names auxdata |> Iter.iter (Graph_internal.add_edge_e g);
-  edges_of_function_blocks auxdata |> Iter.iter (Graph_internal.add_edge_e g);
-  edges_of_symbol_forwarding auxdata |> Iter.iter (Graph_internal.add_edge_e g);
-  edges_of_symbol_list m.symbols |> Iter.iter (Graph_internal.add_edge_e g);
-  edges_of_proxy_blocks m.proxies |> Iter.iter (Graph_internal.add_edge_e g);
-
   (* TODO: do sections and byteintervals too *)
-  let open Gtirb_proto' in
-  List.to_iter m.Module.sections
-  |> Iter.flat_map_l (fun s -> s.Section.byte_intervals)
-  |> Iter.flat_map_l (fun bi -> bi.ByteInterval.blocks)
-  |> edges_of_concrete_blocks
-  |> Iter.iter (Graph_internal.add_edge_e g);
+  let concrete_block_edges =
+    let open Gtirb_proto' in
+    List.to_iter m.Module.sections
+    |> Iter.flat_map_l (fun s -> s.Section.byte_intervals)
+    |> Iter.flat_map_l (fun bi -> bi.ByteInterval.blocks)
+    |> edges_of_concrete_blocks
+  in
 
+  Iter.append_l
+    [
+      concrete_block_edges;
+      edges_of_function_entries auxdata;
+      edges_of_function_names auxdata;
+      edges_of_function_blocks auxdata;
+      edges_of_symbol_forwarding auxdata;
+      edges_of_symbol_list m.symbols;
+      edges_of_proxy_blocks m.proxies;
+    ]
+
+let edges_of_gtirb_ir (ir : Gtirb_proto'.IR.t) =
+  Iter.append_l
+    [
+      Option.to_iter ir.cfg |> Iter.flat_map edges_of_ipcfg;
+      List.to_iter ir.modules |> Iter.flat_map edges_of_module;
+    ]
+
+let graph_of_gtirb_ir ir =
+  let g = Graph_internal.create () in
+  edges_of_gtirb_ir ir |> Iter.iter (Graph_internal.add_edge_e g);
   g
