@@ -60,6 +60,8 @@ type relation =
           references via the Global Offset Table (GOT) used to resolve addresses
           of global variables at runtime. *)
   | Unknown_edge_type
+      (** Edge of unknown type. This should never occur and is only needed to
+          define the default ocamlgraph edge type. *)
 [@@deriving show { with_path = false }]
 
 (** {2 Helper functions} *)
