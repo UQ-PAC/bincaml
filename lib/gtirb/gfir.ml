@@ -1,11 +1,6 @@
 open Bincaml_util.Common
-open Gtirb_proto
 open Ocaml_protoc_plugin
-open IR.Gtirb.Proto
-open ByteInterval.Gtirb.Proto
-open Module.Gtirb.Proto
-open Section.Gtirb.Proto
-open CFG.Gtirb.Proto
+open Gtirb_proto'
 open Load_auxdata
 module UUIDMap = UUIDMap
 module UUIDSet = UUIDSet
@@ -19,22 +14,6 @@ open Conf
 
 (** edges just copied directly from gtirb protobuf CFG *)
 module Edge = struct
-  type edge_type = EdgeType.t =
-    | Type_Branch
-    | Type_Call
-    | Type_Fallthrough
-    | Type_Return
-    | Type_Syscall
-    | Type_Sysret
-  [@@deriving eq, ord, show { with_path = false }]
-
-  type edge_label = EdgeLabel.t = {
-    conditional : bool;
-    direct : bool;
-    type' : edge_type;
-  }
-  [@@deriving eq, ord, show { with_path = false }]
-
   type t = edge_label option [@@deriving eq, ord, show { with_path = false }]
 
   let to_attrib { conditional; direct; type' } =
@@ -153,7 +132,7 @@ let make_proc_cfg block_member_of block_proxy (gtirb_cfg : CFG.t)
   in
   let module E = Edge in
   let edges =
-    Gtirb_proto.CFG.Gtirb.Proto.Edge.(
+    Gtirb_proto'.Edge.(
       gtirb_cfg.edges
       |> List.filter (fun { source_uuid; _ } ->
           let uuid = UUID.of_bytes source_uuid in
@@ -202,7 +181,7 @@ let gtirb_to_gfir prog (gtirb_cfg : CFG.t) (m : Module.t) =
 
   let proxy_blocks =
     m.proxies
-    |> List.map (fun (m : ProxyBlock.Gtirb.Proto.ProxyBlock.t) ->
+    |> List.map (fun (m : ProxyBlock.t) ->
         let u = UUID.of_bytes m in
         (u, Gtirb.Proxy u))
     |> UUIDMap.of_list
@@ -210,8 +189,7 @@ let gtirb_to_gfir prog (gtirb_cfg : CFG.t) (m : Module.t) =
 
   let sym =
     m.symbols
-    |> List.map (fun (s : Symbol.Gtirb.Proto.Symbol.t) ->
-        (UUID.of_bytes s.uuid, s.name))
+    |> List.map (fun (s : Symbol.t) -> (UUID.of_bytes s.uuid, s.name))
     |> UUIDMap.of_list
   in
   let all_blocks =
