@@ -57,7 +57,7 @@ type relation =
           the function Symbols called in such entries. It also resolves indirect
           references via the Global Offset Table (GOT) used to resolve addresses
           of global variables at runtime. *)
-  | Control_flow of Gtirb_proto'.edge_label
+  | Control_flow of [ `Same_proc | `Out_of_proc ] * Gtirb_proto'.edge_label
       (** A (possibly inter-procedural) control-flow edge. *)
   | Unknown_edge_type
       (** Edge of unknown type. This should never occur and is only needed to

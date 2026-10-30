@@ -104,11 +104,13 @@ let edges_of_proxy_blocks (uuids : bytes list) =
 
 let edges_of_ipcfg (cfg : Gtirb_proto'.CFG.t) =
   List.to_iter cfg.edges
-  |> Iter.map (function
-      | { Gtirb_proto'.Edge.source_uuid; target_uuid; label } ->
-      Graph_types.make_uuid_rel
-        (Control_flow (label |> Option.get))
-        UUID.(of_bytes source_uuid, of_bytes target_uuid))
+  |> Iter.filter_map (function
+    | { Gtirb_proto'.Edge.source_uuid; target_uuid; label = None } -> None
+    | { source_uuid; target_uuid; label = Some label } ->
+        Some
+          (Graph_types.make_uuid_rel
+             (Control_flow (`Same_proc, label))
+             UUID.(of_bytes source_uuid, of_bytes target_uuid)))
 
 (** {2 Entry point} *)
 
