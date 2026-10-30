@@ -9,9 +9,7 @@ type vert = Uuid of UUID.t [@@deriving show { with_path = false }]
 (** Data stored by a UUID of a particular kind.*)
 type self_data =
   | Block_data of
-      [ `Proxy
-      | `Code of int * Gtirb_proto'.decode_mode
-      | `Data of int ]
+      [ `Proxy | `Code of int * Gtirb_proto'.decode_mode | `Data of int ]
       (** Information about a block. In the Code and Data variants, the int is
           the size. *)
   | Symbol_data of { name : string; at_end : bool; int_value : int option }
