@@ -148,7 +148,4 @@ let edges_of_gtirb_ir (ir : Gtirb_proto'.IR.t) =
       List.to_iter ir.modules |> Iter.flat_map edges_of_module;
     ]
 
-let graph_of_gtirb_ir ir =
-  let g = Graph_internal.create () in
-  edges_of_gtirb_ir ir |> Iter.iter (Graph_internal.add_edge_e g);
-  g
+let graph_of_gtirb_ir ir = Graph_query.of_edges_iter (edges_of_gtirb_ir ir)
