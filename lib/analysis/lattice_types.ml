@@ -108,6 +108,20 @@ module type Domain = sig
   val init : ?vertex:Procedure.Vert.t Option.t -> Program.proc -> t
 end
 
+module BooleanLattice = struct
+  type t = bool [@@deriving eq, ord]
+
+  let name = "bool"
+  let bottom = false
+  let top = true
+  let show = Bool.to_string
+  let pretty = Containers_pp.bool
+  let leq a b = (not a) || b
+  let join = ( || )
+  let widening = join
+  let narrowing = const
+end
+
 module FlatLattice (L : sig
   include ORD_TYPE
 
