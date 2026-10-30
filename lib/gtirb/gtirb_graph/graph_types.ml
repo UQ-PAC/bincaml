@@ -10,7 +10,7 @@ type vert = Uuid of UUID.t [@@deriving show { with_path = false }]
 type self_data =
   | Block_data of
       [ `Proxy
-      | `Code of int * (Gtirb_proto.CodeBlock.Gtirb.Proto.DecodeMode.t[@opaque])
+      | `Code of int * Gtirb_proto'.decode_mode
       | `Data of int ]
       (** Information about a block. In the Code and Data variants, the int is
           the size. *)
