@@ -1,18 +1,8 @@
+(include_subdirs qualified)
+
 (library
  (public_name bincaml.gtirb)
  (name gtirb_frontend)
- (modules
-  load_auxdata
-  gtirb
-  UUID
-  opcode
-  disas
-  gfir
-  gfir_to_bincaml
-  conf
-  gtirb_attribs
-  gtirb_proto'
-  gtirb_frontend)
  (libraries
   bincaml.gtirb_proto
   capstone_arm64_disas
