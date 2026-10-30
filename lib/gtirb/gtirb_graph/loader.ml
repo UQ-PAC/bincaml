@@ -119,12 +119,13 @@ let fixup_ipcfg_edges g =
   |> Iter.persistent
   |> Iter.fold
        (fun g (old_edge, label, (src, tgt)) ->
-         let src_fun, tgt_fun =
-           Graph_query.(function_of_block_exn g src, function_of_block_exn g tgt)
-         in
          let flow_kind =
-           if Graph_types.equal_vert src_fun tgt_fun then `In_proc
-           else `Out_of_proc
+           match
+             Graph_query.
+               (function_of_block_exn g src, function_of_block_exn g tgt)
+           with
+           | Some src, Some tgt when Graph_types.equal_vert src tgt -> `In_proc
+           | _ -> `Out_of_proc
          in
          Graph_query.replace_edge_e g old_edge
            (src, Control_flow (flow_kind, label), tgt))

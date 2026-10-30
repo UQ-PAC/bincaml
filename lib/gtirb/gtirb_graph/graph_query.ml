@@ -32,10 +32,12 @@ let singular ?(msg = "expected exactly one item in Iter") (it : 'a Iter.t) =
   it f;
   match !cell with None -> failwith msg | Some x -> x
 
-(** Gets the function UUID which contains the given block UUID. *)
+(** Gets the (unique) function UUID which contains the given block UUID, or
+    [None] if the block is a proxy block. *)
 let function_of_block_exn g v =
   preds_iter g v
   |> Iter.filter_map (function
-    | func, Function_has_block, _ -> Some func
+    | func, Function_has_block, _ -> Some (Some func)
+    | _, Self (Block_data `Proxy), _ -> Some None
     | _ -> None)
   |> singular
