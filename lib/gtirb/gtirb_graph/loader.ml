@@ -118,7 +118,7 @@ let fixup_ipcfg_edges g =
     | _ -> None)
   |> Iter.persistent
   |> Iter.fold
-       (fun g (e, label, (src, tgt)) ->
+       (fun g (old_edge, label, (src, tgt)) ->
          let src_fun, tgt_fun =
            Graph_query.(function_of_block_exn g src, function_of_block_exn g tgt)
          in
@@ -126,7 +126,7 @@ let fixup_ipcfg_edges g =
            if Graph_types.equal_vert src_fun tgt_fun then `In_proc
            else `Out_of_proc
          in
-         Graph_query.replace_edge_e g e
+         Graph_query.replace_edge_e g old_edge
            (src, Control_flow (flow_kind, label), tgt))
        g
 
