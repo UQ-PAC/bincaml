@@ -75,7 +75,7 @@ open AuxDataTypes
 
 type 'a aux_section = { name : string; decoder : 'a t }
 
-let load a (ad : Gtirb_proto.AuxData.Gtirb.Proto.AuxData.t StringMap.t) =
+let load a (ad : Gtirb_proto'.AuxData.t StringMap.t) =
   let open Result in
   let* d =
     StringMap.find_opt a.name ad

@@ -9,7 +9,7 @@ type vert = Uuid of UUID.t [@@deriving show { with_path = false }]
 (** Data stored by a UUID of a particular kind.*)
 type self_data =
   | Block_data of
-      [ `Proxy | `Code of int * Gtirb_types.decode_mode | `Data of int ]
+      [ `Proxy | `Code of int * Gtirb_proto'.decode_mode | `Data of int ]
       (** Information about a block. In the Code and Data variants, the int is
           the size. *)
   | Symbol_data of { name : string; at_end : bool; int_value : int option }
@@ -57,7 +57,7 @@ type relation =
           the function Symbols called in such entries. It also resolves indirect
           references via the Global Offset Table (GOT) used to resolve addresses
           of global variables at runtime. *)
-  | Control_flow of Gtirb_types.edge_label
+  | Control_flow of Gtirb_proto'.edge_label
       (** A (possibly inter-procedural) control-flow edge. *)
   | Unknown_edge_type
       (** Edge of unknown type. This should never occur and is only needed to
