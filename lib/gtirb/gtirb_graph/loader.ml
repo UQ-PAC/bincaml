@@ -45,7 +45,7 @@ let edges_of_function_names auxdata =
   |> Iter.flat_map (fun pair ->
       Iter.doubleton
         (Graph_types.make_uuid_rel Function_has_name pair)
-        (Graph_types.make_self_rel (Function_data ()) (fst pair)))
+        (Graph_types.make_self_uuid_rel (Function_data ()) (fst pair)))
 
 let edges_of_symbol_forwarding auxdata =
   let symbol_forwarding =
@@ -65,9 +65,7 @@ let edges_of_symbol_list (syms : Gtirb_proto'.Symbol.t list) =
           optional_payload = `Referent_uuid referent;
           _;
         } ->
-          Some
-            (Graph_types.make_uuid_rel Symbol_refers_to
-               UUID.(of_bytes uuid, of_bytes referent))
+          Some Graph_types.(make_rel Symbol_refers_to (v uuid, v referent))
       | _ -> None)
   and datas =
     List.to_iter syms
@@ -76,9 +74,8 @@ let edges_of_symbol_list (syms : Gtirb_proto'.Symbol.t list) =
         let int_value =
           match optional_payload with `Value i -> Some i | _ -> None
         in
-        Graph_types.make_self_rel
-          (Symbol_data { name; at_end; int_value })
-          (UUID.of_bytes uuid))
+        Graph_types.(
+          make_self_rel (Symbol_data { name; at_end; int_value }) (v uuid)))
   in
   Iter.append datas referents
 
@@ -93,12 +90,12 @@ let edges_of_concrete_blocks (bs : Gtirb_proto'.Block.t Iter.t) =
           Some (uuid, `Code (size, decode_mode))
       | `Data { uuid; size } -> Some (uuid, `Data size)))
   |> Iter.map (fun (uuid, data) ->
-      Graph_types.make_self_rel (Block_data data) (UUID.of_bytes uuid))
+      Graph_types.(make_self_rel (Block_data data) (v uuid)))
 
 let edges_of_proxy_blocks (uuids : bytes list) =
   uuids |> List.to_iter
   |> Iter.map (fun uuid ->
-      Graph_types.make_self_rel (Block_data `Proxy) (UUID.of_bytes uuid))
+      Graph_types.(make_self_rel (Block_data `Proxy) (v uuid)))
 
 (** {2 Control-flow graph information} *)
 
@@ -107,10 +104,31 @@ let edges_of_ipcfg (cfg : Gtirb_proto'.CFG.t) =
   |> Iter.filter_map (function
     | { Gtirb_proto'.Edge.source_uuid; target_uuid; label = None } -> None
     | { source_uuid; target_uuid; label = Some label } ->
-        Some
-          (Graph_types.make_uuid_rel
-             (Control_flow (`Same_proc, label))
-             UUID.(of_bytes source_uuid, of_bytes target_uuid)))
+        let src, tgt = Graph_types.(v source_uuid, v target_uuid) in
+        Some (Graph_types.make_rel (Control_flow (`In_proc, label)) (src, tgt)))
+
+(** Correct the inter-/intra-procedural labels on {!Graph_types.Control_flow}
+    edges. This has to query other parts of the graph, so has to run as a
+    post-process. *)
+let fixup_ipcfg_edges g =
+  Graph_query.to_edges_iter g
+  |> Iter.filter_map (function
+    | (src, Graph_types.Control_flow (_, label), tgt) as e ->
+        Some (e, label, (src, tgt))
+    | _ -> None)
+  |> Iter.persistent
+  |> Iter.fold
+       (fun g (e, label, (src, tgt)) ->
+         let src_fun, tgt_fun =
+           Graph_query.(function_of_block_exn g src, function_of_block_exn g tgt)
+         in
+         let flow_kind =
+           if Graph_types.equal_vert src_fun tgt_fun then `In_proc
+           else `Out_of_proc
+         in
+         Graph_query.replace_edge_e g e
+           (src, Control_flow (flow_kind, label), tgt))
+       g
 
 (** {2 Entry point} *)
 
@@ -148,4 +166,5 @@ let edges_of_gtirb_ir (ir : Gtirb_proto'.IR.t) =
       List.to_iter ir.modules |> Iter.flat_map edges_of_module;
     ]
 
-let graph_of_gtirb_ir ir = Graph_query.of_edges_iter (edges_of_gtirb_ir ir)
+let graph_of_gtirb_ir ir =
+  Graph_query.of_edges_iter (edges_of_gtirb_ir ir) |> fixup_ipcfg_edges

@@ -4,7 +4,7 @@
 (** A vertex in the {!Gtirb_frontend.Gtirb_graph.t}.
 
     @canonical Gtirb_frontend.Gtirb_graph.vert *)
-type vert = Uuid of UUID.t [@@deriving show { with_path = false }]
+type vert = Uuid of UUID.t [@@deriving eq, show { with_path = false }]
 
 (** Data stored by a UUID of a particular kind.*)
 type self_data =
@@ -57,7 +57,7 @@ type relation =
           the function Symbols called in such entries. It also resolves indirect
           references via the Global Offset Table (GOT) used to resolve addresses
           of global variables at runtime. *)
-  | Control_flow of [ `Same_proc | `Out_of_proc ] * Gtirb_proto'.edge_label
+  | Control_flow of [ `In_proc | `Out_of_proc ] * Gtirb_proto'.edge_label
       (** A (possibly inter-procedural) control-flow edge. *)
   | Unknown_edge_type
       (** Edge of unknown type. This should never occur and is only needed to
@@ -66,15 +66,21 @@ type relation =
 
 (** {2 Helper functions} *)
 
+(** Makes a {!vert} from a given {!bytes}. This is convenient to use with the
+    {!bytes} fields stored in the protobuf data. *)
+let v bytes = Uuid (UUID.of_bytes bytes)
+
 let make_rel (kind : relation) (a, b) = (a, kind, b)
 let make_uuid_rel (kind : relation) (a, b) = (Uuid a, kind, Uuid b)
+let make_self_rel (kind : self_data) a = (a, Self kind, a)
 
-let make_self_rel (kind : self_data) a =
-  let v = Uuid a in
-  (v, Self kind, v)
+let make_self_uuid_rel (kind : self_data) a =
+  let a = Uuid a in
+  (a, Self kind, a)
 
 (** {3 Derived functions} *)
 
+let equal_vert = equal_vert
 let pp_vert = pp_vert
 let show_vert = show_vert
 let pp_self_data = pp_self_data
