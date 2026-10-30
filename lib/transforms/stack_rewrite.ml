@@ -59,36 +59,19 @@ end
 module TaintAnalysis = Dataflow_graph.AnalysisFwd (Taint)
 
 (** Determine the offset of an expression of the form R31_in - off *)
-let computed_offset e =
-  (* TODO use an improved version of linear_copy !!!!!! it should let us
-     extract these offsets from exprs etc *)
-  let open Expr.BasilExpr in
-  match e with
-  | E
-      (ApplyIntrin
-         {
-           op = `BVADD;
-           args =
-             [ E (RVar { id = v }); E (Constant { const = `Bitvector bv }) ];
-         })
-    when is_sp_in v ->
-      Some (Bitvec.neg bv)
-  | E
-      (BinaryExpr
-         {
-           op = `BVSUB;
-           arg1 = E (RVar { id = v });
-           arg2 = E (Constant { const = `Bitvector bv });
-         })
-    when is_sp_in v ->
-      Some bv
-  | E (RVar { id = v }) when is_sp_in v -> Some (Bitvec.zero ~size:64)
+let computed_offset ~g e =
+  let open Analysis.Linear_const in
+  match Graph.fun_of g e with
+  | Some (LF.IdEdge, v) when is_sp_in v -> Some (Bitvec.zero ~size:64)
+  | Some (LF.Linear (a, b), v)
+    when Bitvec.equal a (Bitvec.one ~size:64) && is_sp_in v ->
+      Some (Bitvec.neg b)
   | _ -> None
 
 type stack_size = Unbounded | Size of Bitvec.t | Unknown [@@deriving show]
 
 (** Computes the size of the stack frame of this procedure. *)
-let stack_frame_size proc =
+let stack_frame_size ~g proc =
   (* Look at all calls in this procedure and look at their passed R31_in
      parameter. If they all have the same offset, that is the stack frame size.
      If they have different sizes, then the stack size is unknown and if there
@@ -102,7 +85,7 @@ let stack_frame_size proc =
           StringMap.get "R31_in" args
           |> Option.or_ ~else_:(StringMap.get "SP_in" args)
           |> Option.map (fun arg ->
-              computed_offset arg
+              computed_offset ~g arg
               |> Option.get_exn_or
                    "Passed stack pointer parameter was not of the expected \
                     form!")
@@ -115,16 +98,16 @@ let stack_frame_size proc =
 
 (** Determines whether all stack memory operations fall within bounds of the
     procedure's stack frame. *)
-let stack_ops_inbounds proc =
+let stack_ops_inbounds ~g proc =
   let open Stmt in
   let m = TaintAnalysis.flow_insensitive proc in
-  let stack_size = stack_frame_size proc in
+  let stack_size = stack_frame_size ~g proc in
   Procedure.iter_stmt_topo_fwd proc
   |> Iter.for_all (function
     | Instr_Load { addr = Addr { addr; size = s } }
     | Instr_Store { addr = Addr { addr; size = s } } ->
         if Taint.is_tainted_expr m addr then
-          computed_offset addr
+          computed_offset ~g addr
           |> Option.exists (fun o ->
               let size = Bitvec.size o in
               (* o' is the offset of the last byte read/written to *)
@@ -160,20 +143,22 @@ let sp_never_escapes proc =
     passed as parameters to called procedures except for R31_in/SP_in. We also
     require that all transitive callees of this procedure can also be
     transformed. *)
-let rec can_transform ?(memo = ref IDMap.empty) prog proc =
+let rec can_transform ~lc_graphs ?(memo = ref IDMap.empty) prog proc =
   let open Stmt in
   let id = Procedure.id proc in
+  let g = Hashtbl.find lc_graphs id in
   match IDMap.get id !memo with
   | Some b -> b
   | None ->
-      let b = stack_ops_inbounds proc && sp_never_escapes proc in
+      let b = stack_ops_inbounds ~g proc && sp_never_escapes proc in
       memo := IDMap.add id b !memo;
       if b then (
         let x =
           Procedure.iter_stmt_topo_fwd proc
           |> Iter.for_all (function
             | Instr_Call { procid } ->
-                can_transform ~memo prog (Program.get_proc procid prog)
+                can_transform ~lc_graphs ~memo prog
+                  (Program.get_proc procid prog)
             | _ -> true)
         in
         memo := IDMap.add id x !memo;
@@ -183,8 +168,9 @@ let rec can_transform ?(memo = ref IDMap.empty) prog proc =
 (** Tries to add a stack allocation to the start of the procedure, and returns
     the new stack pointer variable if successful. This will fail if the
     procedure does not have an entry block (e.g. it is a stub). *)
-let create_stack_frame prog proc =
+let create_stack_frame ~lc_graphs prog proc =
   let open Option.Infix in
+  let g = Hashtbl.find lc_graphs (Procedure.id proc) in
   let* entry_id = Procedure.get_entry_block proc in
   let new_sp =
     Procedure.fresh_var proc ~pure:true ~name:"SP" (Types.Bitvector 64)
@@ -194,7 +180,7 @@ let create_stack_frame prog proc =
     |> Iter.find_pred_exn (fun v -> String.equal (Var.name v) "$mem")
   in
   let stack_size =
-    match stack_frame_size proc with
+    match stack_frame_size ~g proc with
     | Size s -> Expr.BasilExpr.bvconst s
     (* Unbounded stack offset use is maybe valid as long as it is always within the procedure's frame?!?! *)
     | Unbounded -> Expr.BasilExpr.bvconst (Bitvec.max_value_signed 64)
@@ -228,30 +214,31 @@ let drop_sp_params proc =
 let transform prog =
   let open Option.Infix in
   let memo = ref IDMap.empty in
+  let lc_graphs = Analysis.Linear_const.Solver.solve prog in
   Program.map_procedures
     (fun pid proc ->
       let old_sp =
-        if can_transform ~memo prog proc then
+        if can_transform ~lc_graphs ~memo prog proc then
           Procedure.formal_in_params proc
           |> StringMap.to_iter
           |> Iter.find_pred (fst %> is_sp_in_name)
           |> Option.map snd
         else None
       in
-      if can_transform ~memo prog proc then
-        print_endline @@ ID.show @@ Procedure.id proc;
       let new_sp, proc =
-        if can_transform ~memo prog proc && Option.is_some old_sp then
-          create_stack_frame prog proc
+        if can_transform ~lc_graphs ~memo prog proc && Option.is_some old_sp
+        then
+          create_stack_frame ~lc_graphs prog proc
           |> Option.map (Pair.map_fst Option.some)
           |> Option.get_or ~default:(None, proc)
         else (None, proc)
       in
       let proc =
-        if can_transform ~memo prog proc then drop_sp_params proc else proc
+        if can_transform ~lc_graphs ~memo prog proc then drop_sp_params proc
+        else proc
       in
       let transform_stmt =
-        if can_transform ~memo prog proc then
+        if can_transform ~lc_graphs ~memo prog proc then
           Stmt.map ~f_lvar:id
             ~f_expr:
               (Expr.BasilExpr.substitute (fun v ->
@@ -271,8 +258,8 @@ let transform prog =
             ( transform_stmt %> fun stmt ->
               match stmt with
               | Instr_Call c
-                when can_transform ~memo prog (Program.get_proc c.procid prog)
-                ->
+                when can_transform ~lc_graphs ~memo prog
+                       (Program.get_proc c.procid prog) ->
                   let args =
                     c.args
                     |> StringMap.filter (fun n _ -> not (is_sp_in_name n))
@@ -289,9 +276,10 @@ let transform prog =
 
 let check_transform prog =
   let memo = ref IDMap.empty in
+  let lc_graphs = Analysis.Linear_const.Solver.solve prog in
   tap
     (Program.iter_procedures
-    %> Iter.filter (not % can_transform ~memo prog)
+    %> Iter.filter (not % can_transform ~lc_graphs ~memo prog)
     %> Iter.iter (print_endline % ID.show % Procedure.id))
     prog
 
@@ -465,9 +453,6 @@ proc @safe_ops(R0_in:bv64, R31_in:bv64) -> ()
   @@ Containers_pp.Pretty.to_string ~width:80 (Lang.Program.prog_pretty prog);
   [%expect
     {|
-    ("@main", 1)
-    ("@safe_call", 2)
-    ("@safe_ops", 3)
     var observable $mem:(bv64->bv8);
     proc @main(R0_in:bv64)  -> () {  }
       modifies $mem:(bv64->bv8)
