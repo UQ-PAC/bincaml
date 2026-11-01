@@ -193,9 +193,15 @@ let load_il st args =
     raise
       (ReplError { msg; cmd = "load-il " ^ Sexp.to_string args; loc = None })
 
+let run_transforms st args =
+  let args = Attrib.of_sexp args in
+  let ba = Passes.PassManager.construct_batch_attrib args in
+  let prog = Some (Passes.PassManager.run_batch ba (get_prog st)) in
+  set_prog st prog
+
 let run_transform st args =
-  let args = P.(list string args) in
-  let ba = Passes.PassManager.batch_of_list args in
+  let args = Attrib.of_sexp args in
+  let ba = [ Passes.PassManager.pass_of_attrib args ] in
   let prog = Some (Passes.PassManager.run_batch ba (get_prog st)) in
   set_prog st prog
 
@@ -361,7 +367,7 @@ let cmds_list =
       "run IL transforms in sequence" );
     ("list-passes", list_passes, "", "List transform passes");
     ( "run-transforms",
-      run_transform,
+      run_transforms,
       "<t1> <t2> ...",
       "run IL transforms in sequence" );
     ("log-level", log_level, "<level> <sources list>", "set log level");

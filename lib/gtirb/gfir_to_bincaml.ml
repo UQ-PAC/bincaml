@@ -87,7 +87,7 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
       let attrib =
         StringMap.of_list
           [
-            (".address", `CamlInt address);
+            (".address", Attrib.int_val address);
             (".gtirb_block", `String (UUID.show @@ Gtirb.uuid b));
           ]
       in
@@ -103,7 +103,7 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
           |> List.map (fun (_, l, t) ->
               let addr =
                 address_of_uuid all_blocks (Vert.uuid t)
-                |> Option.map (fun x -> (".address", `CamlInt x))
+                |> Option.map (fun x -> (".address", Attrib.int_val x))
                 |> Option.to_list
               in
               (match l with Some l -> Edge.to_attrib l | None -> Attrib.empty)

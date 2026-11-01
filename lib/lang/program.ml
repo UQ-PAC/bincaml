@@ -428,7 +428,7 @@ module CallGraph = struct
       | v -> G.iter_succ f g v
   end)
 
-  let make_call_graph t =
+  let make_call_graph ?(returns = true) t =
     let called_by (p : proc) =
       Procedure.blocks_to_list p |> List.to_iter |> Iter.map snd
       |> Iter.flat_map Block.stmts_iter
@@ -458,10 +458,10 @@ module CallGraph = struct
     in
     let call_dep caller callee =
       Iter.of_list
-        [
-          (ProcBegin caller, Nop, ProcBegin callee);
-          (ProcReturn callee, Nop, ProcBegin caller);
-        ]
+        ((ProcBegin caller, Nop, ProcBegin callee)
+        ::
+        (if returns then [ (ProcReturn callee, Nop, ProcBegin caller) ] else [])
+        )
     in
     let call_dep_edges =
       Iter.flat_map

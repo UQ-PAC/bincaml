@@ -6,8 +6,31 @@ open Bincaml_util.Logger
 
     TODO: structured errors for checks *)
 
+module StringParam = struct
+  type t = string [@@deriving protocol ~driver:(module Lang.Attrib_conv)]
+end
+
+module type PassParam = sig
+  type t
+
+  val run : t -> Program.t -> Program.t
+  val to_attrib_conv : t -> Attrib.t
+  val of_attrib_conv_exn : Attrib.t -> t
+  val of_attrib_conv : Attrib.t -> (t, Attrib_conv.error) result
+end
+
 module PassManager = struct
+  type pass_param = (module PassParam) option
+
+  let make_pass (module P : PassParam) : Attrib.t -> Program.t -> Program.t =
+    let run sexp =
+      let arg = P.of_attrib_conv_exn sexp in
+      P.run arg
+    in
+    run
+
   type transform =
+    | ParametricProg of (Attrib.t -> Program.t -> Program.t)
     | Prog of (Program.t -> Program.t)
         (** A transform over the whole program *)
     | Proc of (Program.proc -> Program.proc)
@@ -26,7 +49,41 @@ module PassManager = struct
     invariants : Invariants.config;
   }
 
+  let cond_pass name (module P : PassParam) ~doc ~invariants =
+    let apply = ParametricProg (make_pass (module P : PassParam)) in
+    { name; apply; doc; invariants }
+
+  let gen_para_pass p args =
+    match p.apply with
+    | ParametricProg f -> { p with apply = Prog (f args) }
+    | o -> failwith "applied argument to non-parametric pass"
+
   type t = { avail : pass StringMap.t }
+
+  module TrimReachableProcs = struct
+    type t = string list [@@deriving protocol ~driver:(module Lang.Attrib_conv)]
+
+    let run args =
+      Transforms.Trim_from_proc.TrimMain.filter_connected ~procid:args
+  end
+
+  module SetEntry = struct
+    include StringParam
+
+    let run procid = Transforms.Trim_from_proc.set_entry procid
+  end
+
+  let set_entry =
+    cond_pass "set-main-proc"
+      (module SetEntry)
+      ~doc:"set provided to main procedure in current prog"
+      ~invariants:Invariants.empty
+
+  let trim_reachable_procs =
+    cond_pass "trim-procs-reachable"
+      (module TrimReachableProcs)
+      ~doc:"set provided to main procedure in current prog"
+      ~invariants:Invariants.empty
 
   let hm_elaborate =
     {
@@ -493,6 +550,8 @@ module PassManager = struct
 
   let passes =
     [
+      trim_reachable_procs;
+      set_entry;
       aslp_semantics;
       lift_intrinsics_aarch64;
       hm_elaborate;
@@ -576,6 +635,7 @@ module PassManager = struct
         let body =
           match p.apply with
           | Prog _ -> text "prog transform"
+          | ParametricProg _ -> text "prog transform with params"
           | Proc _ -> text "intraproc transform"
           | ProcCheck _ -> text "proc check"
           | DFGAnalysis _ -> text "dataflow graph analysis"
@@ -613,6 +673,7 @@ module PassManager = struct
     in
 
     begin match tf.apply with
+    | ParametricProg fn -> failwith "parametric pass not supplied argument"
     | Prog fn ->
         let p = fn p in
         Program.procs p
@@ -672,6 +733,20 @@ module PassManager = struct
       (Attrib.merge_map_shadow (Program.attrib p)
          (Invariants.to_attrib post_invs))
       p
+
+  let pass_map = StringMap.of_list (List.map (fun p -> (p.name, p)) passes)
+
+  let pass_of_attrib (pass : Attrib.t) =
+    let get = fun p -> StringMap.find p pass_map in
+    match pass with
+    | `String a -> get a
+    | `List [ `String a; args ] -> gen_para_pass (get a) args
+    | p -> failwith ("malformed pass: " ^ Attrib.to_string p)
+
+  let construct_batch_attrib (passes : Attrib.t) =
+    match passes with
+    | `List ls -> List.map pass_of_attrib ls
+    | o -> [ pass_of_attrib o ]
 
   let construct_batch (s : t) (passes : string list) =
     List.map (fun p -> StringMap.find p s.avail) passes
