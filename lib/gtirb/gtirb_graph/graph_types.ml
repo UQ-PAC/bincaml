@@ -16,6 +16,16 @@ type self_data =
   | Function_data of unit
 [@@deriving show { with_path = false }]
 
+let uuid_val =
+  Datalog_caml_interface.Univ.new_key ~eq:UUID.equal ~hash:Hashtbl.hash
+    ~print:UUID.show ()
+
+let function_has_name_rel =
+  Datalog_caml_interface.Rel2.create ~k1:uuid_val ~k2:uuid_val "function_has_name"
+
+let self_data_rel =
+  Datalog_caml_interface.Rel2.create ~k1:uuid_val ~k2:uuid_val "function_has_name"
+
 (** A relation between two {!vert}s. For example, an edge [a -> b] with label
     [Function_has_entry] means that the function [a] has entry [b].
 
