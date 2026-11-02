@@ -99,18 +99,13 @@ let edges_of_ipcfg (cfg : Gtirb_proto'.CFG.t) =
     edges. This has to query other parts of the graph, so has to run as a
     post-process. *)
 let fixup_ipcfg_edges g =
-  Graph_query.to_edges_iter g
-  |> Iter.filter_map (function
-    | (src, Graph_types.Control_flow (_, label), tgt) as e ->
-        Some (e, label, (src, tgt))
-    | _ -> None)
+  Graph_query.control_flow_edges g
   |> Iter.persistent
   |> Iter.fold
-       (fun g (old_edge, label, (src, tgt)) ->
+       (fun g (((src, _, tgt) as old_edge), (_, label)) ->
          let flow_kind =
            match
-             Graph_query.
-               (function_of_block_exn g src, function_of_block_exn g tgt)
+             Graph_query.(function_of_block g src, function_of_block g tgt)
            with
            | Some src, Some tgt when Graph_types.equal_vert src tgt -> `In_proc
            | _ -> `Out_of_proc
@@ -121,10 +116,8 @@ let fixup_ipcfg_edges g =
 
 (** Removes within-procedure control-flow edges to clean up the graph. *)
 let remove_same_procedure_control_flow g =
-  Graph_query.to_edges_iter g
-  |> Iter.filter_map (function
-    | (src, Graph_types.Control_flow (`In_proc, label), tgt) as e -> Some e
-    | _ -> None)
+  Graph_query.control_flow_edges g
+  |> Iter.filter_map (function e, (`In_proc, _) -> Some e | _ -> None)
   |> Iter.persistent
   |> Iter.fold
        (fun g e ->

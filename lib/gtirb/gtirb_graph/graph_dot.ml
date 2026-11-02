@@ -20,7 +20,7 @@ include Graph.Graphviz.Dot (struct
     | None -> None
     | Some g -> (
         match
-          Graph_query.function_of_block_exn g v
+          Graph_query.function_of_block g v
           |> Option.map (Graph_query.function_name g)
           |> Option.map (Graph_query.self_data g)
         with
