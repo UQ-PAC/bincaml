@@ -131,6 +131,19 @@ let fixup_ipcfg_edges g =
            (src, Control_flow (flow_kind, label), tgt))
        g
 
+(** Removes within-procedure control-flow edges to clean up the graph. *)
+let remove_same_procedure_control_flow g =
+  Graph_query.to_edges_iter g
+  |> Iter.filter_map (function
+    | (src, Graph_types.Control_flow (`In_proc, label), tgt) as e -> Some e
+    | _ -> None)
+  |> Iter.persistent
+  |> Iter.fold
+       (fun g e ->
+         Graph_internal.remove_edge_e g e;
+         g)
+       g
+
 (** {2 Entry point} *)
 
 let edges_of_module (m : Gtirb_proto'.Module.t) =
@@ -168,4 +181,5 @@ let edges_of_gtirb_ir (ir : Gtirb_proto'.IR.t) =
     ]
 
 let graph_of_gtirb_ir ir =
-  Graph_query.of_edges_iter (edges_of_gtirb_ir ir) |> fixup_ipcfg_edges
+  Graph_query.of_edges_iter (edges_of_gtirb_ir ir)
+  |> fixup_ipcfg_edges |> remove_same_procedure_control_flow

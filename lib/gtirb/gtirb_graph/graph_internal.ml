@@ -18,4 +18,3 @@ include
       let compare = Stdlib.compare
       let default = Unknown_edge_type
     end)
-
