@@ -10,6 +10,7 @@
   angstrom
   zarith
   fix
+  datalog.caml_interface
   ocamlgraph
   containers
   containers-data

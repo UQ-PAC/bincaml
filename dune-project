@@ -53,6 +53,7 @@
   (ppx_deriving :build)
   (ppx_protocol_conv :build)
   ocamlgraph
+  datalog
   (cmdliner (>= 2.0.0))
   pp_loc
   base64
