@@ -14,3 +14,4 @@ type t = Graph_internal.t
 (** The main graph type. *)
 
 include Graph_types
+(** @inline *)
