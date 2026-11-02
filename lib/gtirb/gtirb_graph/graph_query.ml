@@ -88,3 +88,6 @@ let self_data g v =
   succs_iter g v
   |> Iter.filter_map (function Self data, _ -> Some data | _ -> None)
   |> singular ~msgf:(err_of_vertex "self_data" v)
+
+(* TODO: some GADT or other kind of type-level constraint on kinds of UUIDs
+   (blocks vs symbols vs functions, etc)? *)
