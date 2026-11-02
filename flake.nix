@@ -62,6 +62,7 @@
           kittyimg = ofinal.callPackage ./nix/kittyimg.nix { };
           stb_image = ofinal.callPackage ./nix/stb_image.nix { };
           containers = ofinal.callPackage ./nix/containers.nix { };
+          datalog = ofinal.callPackage ./nix/ocaml-datalog.nix { };
 
           odoc_3_2 = ofinal.callPackage ./nix/odoc.nix { };
           sherlodoc = ofinal.callPackage ./nix/sherlodoc.nix {
