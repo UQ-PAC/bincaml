@@ -62,6 +62,7 @@ let set_modsets ?(add_only = false) prog =
   let rwset = solve prog in
   prog
   |> Program.map_procedures (fun i p ->
+      print_endline (ID.show i);
       let read, written = rwset i in
       let spec = Procedure.specification p in
       let exist_modifies =
