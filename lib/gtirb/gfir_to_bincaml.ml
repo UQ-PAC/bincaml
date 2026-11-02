@@ -254,7 +254,27 @@ let transform_cfg_calls procs =
       { p with cfg })
     procs
 
-let temp_proc_to_ir_proc (g : Gtirb_graph.t) all_blocks m (p : temp_proc) =
+let transform_proxy_procedures (g : Gtirb_graph.t) (p : temp_proc) =
+  match
+    Gtirb_graph.Graph_query.(
+      function_name g (Uuid p.uuid)
+      |> symbol_forwarded_to g
+      |> Option.map (self_data g))
+  with
+  (* procedure is forwarded. this is a dynamic-linking stub. *)
+  | Some (Symbol_data { name }) ->
+      {
+        p with
+        name;
+        entries = UUIDSet.empty;
+        blocks = UUIDSet.empty;
+        code_blocks = UUIDMap.empty;
+        cfg = G.empty;
+      }
+  (* procedure is not forwarded. this is a normal procedure. *)
+  | _ -> p
+
+let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   let entry_addrs =
     UUIDSet.to_iter p.entries
     |> Iter.filter_map (fun x -> UUIDMap.find x p.code_blocks |> Gtirb.address)
@@ -284,60 +304,45 @@ let temp_proc_to_ir_proc (g : Gtirb_graph.t) all_blocks m (p : temp_proc) =
         |> Iter.filter_map Gtirb.address)
     with Invalid_argument _ -> Iter.empty
   in
-
-  let is_stub, name =
-    match
-      Gtirb_graph.Graph_query.(
-        function_name g (Uuid p.uuid)
-        |> symbol_forwarded_to g
-        |> Option.map (self_data g))
-    with
-    (* procedure is forwarded. this is a dynamic-linking stub. *)
-    | Some (Symbol_data { name }) -> (true, name)
-    (* procedure is not forwarded. this is a normal procedure. *)
-    | _ -> (false, p.name)
-  in
+  let is_stub = UUIDSet.is_empty p.entries in
   let name = Lang.Program.declare_name ("@" ^ p.name) m in
   let proc = Lang.Procedure.create ~is_stub ~requires name () in
 
-  (match is_stub with
-    | true -> proc
-    | false ->
-        let proc, blocks =
-          p.code_blocks |> UUIDMap.to_iter |> Iter.map snd
-          |> Iter.fold
-               (add_new_code_block all_blocks p succ_addr)
-               (proc, UUIDMap.empty)
-        in
-        let proc, blocks =
-          Iter.from_iter (fun f -> Gfir.G.iter_vertex f p.cfg)
-          |> Iter.filter_map (function
-            | Gfir.Vert.External uuid | Gfir.Vert.Proxy uuid ->
-                Option.map
-                  (fun (b : Gtirb.block) -> (uuid, Gtirb.address b, []))
-                  (UUIDMap.find_opt uuid all_blocks)
-            | Gfir.Vert.Stmts { uuid; stmts } ->
-                Option.map
-                  (fun (b : Gtirb.block) -> (uuid, Gtirb.address b, stmts))
-                  (UUIDMap.find_opt uuid all_blocks)
-            | _ -> None)
-          |> Iter.fold
-               (add_new_simple_block ~name_suffix:"_ext" succ_addr)
-               (proc, blocks)
-        in
+  let proc, blocks =
+    p.code_blocks |> UUIDMap.to_iter |> Iter.map snd
+    |> Iter.fold
+         (add_new_code_block all_blocks p succ_addr)
+         (proc, UUIDMap.empty)
+  in
+  let proc, blocks =
+    Iter.from_iter (fun f -> Gfir.G.iter_vertex f p.cfg)
+    |> Iter.filter_map (function
+      | Gfir.Vert.External uuid | Gfir.Vert.Proxy uuid ->
+          Option.map
+            (fun (b : Gtirb.block) -> (uuid, Gtirb.address b, []))
+            (UUIDMap.find_opt uuid all_blocks)
+      | Gfir.Vert.Stmts { uuid; stmts } ->
+          Option.map
+            (fun (b : Gtirb.block) -> (uuid, Gtirb.address b, stmts))
+            (UUIDMap.find_opt uuid all_blocks)
+      | _ -> None)
+    |> Iter.fold
+         (add_new_simple_block ~name_suffix:"_ext" succ_addr)
+         (proc, blocks)
+  in
 
-        let proc =
-          UUIDSet.fold
-            (fun uuid acc ->
-              let b = UUIDMap.find uuid blocks in
-              Lang.Procedure.(
-                map_graph
-                  (fun g -> G.add_edge g Lang.Procedure.Vert.Entry (Begin b))
-                  acc))
-            p.entries proc
-        in
-        Gfir.G.fold_edges_e (cfg_edge_to_ir_edge blocks) p.cfg proc)
-  |> flip Lang.Program.add_proc m
+  let proc =
+    UUIDSet.fold
+      (fun uuid acc ->
+        let b = UUIDMap.find uuid blocks in
+        Lang.Procedure.(
+          map_graph
+            (fun g -> G.add_edge g Lang.Procedure.Vert.Entry (Begin b))
+            acc))
+      p.entries proc
+  in
+  let proc = Gfir.G.fold_edges_e (cfg_edge_to_ir_edge blocks) p.cfg proc in
+  Lang.Program.add_proc proc m
 
 let section_to_bincaml_section (sec : Section.t) : Gtirb_attribs.section option
     =
@@ -394,7 +399,7 @@ let module_to_ir_prog gtirb_graph ir_cfg (m : Module.t) =
   *)
   let prog =
     UUIDMap.fold
-      (fun _ proc prog -> temp_proc_to_ir_proc gtirb_graph all_blocks prog proc)
+      (fun _ proc prog -> temp_proc_to_ir_proc all_blocks prog proc)
       procs prog
   in
   let prog = Lang.Spec_modifies.set_modsets prog in
