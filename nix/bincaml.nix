@@ -33,6 +33,7 @@
   unionFind,
   decompress,
   base64,
+  datalog,
 
   capstone_arm64_disas,
   aslp_lifter_ocaml,
@@ -125,6 +126,7 @@ buildDunePackage {
     qcheck-core
     qcheck-alcotest
     qcheck-stm
+    datalog
   ];
 
   postPatch = ''
