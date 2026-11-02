@@ -5,18 +5,6 @@ open Bincaml_util.Common
 open struct
   module UUIDMap = Load_auxdata.UUIDMap
   module UUIDSet = Load_auxdata.UUIDSet
-
-  (** Local module alias for shortening module namespace paths. *)
-  module Gtirb_proto' = struct
-    module IR = Gtirb_proto.IR.Gtirb.Proto.IR
-    module Symbol = Gtirb_proto.Symbol.Gtirb.Proto.Symbol
-    module Module = Gtirb_proto.Module.Gtirb.Proto.Module
-    module Section = Gtirb_proto.Section.Gtirb.Proto.Section
-    module ByteInterval = Gtirb_proto.ByteInterval.Gtirb.Proto.ByteInterval
-    module Block = Gtirb_proto.ByteInterval.Gtirb.Proto.Block
-    module CFG = Gtirb_proto.CFG.Gtirb.Proto.CFG
-    module Edge = Gtirb_proto.CFG.Gtirb.Proto.Edge
-  end
 end
 
 (** {2 Helper functions} *)
