@@ -254,7 +254,7 @@ let transform_cfg_calls procs =
       { p with cfg })
     procs
 
-let transform_proxy_procedures (g : Gtirb_graph.t) (p : temp_proc) =
+let rename_forwarded_procedures (g : Gtirb_graph.t) (p : temp_proc) =
   match
     Gtirb_graph.Graph_query.(
       function_name g (Uuid p.uuid)
@@ -262,15 +262,7 @@ let transform_proxy_procedures (g : Gtirb_graph.t) (p : temp_proc) =
       |> Option.map (self_data g))
   with
   (* procedure is forwarded. this is a dynamic-linking stub. *)
-  | Some (Symbol_data { name }) ->
-      {
-        p with
-        name;
-        entries = UUIDSet.empty;
-        blocks = UUIDSet.empty;
-        code_blocks = UUIDMap.empty;
-        cfg = G.empty;
-      }
+  | Some (Symbol_data { name }) -> { p with name; is_stub = true }
   (* procedure is not forwarded. this is a normal procedure. *)
   | _ -> p
 
@@ -304,9 +296,8 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
         |> Iter.filter_map Gtirb.address)
     with Invalid_argument _ -> Iter.empty
   in
-  let is_stub = UUIDSet.is_empty p.entries in
   let name = Lang.Program.declare_name ("@" ^ p.name) m in
-  let proc = Lang.Procedure.create ~is_stub ~requires name () in
+  let proc = Lang.Procedure.create ~requires name () in
 
   let proc, blocks =
     p.code_blocks |> UUIDMap.to_iter |> Iter.map snd
@@ -342,7 +333,7 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
       p.entries proc
   in
   let proc = Gfir.G.fold_edges_e (cfg_edge_to_ir_edge blocks) p.cfg proc in
-  Lang.Program.add_proc proc m
+  (name, Lang.Program.add_proc proc m)
 
 let section_to_bincaml_section (sec : Section.t) : Gtirb_attribs.section option
     =
@@ -388,7 +379,8 @@ let module_to_ir_prog gtirb_graph ir_cfg (m : Module.t) =
   in
   (* (2) convert jumps to procedure-external vertices to stub blocks with call
      statements, and reroute the fall through edges as a successor of this stub
-     *)
+  *)
+  let procs = UUIDMap.map (rename_forwarded_procedures gtirb_graph) procs in
   let procs = if conf.direct then procs else transform_cfg_calls procs in
   (*
     (3) convert [Gfir] to Bincaml IR program, with each block getting a assertions
@@ -399,7 +391,14 @@ let module_to_ir_prog gtirb_graph ir_cfg (m : Module.t) =
   *)
   let prog =
     UUIDMap.fold
-      (fun _ proc prog -> temp_proc_to_ir_proc all_blocks prog proc)
+      (fun _ proc prog ->
+        let id, prog = temp_proc_to_ir_proc all_blocks prog proc in
+        prog
+        |> Lang.Program.update_proc id (function
+          | Some proc' when proc.is_stub ->
+              Some (Lang.Procedure.(set_graph G.empty) proc')
+          | Some p -> Some p
+          | None -> failwith "procedure shuold have been added"))
       procs prog
   in
   let prog = Lang.Spec_modifies.set_modsets prog in
