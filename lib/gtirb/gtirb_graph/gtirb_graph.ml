@@ -5,6 +5,7 @@
 module Graph_internal = Graph_internal
 module Graph_dot = Graph_dot
 module Graph_types = Graph_types
+module Graph_query = Graph_query
 module Loader = Loader
 
 (** {2 Types} *)
