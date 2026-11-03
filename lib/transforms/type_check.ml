@@ -29,8 +29,7 @@ let type_check stmt_id block_id expr =
     | `Gamma -> []
     | `Old -> []
     | `ReadField _ -> (
-        match arg with
-        | _ -> [ type_err "ReadField body is not a record type" ])
+        match arg with _ -> [ type_err "ReadField body is not a record type" ])
     | `BoolNOT | `BOOLTOBV1 ->
         if Types.equal arg Types.Boolean then []
         else [ type_err "%s body is not a boolean" @@ AllOps.to_string op ]

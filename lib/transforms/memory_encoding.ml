@@ -527,15 +527,17 @@ module SplitMemory : MemoryEncoding = struct
     Types.Variant
       [
         ( "MemEncoding",
-          [Types.Record
-            [
-              Types.mk_field "alloc_live"
-                (Types.Map (Types.Bitvector 64, Types.Bitvector 2));
-              Types.mk_field "alloc_size"
-                (Types.Map (Types.Bitvector 64, Types.Bitvector 64));
-              Types.mk_field "addr_is_heap"
-                (Types.Map (Types.Bitvector 64, Types.Boolean));
-            ]] );
+          [
+            Types.Record
+              [
+                Types.mk_field "alloc_live"
+                  (Types.Map (Types.Bitvector 64, Types.Bitvector 2));
+                Types.mk_field "alloc_size"
+                  (Types.Map (Types.Bitvector 64, Types.Bitvector 64));
+                Types.mk_field "addr_is_heap"
+                  (Types.Map (Types.Bitvector 64, Types.Boolean));
+              ];
+          ] );
       ]
 
   module Locals = struct

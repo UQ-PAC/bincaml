@@ -708,8 +708,7 @@ module WrappedIntervalsValueAbstraction = struct
     match op with
     | `Bool _ -> top
     | `Integer _ -> top
-    | `Bitvector bv  ->
-        if size bv = 0 then top else interval bv bv
+    | `Bitvector bv -> if size bv = 0 then top else interval bv bv
 
   let eval_unop (op : Lang.Ops.AllOps.unary) (a, t) rt =
     match t with

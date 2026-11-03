@@ -307,7 +307,7 @@ let pretty_type_declaration (binding : string) (typ : Types.t) =
       text "datatype" ^+ text binding
       ^+ bracket "{" (append_sp (List.map pretty_variant_declaration vs)) "}"
   | Types.Record _ as vs ->
-      let t = [(binding, [ vs ])] in
+      let t = [ (binding, [ vs ]) ] in
       text "datatype" ^+ text binding
       ^+ bracket "{" (append_sp (List.map pretty_variant_declaration t)) "}"
   | _ -> raise (BoogieException "Unsupported type declaration")
