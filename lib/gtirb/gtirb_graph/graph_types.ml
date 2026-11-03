@@ -6,13 +6,21 @@
     @canonical Gtirb_frontend.Gtirb_graph.vert *)
 type vert = Uuid of UUID.t [@@deriving eq, show { with_path = false }]
 
+type block_data =
+  [ `Proxy | `Code of int * Gtirb_proto'.decode_mode | `Data of int ]
+[@@deriving show { with_path = false }]
+(** Information about a block. In the Code and Data variants, the int is the
+    size. *)
+
+type symbol_data = { name : string; at_end : bool; int_value : int option }
+[@@deriving show { with_path = false }]
+
+type function_data = unit
+
 (** Data stored by a UUID of a particular kind.*)
 type self_data =
-  | Block_data of
-      [ `Proxy | `Code of int * Gtirb_proto'.decode_mode | `Data of int ]
-      (** Information about a block. In the Code and Data variants, the int is
-          the size. *)
-  | Symbol_data of { name : string; at_end : bool; int_value : int option }
+  | Block_data of block_data
+  | Symbol_data of symbol_data
   | Function_data of unit
 [@@deriving show { with_path = false }]
 
@@ -20,11 +28,27 @@ let uuid_val =
   Datalog_caml_interface.Univ.new_key ~eq:UUID.equal ~hash:Hashtbl.hash
     ~print:UUID.show ()
 
-let function_has_name_rel =
-  Datalog_caml_interface.Rel2.create ~k1:uuid_val ~k2:uuid_val "function_has_name"
+let block_data_val =
+  Datalog_caml_interface.Univ.new_key ~print:show_block_data ()
 
-let self_data_rel =
-  Datalog_caml_interface.Rel2.create ~k1:uuid_val ~k2:uuid_val "function_has_name"
+let symbol_data_val =
+  Datalog_caml_interface.Univ.new_key ~print:show_symbol_data ()
+
+let function_has_name_rel =
+  Datalog_caml_interface.Rel2.create ~k1:uuid_val ~k2:uuid_val
+    "function_has_name"
+
+let block_data_rel =
+  Datalog_caml_interface.Rel2.create ~k1:uuid_val ~k2:block_data_val
+    "block_data"
+
+let symbol_data_rel =
+  Datalog_caml_interface.Rel2.create ~k1:uuid_val ~k2:symbol_data_val
+    "symbol_data"
+
+let function_data_rel =
+  Datalog_caml_interface.Rel2.create ~k1:uuid_val
+    ~k2:Datalog_caml_interface.Univ.unit "function_data"
 
 (** A relation between two {!vert}s. For example, an edge [a -> b] with label
     [Function_has_entry] means that the function [a] has entry [b].
