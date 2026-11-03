@@ -9,20 +9,33 @@ let anon_fun filename = input_files := filename :: !input_files
 let () =
   Arg.parse [] anon_fun usage_msg;
 
-  let d = Datalog.Default.db_create () in
-  let rel = Gtirb_frontend.Gtirb_graph.Graph_types.function_has_name_rel in
-  let fact =
-    Datalog.AST.(Atom ("hi", [ Const "asdf" ]))
-    |> Datalog.Default.literal_of_ast
+  let lexbuf =
+    Lexing.from_string
+      {|
+      hi(A) :- src(A).
+      src(boop).
+      src(boop2).
+|}
   in
+  let clauses = Datalog.Parser.parse_file Datalog.Lexer.token lexbuf in
 
+  let d = Datalog.Default.db_create () in
   let query =
     Datalog.AST.(Atom ("hi", [ Var "hia" ])) |> Datalog.Default.literal_of_ast
   in
-  Datalog.Default.db_add_fact d fact;
-  let a = Datalog.Default.Query.ask d [| 0 |] [ query ] in
-  Datalog.Default.Query.iter a (function [| x |] ->
-      Datalog.Default.pp_term Format.std_formatter x);
+  clauses
+  |> List.map Datalog.Default.clause_of_ast
+  |> List.iter (Datalog.Default.db_add d);
+  print_endline "matches:";
+  let a =
+    Datalog.Default.db_match d query (fun x ->
+        Datalog.Default.pp_literal Format.std_formatter x)
+  in
+  Format.print_flush ();
+  print_endline "\nclauses:";
+  Datalog.Default.db_fold
+    (fun () -> Format.printf "%a\n" Datalog.Default.pp_clause)
+    () d;
 
   match !input_files with
   | [ filename ] ->
