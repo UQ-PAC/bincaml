@@ -1,4 +1,5 @@
 open Containers
+open Fun
 module StringMap = Map.Make (String)
 
 (** This represents type right expressions (i.e. not declarations), we expand
@@ -32,23 +33,53 @@ type t =
   | Unit  (** type inhabited by unit value *)
   | Top  (** greatest type *)
   | Nothing  (** least type / empty set *)
-  | Map of t * t  (** function type *)
-  | Sort of string * variant list  (** An Algebraic datatype *)
-  | Struct of record_field StringMap.t
-      (** a struct is a product type of a known layout that is representible as
-          a finite byte/bit sequence *)
-  | Pointer of pointer  (** pointer type *)
+  | Map of t * t  (** abstrct map type *)
+  | ByteArray of int * int  (** byte-aligned bitvector map *)
+  | Function of t * t  (** function type *)
+  | Record of (string * t) list
+  | Variant of (string * t list) list
+  | NewType of t list * string (* opaque type constructor *)
   | Variable of string (* Possibly a name of a type declartion *)
+[@@deriving eq, ord]
 
-and variant = { variant : string; fields : field list }
-and field = { field : string; typ : t } [@@deriving eq, ord]
-and record_field = { offset : Z.t; typ : t } [@@deriving eq, ord]
+(* named type *)
+type type_decl = string * t
+type memory_cell = ScalarBits of int | Box of { tag : int; value : int }
+type mem_layout = Scalar of int | Vector of mem_layout list
 
-(*
-  Lower type represents types the pointer could load
-  Upper type represents types the pointer could store
-*)
-and pointer = { lower : t; upper : t } [@@deriving eq, ord]
+module TS = List.Traverse (Option)
+
+let rec size_of_layout vs =
+  match vs with
+  | Scalar s -> s
+  | Vector vs -> List.fold_left (fun acc v -> acc + size_of_layout v) 0 vs
+
+let variant_to_record (cases : (string * t list) list) =
+  let tag_bits = Z.of_int @@ List.length cases |> Z.numbits in
+  let fs = [ ("tag", Bitvector tag_bits) ] in
+  let cases =
+    List.map
+      (fun (k, v) ->
+        let fs =
+          List.mapi (fun ind t -> (Int.to_string ind, t)) v |> fun x -> Record x
+        in
+        (k, fs))
+      cases
+  in
+  Record (fs @ cases)
+
+let rec layout_of_typ t =
+  match t with
+  | Boolean -> Some (Scalar 1)
+  | Bitvector n -> Some (Scalar n)
+  | Record fields ->
+      TS.map_m (fun (fname, ftyp) -> layout_of_typ ftyp) fields
+      |> Option.map (fun m -> Vector m)
+  | Map _ -> None
+  | Integer -> None
+  | ByteArray _ -> None
+  | Unit | Nothing | Top | Function _ | NewType _ | Variable _ -> None
+  | Variant _ -> None
 
 let bv i = Bitvector i
 let int = Integer
@@ -56,48 +87,36 @@ let bool = Boolean
 
 type func_type = { args : t list; return : t }
 
-let bit_width = function Boolean -> Some 1 | Bitvector n -> Some n | _ -> None
-
 (** Get the type for an opaque sort *)
-let mk_sort name = Sort (name, [])
+let mk_sort name = NewType ([], name)
 
 (* ADT not Record type *)
-let mk_field field typ = { field; typ }
-let mk_variant name fields = { variant = name; fields }
+let mk_field field typ = (field, typ)
+let mk_variant name fields = (name, fields)
 
-let mk_enum name (cases : string list) =
-  Sort (name, List.map (fun variant -> { variant; fields = [] }) cases)
+let mk_enum (cases : string list) =
+  Variant (List.map (fun variant -> (variant, [])) cases)
 
-let mk_adt_record name (fields : field list) =
-  Sort (name, [ mk_variant ("Record" ^ name) fields ])
+let mk_adt_record name (fields : (string * t) list) = Record fields
 
 let adt_record_field name t =
   match t with
-  | Sort (_, [ { fields; _ } ]) ->
+  | Record fields ->
       fields
       |> List.find_map (function
-        | { field; typ } when String.equal field name -> Some typ
+        | field, typ when String.equal field name -> Some typ
         | _ -> None)
   | _ -> None
 
-let mk_adt name (variants : (string * field list) list) =
-  Sort
-    (name, variants |> List.map (fun (variant, fields) -> { variant; fields }))
-
+let mk_adt (variants : (string * t list) list) = Variant variants
 let bv_min_width_for_nat n = Bitvector (Z.of_int n |> Z.numbits)
-
-let struct_field field_name record : record_field =
-  match record with
-  | Struct fields -> (
-      match StringMap.find_opt field_name fields with
-      | None -> failwith @@ "No field at offset " ^ field_name
-      | Some t -> t)
-  | _ -> failwith "Not record type"
+let bit_width = layout_of_typ %> Option.map size_of_layout
 
 (*
   Nothing < Unit < {boolean, integer, bitvector, record, pointer} < Top
   *)
 let rec compare_partial (a : t) (b : t) =
+  let equal a b = compare_partial a b |> Option.equal Int.equal (Some 0) in
   match (a, b) with
   | Top, Top -> Some 0
   | Top, _ -> Some 1
@@ -107,21 +126,27 @@ let rec compare_partial (a : t) (b : t) =
   | _, Nothing -> Some 1
   | Unit, _ -> Some (-1)
   | _, Unit -> Some 1
-  | Pointer { lower; upper }, Pointer { lower = lower1; upper = upper1 } -> (
-      compare_partial lower lower1 |> function
-      | Some 0 -> compare_partial upper upper1
-      | o -> o)
-  | Struct fields, Struct fields2 ->
-      Some
-        (StringMap.compare
-           (fun ({ typ = a; _ } : record_field) { typ = b; _ } ->
-             match compare_partial a b with Some a -> a | None -> -1)
-           fields fields2)
   | Bitvector a, Bitvector b -> Some (Int.compare a b)
-  | Sort (n1, _), Sort (n2, _) -> if String.equal n1 n2 then Some 0 else None
   | Integer, Integer -> Some 0
   | Map (k, v), Map (k2, v2) -> (
       compare_partial k k2 |> function Some 0 -> compare_partial v v2 | o -> o)
+  | Function (k, v), Function (k2, v2) -> (
+      compare_partial k k2 |> function Some 0 -> compare_partial v v2 | o -> o)
+  | ByteArray (k, v), ByteArray (k', v') ->
+      if k = k' && v = v' then Some 0 else None
+  | NewType (ts, n), NewType (ts', n') ->
+      if
+        List.length ts = List.length ts'
+        && String.equal n n' && List.equal equal ts ts'
+      then Some 0
+      else None
+  | Record fields, Record fields' ->
+      if List.equal (Pair.equal String.equal equal) fields fields' then Some 0
+      else None
+  | Variant fields, Variant fields' ->
+      if List.equal (Pair.equal String.equal (List.equal equal)) fields fields'
+      then Some 0
+      else None
   | _, _ -> None
 
 let leq a b =
@@ -143,16 +168,6 @@ let rec to_string = function
   | Top -> "⊤"
   | Nothing -> "⊥"
   | Variable name -> name
-  | Pointer { lower; upper } ->
-      Printf.sprintf "ptr(%s, %s)" (to_string lower) (to_string upper)
-  | Struct record ->
-      "{"
-      ^ (StringMap.bindings record
-        |> List.map (fun (k, ({ typ = v; offset } : record_field)) ->
-            Printf.sprintf "\"%s\": (%s, %s)" k (to_string v)
-              (Z.to_string offset))
-        |> String.concat ", ")
-      ^ "}"
   | Map ((Map _ as a), (Map _ as b)) ->
       "(" ^ "(" ^ to_string a ^ ")" ^ "->" ^ "(" ^ to_string b ^ ")" ^ ")"
   | Map ((Map _ as a), b) ->
@@ -160,47 +175,40 @@ let rec to_string = function
   | Map (a, (Map _ as b)) ->
       "(" ^ ("(" ^ to_string a ^ ")" ^ "->" ^ to_string b) ^ ")"
   | Map (a, b) -> "(" ^ (to_string a ^ "->" ^ to_string b) ^ ")"
-  | Sort (name, _) -> name
-
-let to_string_decl = function
-  | Sort (name, []) -> name
-  | Sort (name, variants) ->
-      let pfields fields =
-        List.to_string ~sep:"; " ~start:"{" ~stop:"}"
-          (function { field; typ } -> field ^ ": " ^ to_string typ)
-          fields
+  | Function ((Function _ as a), (Function _ as b)) ->
+      "(" ^ "(" ^ to_string a ^ ")" ^ "->" ^ "(" ^ to_string b ^ ")" ^ ")"
+  | Function ((Function _ as a), b) ->
+      "(" ^ ("(" ^ to_string a ^ ")" ^ "->" ^ to_string b) ^ ")"
+  | Function (a, (Function _ as b)) ->
+      "(" ^ ("(" ^ to_string a ^ ")" ^ "->" ^ to_string b) ^ ")"
+  | Function (a, b) -> "(" ^ (to_string a ^ "->" ^ to_string b) ^ ")"
+  | NewType (ls, name) ->
+      List.to_string ~start:"(" ~stop:")" to_string ls ^ " " ^ name
+  | Record fields ->
+      List.to_string ~sep:"; " ~start:"{" ~stop:"}"
+        (function field, typ -> field ^ ": " ^ to_string typ)
+        fields
+  | Variant variants ->
+      let pcase vs =
+        List.to_string ~start:"(" ~stop:")" ~sep:", " to_string vs
       in
       let fsort name variants =
-        name ^ match variants with [] -> "" | o -> " of " ^ pfields o
+        name ^ match variants with [] -> "" | o -> " of " ^ pcase o
       in
+      List.to_string ~sep:" | " ~start:"" ~stop:""
+        (function variant, fields -> fsort variant fields)
+        variants
+  | ByteArray (k, v) -> Printf.sprintf "(%d, %d) array" k v
 
-      name ^ " = "
-      ^ List.to_string ~sep:" | " ~start:"" ~stop:""
-          (function { variant; fields } -> fsort variant fields)
-          variants
-  | a -> to_string a
-
-let to_string_rexp = function
-  | ( Boolean | Integer | Bitvector _ | Unit | Top | Nothing | Variable _
-    | Pointer _ | Struct _ | Map _ ) as e ->
-      to_string e
-  | Sort (name, _) -> name
+let to_string_decl name typ = "type " ^ name ^ " = " ^ to_string typ
+let to_string_rexp ty = to_string ty
 
 let%expect_test "dtp" =
   let lst =
-    Sort
-      ( "list",
-        [
-          {
-            variant = "cons";
-            fields =
-              [
-                { field = "head"; typ = mk_sort "E" };
-                { field = "tail"; typ = mk_sort "list" };
-              ];
-          };
-          { variant = "nil"; fields = [] };
-        ] )
+    let lst t = NewType ([ t ], "list") in
+    let vt = NewType ([], "E") in
+    Variant
+      [ ("cons", [ Record [ ("head", vt); ("tail", lst vt) ] ]); ("nil", []) ]
   in
   let rc =
     mk_adt_record "recs" [ mk_field "a" (Bitvector 12); mk_field "b" Boolean ]
@@ -214,10 +222,10 @@ let%expect_test "dtp" =
 
 let show (b : t) = to_string b
 
-let show_pointer { lower; upper } =
-  Printf.sprintf "{ lower = %s; upper = %s }" (show lower) (show upper)
+let show_pointer = function
+  | NewType ([ lo; hi ], "ptr") ->
+      Printf.sprintf "{ lower = %s; upper = %s }" (show lo) (show hi)
+  | _ -> failwith "not ptr"
 
 let pp fmt b = Format.pp_print_string fmt (show b)
-
-let pp_pointer fmt { lower; upper } =
-  Format.fprintf fmt "{ lower = %s; upper = %s }" (show lower) (show upper)
+let pp_pointer fmt p = Format.fprintf fmt "%s" (show_pointer p)
