@@ -9,19 +9,20 @@ let anon_fun filename = input_files := filename :: !input_files
 let () =
   Arg.parse [] anon_fun usage_msg;
 
-  let d = Datalog_caml_interface.Logic.DB.create () in
+  let d = Datalog.Default.db_create () in
   let rel = Gtirb_frontend.Gtirb_graph.Graph_types.function_has_name_rel in
   let fact =
-    Datalog_caml_interface.Rel2.make rel
-      (Gtirb_frontend.UUID.of_string "a")
-      (Gtirb_frontend.UUID.of_string "a")
+    Datalog.AST.(Atom ("hi", [ Const "asdf" ]))
+    |> Datalog.Default.literal_of_ast
   in
-  Datalog_caml_interface.Logic.DB.add_fact d fact;
-  Datalog_caml_interface.Logic.(
-    ask ~oc:true d
-      (Datalog_caml_interface.Rel2.apply rel (T.mk_var 0) (T.mk_var 0)))
-  |> List.iter (fun x ->
-      Datalog_caml_interface.Logic.T.fmt Format.std_formatter x);
+
+  let query =
+    Datalog.AST.(Atom ("hi", [ Var "hia" ])) |> Datalog.Default.literal_of_ast
+  in
+  Datalog.Default.db_add_fact d fact;
+  let a = Datalog.Default.Query.ask d [| 0 |] [ query ] in
+  Datalog.Default.Query.iter a (function [| x |] ->
+      Datalog.Default.pp_term Format.std_formatter x);
 
   match !input_files with
   | [ filename ] ->
