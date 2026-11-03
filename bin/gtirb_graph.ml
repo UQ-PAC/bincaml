@@ -14,7 +14,7 @@ let () =
       {|
       hi(A) :- src(A).
       src(boop).
-      src(boop2).
+      src(asddf_A).
 |}
   in
   let clauses = Datalog.Parser.parse_file Datalog.Lexer.token lexbuf in
