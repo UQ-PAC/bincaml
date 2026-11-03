@@ -404,8 +404,9 @@ module Construction = struct
           let initialised =
             let analysis = May_read_uninit.A.analyse procedure in
             fun vert var ->
-              May_read_uninit.A.A.M.find vert analysis
-              |> May_read_uninit.ReadUninitAnalysis.read_var var
+              May_read_uninit.A.A.M.find_opt vert analysis
+              |> Option.map_or ~default:May_read_uninit.ReadUninit.Bot
+                   (May_read_uninit.ReadUninitAnalysis.read_var var)
               |> function
               | Val (_, May_read_uninit.ReadUninit.Happy) -> true
               | _ -> false
