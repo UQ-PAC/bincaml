@@ -34,7 +34,8 @@ module Constraint = struct
         Call { lhs; args; callee_id }
 
   let show s = function
-    | Mem { addr; value } -> Printf.sprintf "[|%s|] -> %s" (s addr) (s value)
+    | Mem { addr; value; size } ->
+        Printf.sprintf "[|%s|] -> %s (size: %d)" (s addr) (s value) size
     | Call { lhs; args } ->
         Printf.sprintf "in: %s, out: %s"
           (List.to_string ~sep:", " (fun (a, f) -> s a ^ " <-> " ^ s f) args)
