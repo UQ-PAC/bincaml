@@ -27,3 +27,8 @@
  (name gtirb_graph)
  (libraries bincaml.gtirb)
  (modules gtirb_graph))
+
+(executable
+ (name dsa)
+ (libraries bincaml.transforms bincaml bincaml.util)
+ (modules dsa))
