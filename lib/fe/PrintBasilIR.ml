@@ -80,6 +80,8 @@ let prtString (_:int) (s:string) : doc = render ("\"" ^ String.escaped s ^ "\"")
 
 
 
+let prtIdent _ (AbsBasilIR.Ident i) : doc = render i
+
 
 let prtBVTYPE _ (AbsBasilIR.BVTYPE (_,i)) : doc = render i
 
@@ -184,7 +186,7 @@ and prtProcDef (i:int) (e : AbsBasilIR.procDef) : doc = match e with
 
 
 and prtField (i:int) (e : AbsBasilIR.field) : doc = match e with
-       AbsBasilIR.Field1 (str, openparen, type_, intval, closeparen) -> prPrec i 0 (concatD [prtStr 0 str ; render ":" ; prtOpenParen 0 openparen ; prtTypeT 0 type_ ; render "," ; prtIntVal 0 intval ; prtCloseParen 0 closeparen])
+       AbsBasilIR.Field1 (str, type_) -> prPrec i 0 (concatD [prtStr 0 str ; render ":" ; prtTypeT 0 type_])
 
 and prtFieldListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
@@ -200,10 +202,6 @@ and prtBoolType (i:int) (e : AbsBasilIR.boolType) : doc = match e with
 
 and prtRecordType (i:int) (e : AbsBasilIR.recordType) : doc = match e with
        AbsBasilIR.RecordType1 (beginrec, fields, endrec) -> prPrec i 0 (concatD [prtBeginRec 0 beginrec ; prtFieldListBNFC 0 fields ; prtEndRec 0 endrec])
-
-
-and prtPointerType (i:int) (e : AbsBasilIR.pointerType) : doc = match e with
-       AbsBasilIR.PointerType1 (openparen, type_1, type_2, closeparen) -> prPrec i 0 (concatD [render "ptr" ; prtOpenParen 0 openparen ; prtTypeT 0 type_1 ; render "," ; prtTypeT 0 type_2 ; prtCloseParen 0 closeparen])
 
 
 and prtBVType (i:int) (e : AbsBasilIR.bVType) : doc = match e with
@@ -223,7 +221,8 @@ and prtRecordFieldListBNFC i es : doc = match (i, es) with
   | (_,x::xs) -> (concatD [prtRecordField 0 x ; render ";" ; prtRecordFieldListBNFC 0 xs])
 and prtSumCase (i:int) (e : AbsBasilIR.sumCase) : doc = match e with
        AbsBasilIR.SortType localident -> prPrec i 0 (concatD [prtLocalIdent 0 localident])
-  |    AbsBasilIR.VariantCase (localident, beginrec, recordfields, endrec) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render "of" ; prtBeginRec 0 beginrec ; prtRecordFieldListBNFC 0 recordfields ; prtEndRec 0 endrec])
+  |    AbsBasilIR.VariantCase (localident, openparen, types, closeparen) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render "of" ; prtOpenParen 0 openparen ; prtTypeTListBNFC 0 types ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.VariantCaseInlineRec (localident, beginrec, recordfields, endrec) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render "of" ; prtBeginRec 0 beginrec ; prtRecordFieldListBNFC 0 recordfields ; prtEndRec 0 endrec])
 
 and prtSumCaseListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
@@ -233,7 +232,6 @@ and prtTypeT (i:int) (e : AbsBasilIR.typeT) : doc = match e with
        AbsBasilIR.TypeIntType inttype -> prPrec i 1 (concatD [prtIntType 0 inttype])
   |    AbsBasilIR.TypeBoolType booltype -> prPrec i 1 (concatD [prtBoolType 0 booltype])
   |    AbsBasilIR.TypeBVType bvtype -> prPrec i 1 (concatD [prtBVType 0 bvtype])
-  |    AbsBasilIR.TypePointerType pointertype -> prPrec i 1 (concatD [prtPointerType 0 pointertype])
   |    AbsBasilIR.TypeRecordType recordtype -> prPrec i 1 (concatD [prtRecordType 0 recordtype])
   |    AbsBasilIR.TypeVarType localident -> prPrec i 1 (concatD [prtLocalIdent 0 localident])
   |    AbsBasilIR.TypeParen (openparen, type_, closeparen) -> prPrec i 1 (concatD [prtOpenParen 0 openparen ; prtTypeT 0 type_ ; prtCloseParen 0 closeparen])
@@ -252,13 +250,6 @@ and prtBVVal (i:int) (e : AbsBasilIR.bVVal) : doc = match e with
        AbsBasilIR.BVVal1 (intval, bvtype) -> prPrec i 0 (concatD [prtIntVal 0 intval ; render ":" ; prtBVType 0 bvtype])
 
 
-and prtFieldVal (i:int) (e : AbsBasilIR.fieldVal) : doc = match e with
-       AbsBasilIR.FieldVal1 (openparen, str, bvval, type_, closeparen) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtStr 0 str ; render ":" ; prtBVVal 0 bvval ; render "," ; prtTypeT 0 type_ ; prtCloseParen 0 closeparen])
-
-and prtFieldValListBNFC i es : doc = match (i, es) with
-    (_,[]) -> (concatD [])
-  | (_,[x]) -> (concatD [prtFieldVal 0 x])
-  | (_,x::xs) -> (concatD [prtFieldVal 0 x ; render "," ; prtFieldValListBNFC 0 xs])
 and prtEndian (i:int) (e : AbsBasilIR.endian) : doc = match e with
        AbsBasilIR.Endian_Little  -> prPrec i 0 (concatD [render "le"])
   |    AbsBasilIR.Endian_Big  -> prPrec i 0 (concatD [render "be"])
@@ -428,8 +419,6 @@ and prtParamsListBNFC i es : doc = match (i, es) with
 and prtValue (i:int) (e : AbsBasilIR.value) : doc = match e with
        AbsBasilIR.Value_BV bvval -> prPrec i 0 (concatD [prtBVVal 0 bvval])
   |    AbsBasilIR.Value_Int intval -> prPrec i 0 (concatD [prtIntVal 0 intval])
-  |    AbsBasilIR.Value_Record (openparen, beginrec, fieldvals, endrec, type_, closeparen) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtBeginRec 0 beginrec ; prtFieldValListBNFC 0 fieldvals ; prtEndRec 0 endrec ; render "," ; prtTypeT 0 type_ ; prtCloseParen 0 closeparen])
-  |    AbsBasilIR.Value_Pointer (openparen, bvval, pointertype, closeparen) -> prPrec i 0 (concatD [render "ptr" ; prtOpenParen 0 openparen ; prtBVVal 0 bvval ; render "," ; prtPointerType 0 pointertype ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Value_True  -> prPrec i 0 (concatD [render "true"])
   |    AbsBasilIR.Value_False  -> prPrec i 0 (concatD [render "false"])
 
@@ -458,7 +447,9 @@ and prtExpr (i:int) (e : AbsBasilIR.expr) : doc = match e with
   |    AbsBasilIR.Expr_Paren (openparen, expr, closeparen) -> prPrec i 2 (concatD [prtOpenParen 0 openparen ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Field (expr, bident) -> prPrec i 0 (concatD [prtExpr 2 expr ; prtBIdent 0 bident])
   |    AbsBasilIR.Expr_FieldSet (expr1, localident, expr2) -> prPrec i 2 (concatD [prtExpr 2 expr1 ; render "with" ; prtLocalIdent 0 localident ; render "=" ; prtExpr 0 expr2])
-  |    AbsBasilIR.SortValRec (localident, beginrec, fieldassigns, endrec) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; prtBeginRec 0 beginrec ; prtFieldAssignListBNFC 0 fieldassigns ; prtEndRec 0 endrec])
+  |    AbsBasilIR.VariantConstr (localident1, localident2, openparen, exprs, closeparen) -> prPrec i 0 (concatD [prtLocalIdent 0 localident1 ; render "::" ; prtLocalIdent 0 localident2 ; prtOpenParen 0 openparen ; prtExprListBNFC 0 exprs ; prtCloseParen 0 closeparen])
+  |    AbsBasilIR.RecordConstr (beginrec, fieldassigns, endrec) -> prPrec i 0 (concatD [prtBeginRec 0 beginrec ; prtFieldAssignListBNFC 0 fieldassigns ; prtEndRec 0 endrec])
+  |    AbsBasilIR.UpdateRecord (beginrec, ident, fieldassigns, endrec) -> prPrec i 0 (concatD [prtBeginRec 0 beginrec ; prtIdent 0 ident ; render "with" ; prtFieldAssignListBNFC 0 fieldassigns ; prtEndRec 0 endrec])
 
 and prtExprListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])

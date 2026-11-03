@@ -74,12 +74,11 @@ ProcDef_Empty . ProcDef ::= ;
 ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ;
 
 separator Field "," ;
-Field1 . Field ::= Str ":" OpenParen Type "," IntVal CloseParen ;
+Field1 . Field ::= Str ":" Type ;
 
 IntType1 . IntType ::= INTTYPE ;
 BoolType1. BoolType ::= BOOLTYPE ;
 RecordType1 . RecordType ::= BeginRec [Field] EndRec ;
-PointerType1 . PointerType ::= "ptr" OpenParen Type "," Type CloseParen ;
 BVType1 . BVType ::= BVTYPE ;
 -- map types are right associative. left of -> cannot be another MapType.
 MapType1 . MapType ::=  Type1 "->" Type ; 
@@ -88,7 +87,8 @@ rules RecordField ::= LocalIdent ":" Type ;
 separator nonempty RecordField ";";
 
 SortType    . SumCase    ::= LocalIdent;
-VariantCase . SumCase    ::= LocalIdent "of" BeginRec [RecordField] EndRec;
+VariantCase . SumCase    ::= LocalIdent "of" OpenParen [Type] CloseParen;
+VariantCaseInlineRec . SumCase    ::= LocalIdent "of" BeginRec [RecordField] EndRec;
 
 separator nonempty SumCase "|";
 
@@ -96,7 +96,6 @@ separator nonempty SumCase "|";
 TypeIntType     . Type1 ::= IntType ;
 TypeBoolType    . Type1 ::= BoolType ;
 TypeBVType      . Type1 ::= BVType ;
-TypePointerType . Type1 ::= PointerType ;
 TypeRecordType  . Type1 ::= RecordType ;
 TypeVarType     . Type1 ::= LocalIdent ;
 TypeParen       . Type1 ::= OpenParen Type CloseParen; 
@@ -108,8 +107,6 @@ IntVal_Dec . IntVal ::=  IntegerDec ;
 
 rules BVVal ::=  IntVal ":" BVType ;
 
-separator FieldVal "," ;
-rules FieldVal ::= OpenParen Str ":" BVVal "," Type CloseParen;
 
 Endian_Little . Endian ::= "le" ;
 Endian_Big . Endian ::= "be" ;
@@ -226,10 +223,11 @@ separator Params "," ;
 
 {- EXPRESSIONS -}
 
+
+
 Value_BV . Value ::=  BVVal;
 Value_Int . Value ::= IntVal;
-Value_Record . Value ::= OpenParen BeginRec [FieldVal] EndRec "," Type CloseParen ;
-Value_Pointer . Value ::= "ptr" OpenParen BVVal "," PointerType CloseParen;
+
 Value_True . Value ::= "true" ;
 Value_False . Value ::= "false" ;
 
@@ -293,7 +291,11 @@ Expr_FieldSet   . Expr2 ::= Expr2 "with" LocalIdent "=" Expr ;
 rules FieldAssign ::= LocalIdent "=" Expr ;
 separator FieldAssign ";";
 
-SortValRec . Expr ::= LocalIdent BeginRec [FieldAssign] EndRec;
+VariantConstr . Expr ::= LocalIdent "::" LocalIdent OpenParen [Expr] CloseParen ;
+RecordConstr . Expr ::= BeginRec [FieldAssign] EndRec;
+UpdateRecord . Expr ::= BeginRec Ident "with" [FieldAssign] EndRec;
+
+
 
 
 -- operators

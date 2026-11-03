@@ -187,32 +187,33 @@ module BasilASTLoader = struct
     trans_one v
 
   and trans_typedecl t =
+    let trans_variant_case c =
+      match c with
+      | SortType variant -> (unsafe_unsigil (`TypeConstructor variant), [])
+      | VariantCase (variant, _, fields, _) ->
+          (unsafe_unsigil (`TypeConstructor variant), List.map trans_type fields)
+      | VariantCaseInlineRec (variant, _, fields, _) ->
+          ( unsafe_unsigil (`TypeConstructor variant),
+            [ Types.Record (List.map trans_recordfield fields) ] )
+    in
     match t with
     | TypeAssign_Sum (localIdent, typeT) ->
         let n = unsafe_unsigil (`Type localIdent) in
-        ( n,
-          Types.mk_adt n
-            (typeT
-            |> List.map (function
-              | SortType variant ->
-                  (unsafe_unsigil (`TypeConstructor variant), [])
-              | VariantCase (variant, _, fields, _) ->
-                  ( unsafe_unsigil (`TypeConstructor variant),
-                    List.map trans_recordfield fields ))) )
+        (n, Types.mk_adt (typeT |> List.map trans_variant_case))
 
-  (** First pass; process like forward declaration: only add the information
+  (* First pass; process like forward declaration: only add the information
       needed to do non-local reslolution of names such as for procedure calls *)
   and trans_declaration prog (x : decl) : load_st =
     match x with
     | Decl_Type sort ->
         let name = unsafe_unsigil (`Type sort) in
         let typ = Types.mk_sort name in
-        map_prog (fun prog -> Program.decl_typ prog typ) prog
+        map_prog (fun prog -> Program.decl_typ prog name typ) prog
     | Decl_RecType types ->
         let types = List.map trans_typedecl types in
         List.fold_left
           (fun prog (binding, typ) ->
-            map_prog (fun prog -> Program.decl_typ prog typ) prog)
+            map_prog (fun prog -> Program.decl_typ prog binding typ) prog)
           prog types
     | Decl_Mem (modifiers, bident, type', spec) ->
         let classification = trans_varspec prog spec in
@@ -498,22 +499,17 @@ module BasilASTLoader = struct
   and transMapType (x : mapType) : Types.t =
     match x with MapType1 (t0, t1) -> Map (trans_type t0, trans_type t1)
 
-  and trans_recordfield field =
+  and trans_recordfield field : string * Types.t =
     match field with
     | RecordField1 (id, ty) ->
         Types.mk_field (unsafe_unsigil (`Type id)) (trans_type ty)
 
   and transRECORDTYPE (fields : field list) =
-    Types.Struct
-      (StringMap.of_list
-         ((List.map (function Field1 (field_name, _, t, offset, _) ->
-              ( transStr field_name,
-                ({ typ = trans_type t; offset = transIntVal offset }
-                  : Types.record_field) )))
-            fields))
-
-  and transPOINTERTYPE (l : typeT) (u : typeT) =
-    Types.Pointer { lower = trans_type l; upper = trans_type u }
+    Types.Record
+      (List.map
+         (function
+           | Field1 (field_name, t) -> (transStr field_name, trans_type t))
+         fields)
 
   and trans_type (x : typeT) : Types.t =
     match x with
@@ -524,7 +520,6 @@ module BasilASTLoader = struct
     | TypeParen (_, typeT, _) -> trans_type typeT
     | TypeVarType name -> Types.Variable (unsafe_unsigil (`Type name))
     | TypeRecordType (RecordType1 (_, fields, _)) -> transRECORDTYPE fields
-    | TypePointerType (PointerType1 (_, l, u, _)) -> transPOINTERTYPE l u
 
   and transIntVal (x : intVal) : PrimInt.t =
     match x with
@@ -1169,19 +1164,6 @@ module BasilASTLoader = struct
     | Value_Int intval -> `Integer (transIntVal intval)
     | Value_True -> `Bool true
     | Value_False -> `Bool false
-    | Value_Pointer (_, v, PointerType1 (_, l, u, _), _) ->
-        `Pointer (trans_bv_val v, { lower = trans_type l; upper = trans_type u })
-    | Value_Record (_, _, fields, _, typ, _) ->
-        `Record
-          ( StringMap.of_list
-              (List.map
-                 (function
-                   | FieldVal1 (_, offset, value, typ, _) ->
-                       ( transStr offset,
-                         ({ value = trans_bv_val value; typ = trans_type typ }
-                           : Ops.Record.field) ))
-                 fields),
-            trans_type typ )
 
   and unsafe_unsigil g : string =
     match g with
@@ -1327,10 +1309,13 @@ module BasilASTLoader = struct
           |> Option.get_exn_or "safe by parser"
         in
         BasilExpr.field_read ~field:fname (trans_expr record)
-    | SortValRec (variant, bi, fields, ei) ->
+    | VariantConstr (typeName, variant, bi, fields, ei) ->
         let f = BasilExpr.rvar @@ lookup_constructor p_st variant in
-        BasilExpr.apply_fun ~func:f
-          (List.map (trans_field_assign trans_expr) fields |> List.map snd)
+        BasilExpr.apply_fun ~func:f (List.map trans_expr fields)
+    | RecordConstr (bi, fields, ei) ->
+        let fields = List.map (trans_field_assign trans_expr) fields in
+        let op = `RecordConstr (List.map fst fields) in
+        BasilExpr.applyintrin ~op (List.map snd fields)
     | Expr_Ite (cond, t, e) ->
         BasilExpr.ifthenelse (trans_expr cond) (trans_expr t) (trans_expr e)
     | Expr_LoadLe (o, intval, a1, a2, c) ->
@@ -1398,7 +1383,6 @@ module BasilASTLoader = struct
         transIntLogicalBinOp intlogicalbinop
     | BinOpIntBinOp intbinop -> transIntBinOp intbinop
     | BinOpEqOp equop -> transEqOp equop
-    | BinOpPointerBinOp pointerBinOp -> transPointerBinOp pointerBinOp
     | BinOp_implies -> `IMPLIES
     | BinOp_get -> `MapAccess
 
@@ -1451,8 +1435,6 @@ module BasilASTLoader = struct
     | IntBinOp_intdiv -> `INTDIV
     | IntBinOp_intmod -> `INTMOD
 
-  and transPointerBinOp (x : pointerBinOp) =
-    match x with PointerBinOp_ptradd -> `PTRADD
 
   and transIntLogicalBinOp (x : intLogicalBinOp) =
     match x with

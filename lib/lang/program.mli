@@ -89,7 +89,9 @@ val decl_global :
   Var.t ->
   t
 
-val decl_typ : ?attrib:'a Types.StringMap.t -> t -> Types.t -> t
+val decl_typ : t -> string -> Types.t -> t
+(** [decl_typ prog name typ] adds a new type or type alias declaration to the program.
+    Exn if name previously already declared. *)
 
 val referenced_vars_of_prog : t -> Var.t Iter.t
 (** Iterates over global variables in the given program, including both read and

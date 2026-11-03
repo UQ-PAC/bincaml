@@ -285,33 +285,35 @@ module FlatMemory : MemoryEncoding = struct
   open BasilExpr
 
   let mem_encoding_type : Types.t =
-    Types.Sort
-      ( Globals.mem_encoding_typ_name,
-        [
-          Types.mk_variant "MemEncoding"
-            [
-              (* liveness of an allocation *)
-              Types.mk_field "alloc_live"
-                (Types.Map (Types.Integer, Types.Bitvector 2));
-              (* size of an allocation *)
-              Types.mk_field "alloc_size"
-                (Types.Map (Types.Integer, Types.Bitvector 64));
-              (* allocation base address *)
-              Types.mk_field "alloc_base"
-                (Types.Map (Types.Integer, Types.Bitvector 64));
-              (* is an address on the heap *)
-              Types.mk_field "addr_is_heap"
-                (Types.Map (Types.Bitvector 64, Types.Boolean));
-              (* allocation of an address *)
-              Types.mk_field "addr_alloc"
-                (Types.Map (Types.Bitvector 64, Types.Integer));
-              (* offset of an address into its allocation *)
-              Types.mk_field "addr_offset"
-                (Types.Map (Types.Bitvector 64, Types.Bitvector 64));
-              (* allocation counter *)
-              Types.mk_field "alloc_counter" Types.Integer;
-            ];
-        ] )
+    Types.Variant
+      [
+        ( "MemEncoding",
+          [
+            Types.Record
+              [
+                (* liveness of an allocation *)
+                Types.mk_field "alloc_live"
+                  (Types.Map (Types.Integer, Types.Bitvector 2));
+                (* size of an allocation *)
+                Types.mk_field "alloc_size"
+                  (Types.Map (Types.Integer, Types.Bitvector 64));
+                (* allocation base address *)
+                Types.mk_field "alloc_base"
+                  (Types.Map (Types.Integer, Types.Bitvector 64));
+                (* is an address on the heap *)
+                Types.mk_field "addr_is_heap"
+                  (Types.Map (Types.Bitvector 64, Types.Boolean));
+                (* allocation of an address *)
+                Types.mk_field "addr_alloc"
+                  (Types.Map (Types.Bitvector 64, Types.Integer));
+                (* offset of an address into its allocation *)
+                Types.mk_field "addr_offset"
+                  (Types.Map (Types.Bitvector 64, Types.Bitvector 64));
+                (* allocation counter *)
+                Types.mk_field "alloc_counter" Types.Integer;
+              ];
+          ] );
+      ]
 
   module Locals = struct
     let mem_encoding : Var.t =
@@ -522,10 +524,10 @@ module SplitMemory : MemoryEncoding = struct
   let addr_size = 64 - offset_size
 
   let mem_encoding_type =
-    Types.Sort
-      ( Globals.mem_encoding_typ_name,
-        [
-          Types.mk_variant "MemEncoding"
+    Types.Variant
+      [
+        ( "MemEncoding",
+          [Types.Record
             [
               Types.mk_field "alloc_live"
                 (Types.Map (Types.Bitvector 64, Types.Bitvector 2));
@@ -533,8 +535,8 @@ module SplitMemory : MemoryEncoding = struct
                 (Types.Map (Types.Bitvector 64, Types.Bitvector 64));
               Types.mk_field "addr_is_heap"
                 (Types.Map (Types.Bitvector 64, Types.Boolean));
-            ];
-        ] )
+            ]] );
+      ]
 
   module Locals = struct
     let mem_encoding =

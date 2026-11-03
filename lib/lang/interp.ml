@@ -43,13 +43,6 @@ module IValue = struct
     | `Integer v -> Bitvec.create ~size:int_size v
     | `Bool true -> Bitvec.create ~size:8 Z.one
     | `Bool false -> Bitvec.create ~size:8 Z.zero
-    | `Pointer (bv, _) -> bv
-    | `Record (fields, _) ->
-        StringMap.fold
-          (fun _ ({ value; _ } : Ops.Record.field) acc ->
-            Bitvec.concat acc value)
-          fields Bitvec.empty
-    | `Sort _ -> failwith "struct sort unsupported"
 
   let of_constant (v : Ops.AllOps.const) =
     let open Expr.BasilExpr in
@@ -58,9 +51,6 @@ module IValue = struct
     | `Bitvector bv -> bv_value bv
     | `Integer v -> int_value v
     | `Bool b -> if b then true_value else false_value
-    | `Pointer (bv, _) -> bv_value bv
-    | `Record fields -> bv_value @@ bv_of_constant v
-    | `Sort _ -> failwith "struct sort unsupported"
 
   (** conversion to basil values *)
 
@@ -297,17 +287,20 @@ module IState = struct
     let puts st str = lookup_memory str
   end
 
-  let eval_expr (e : Program.e) st =
+  let eval_expr (e : Program.e) st : Ops.AllOps.const =
     let open Expr.AbstractExpr in
     let open Expr in
     let alg e =
       match e with
       | RVar { id } ->
-          let r : Ops.AllOps.const = read_var id st in
+          let r : Expr_eval.Value.t =
+            Expr_eval.Value.of_const @@ read_var id st
+          in
           Some r
       | o -> Expr_eval.eval_expr_alg o
     in
-    BasilExpr.cata alg e
+    BasilExpr.cata alg e |> fun b ->
+    Option.bind b Expr_eval.Value.to_const
     |> Option.get_exn_or "failed to evaluate expr (unsupported)"
 
   let activate_proc p st (args : Ops.AllOps.const StringMap.t) =

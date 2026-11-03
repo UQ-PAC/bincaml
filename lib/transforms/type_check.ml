@@ -30,7 +30,6 @@ let type_check stmt_id block_id expr =
     | `Old -> []
     | `ReadField _ -> (
         match arg with
-        | Struct _ -> []
         | _ -> [ type_err "ReadField body is not a record type" ])
     | `BoolNOT | `BOOLTOBV1 ->
         if Types.equal arg Types.Boolean then []
@@ -89,31 +88,6 @@ let type_check stmt_id block_id expr =
     let binary_bool_types = binary_same_types Types.Boolean in
     let open Ops in
     match op with
-    | `PTRADD -> (
-        let err =
-          match arg2 with
-          | Bitvector _ -> []
-          | _ ->
-              [ type_err "%s is not of bitvector type" @@ Types.to_string arg1 ]
-        in
-        match arg1 with
-        | Pointer _ -> err
-        | _ ->
-            err
-            @ [ type_err "%s is not of pointer type" @@ Types.to_string arg2 ])
-    | `WriteField offset ->
-        let err =
-          match arg1 with
-          | Struct _ -> []
-          | _ -> [ type_err "%s is not of record type" @@ Types.to_string arg1 ]
-        in
-        let { typ } : Types.record_field = Types.struct_field offset arg1 in
-        if List.length err = 1 || Types.equal arg2 typ then err
-        else
-          [
-            type_err "%s is not of %s type" (Types.to_string arg1)
-              (Types.to_string typ);
-          ]
     | `INTADD | `INTMUL | `INTSUB | `INTDIV | `INTMOD | `INTLT | `INTLE ->
         binary_int_types arg1 arg2
     | (`EQ | `NEQ) as op ->

@@ -149,19 +149,25 @@ module SMTLib2 = struct
     | Types.Unit -> (atom "Unit", LSet.singleton DT)
     | Types.Top -> (atom "Any", LSet.singleton DT)
     | Types.Nothing -> (atom "Nothing", LSet.singleton DT)
-    | Types.Sort (name, []) -> (atom name, LSet.singleton UF)
-    | Types.Sort (name, _) -> (atom name, LSet.singleton DT)
+    | Types.NewType ([], name) -> (atom name, LSet.singleton UF)
+    | Types.NewType (vs, name) ->
+        let vs = List.map (of_typ %> fst) vs in
+        let t = list (atom name :: vs) in
+        (t, LSet.singleton DT)
     | Types.Map (l, r) ->
         let tl, ll = of_typ l in
         let tr, lr = of_typ r in
         let log = LSet.union (LSet.singleton Array) (LSet.union ll lr) in
         (list [ atom "Array"; tl; tr ], log)
+    | Types.ByteArray (l, r) ->
+        let tl, ll = of_typ @@ Bitvector (l * 8) in
+        let tr, lr = of_typ @@ Bitvector (r * 8) in
+        let log = LSet.union (LSet.singleton Array) (LSet.union ll lr) in
+        (list [ atom "Array"; tl; tr ], log)
     | Types.Variable v -> (atom v, LSet.empty)
-    | Types.Struct e ->
-        failwith "unsupported: must be lowered to Sort/ADT/Datatype first"
-    | Types.Pointer { upper; lower } ->
-        ( list [ atom "Pointer "; fst (of_typ upper); fst (of_typ lower) ],
-          LSet.singleton UF )
+    | Function _ -> failwith "not supported yet"
+    | Record _ -> failwith "not supported yet"
+    | Variant _ -> failwith "not supported yet"
 
   let add_logic l s = ((), { s with logics = LSet.add l s.logics })
 
@@ -193,8 +199,6 @@ module SMTLib2 = struct
       | `Bitvector _ -> add_logic BV
       | `Integer _ -> add_logic Int
       | `Bool _ -> return ()
-      | `Record _ | `Sort _ -> add_logic DT
-      | `Pointer _ -> add_logic UF
     in
     return v
 
@@ -557,20 +561,21 @@ module SMTLib2 = struct
 
   let trans_decl (decl : Program.declaration) =
     match decl with
-    | Type { binding; typ = Sort (name, [ { variant; fields = [] } ]) } ->
+    | Type { binding; typ = Variant [ (variant, []) ] } ->
         let sexp = Bincaml_util.Smt.Expr.declare_sort variant 0 in
         let* _ = declare_sort sexp in
         let* _ = add_logic DT in
         return sexp
-    | Type { binding; typ = Sort (name, vs) } ->
+    | Type { binding; typ = Variant vs } ->
         let fields =
           List.map
-            Types.(
-              function
-              | { variant; fields } ->
+            (function
+              | variant, fields ->
                   ( variant,
-                    List.map
-                      (fun { field; typ } -> (field, fst @@ of_typ typ))
+                    List.mapi
+                      (fun i typ ->
+                        let fieldname = variant ^ "_field" ^ Int.to_string i in
+                        (fieldname, fst @@ of_typ typ))
                       fields ))
             vs
         in
@@ -677,12 +682,12 @@ let%expect_test "datatypes" =
       {
         binding = "list";
         typ =
-          Types.mk_adt "list"
+          Types.mk_adt
             [
               ( "Cons",
                 [
-                  Types.mk_field "head" (Bitvector 63);
-                  Types.mk_field "tail" (Types.mk_sort "list");
+                  Types.Record
+                    [ ("head", Bitvector 63); ("tail", Types.mk_sort "list") ];
                 ] );
               ("Nil", []);
             ];

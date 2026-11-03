@@ -7,7 +7,7 @@ open AbsBasilIR
 open Lexing
 %}
 
-%token KW_shared KW_observable KW_axiom KW_memory KW_var KW_val KW_let KW_prog KW_entry KW_proc KW_and KW_type KW_ptr KW_of KW_le KW_be KW_nop KW_store KW_load KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_phi KW_block KW_true KW_false KW_forall KW_exists KW_fun KW_in KW_old KW_implies KW_get KW_boolnot KW_intneg KW_booltobv1 KW_gamma KW_classification KW_load_be KW_load_le KW_zero_extend KW_sign_extend KW_extract KW_if KW_then KW_else KW_match KW_with KW_cases KW_eq KW_neq KW_bvnot KW_bvneg KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_bvand KW_bvor KW_bvadd KW_bvxor KW_bvconcat KW_bvmul KW_update KW_ite KW_ptradd KW_require KW_requires KW_ensure KW_ensures KW_rely KW_relies KW_guarantee KW_guarantees KW_captures KW_modifies KW_invariant
+%token KW_shared KW_observable KW_axiom KW_memory KW_var KW_val KW_let KW_prog KW_entry KW_proc KW_and KW_type KW_of KW_le KW_be KW_nop KW_store KW_load KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_phi KW_block KW_true KW_false KW_forall KW_exists KW_fun KW_in KW_old KW_implies KW_get KW_boolnot KW_intneg KW_booltobv1 KW_gamma KW_classification KW_load_be KW_load_le KW_zero_extend KW_sign_extend KW_extract KW_if KW_then KW_else KW_match KW_with KW_cases KW_eq KW_neq KW_bvnot KW_bvneg KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_bvand KW_bvor KW_bvadd KW_bvxor KW_bvconcat KW_bvmul KW_update KW_ite KW_ptradd KW_require KW_requires KW_ensure KW_ensures KW_rely KW_relies KW_guarantee KW_guarantees KW_captures KW_modifies KW_invariant
 
 %token SYMB1 /* ; */
 %token SYMB2 /* , */
@@ -45,7 +45,7 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pRecordType pPointerType pBVType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pFieldVal_list pFieldVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pFieldAssign pFieldAssign_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pIntrinOp pPointerBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pRecordType pBVType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pFieldAssign pFieldAssign_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pIntrinOp pPointerBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -62,7 +62,6 @@ open Lexing
 %type <AbsBasilIR.intType> pIntType
 %type <AbsBasilIR.boolType> pBoolType
 %type <AbsBasilIR.recordType> pRecordType
-%type <AbsBasilIR.pointerType> pPointerType
 %type <AbsBasilIR.bVType> pBVType
 %type <AbsBasilIR.mapType> pMapType
 %type <AbsBasilIR.recordField> pRecordField
@@ -73,8 +72,6 @@ open Lexing
 %type <AbsBasilIR.typeT> pTypeT
 %type <AbsBasilIR.intVal> pIntVal
 %type <AbsBasilIR.bVVal> pBVVal
-%type <AbsBasilIR.fieldVal list> pFieldVal_list
-%type <AbsBasilIR.fieldVal> pFieldVal
 %type <AbsBasilIR.endian> pEndian
 %type <AbsBasilIR.assignment> pAssignment
 %type <AbsBasilIR.stmt> pStmt
@@ -158,7 +155,6 @@ open Lexing
 %type <AbsBasilIR.intType> intType
 %type <AbsBasilIR.boolType> boolType
 %type <AbsBasilIR.recordType> recordType
-%type <AbsBasilIR.pointerType> pointerType
 %type <AbsBasilIR.bVType> bVType
 %type <AbsBasilIR.mapType> mapType
 %type <AbsBasilIR.recordField> recordField
@@ -169,8 +165,6 @@ open Lexing
 %type <AbsBasilIR.typeT> typeT
 %type <AbsBasilIR.intVal> intVal
 %type <AbsBasilIR.bVVal> bVVal
-%type <AbsBasilIR.fieldVal list> fieldVal_list
-%type <AbsBasilIR.fieldVal> fieldVal
 %type <AbsBasilIR.endian> endian
 %type <AbsBasilIR.assignment> assignment
 %type <AbsBasilIR.stmt> stmt
@@ -238,6 +232,7 @@ open Lexing
 %type <AbsBasilIR.funSpec list> funSpec_list
 %type <AbsBasilIR.progSpec list> progSpec_list
 
+%type <AbsBasilIR.ident> ident
 %type <AbsBasilIR.bVTYPE> bVTYPE
 %type <AbsBasilIR.iNTTYPE> iNTTYPE
 %type <AbsBasilIR.bOOLTYPE> bOOLTYPE
@@ -291,8 +286,6 @@ pBoolType : boolType TOK_EOF { $1 };
 
 pRecordType : recordType TOK_EOF { $1 };
 
-pPointerType : pointerType TOK_EOF { $1 };
-
 pBVType : bVType TOK_EOF { $1 };
 
 pMapType : mapType TOK_EOF { $1 };
@@ -312,10 +305,6 @@ pTypeT : typeT TOK_EOF { $1 };
 pIntVal : intVal TOK_EOF { $1 };
 
 pBVVal : bVVal TOK_EOF { $1 };
-
-pFieldVal_list : fieldVal_list TOK_EOF { $1 };
-
-pFieldVal : fieldVal TOK_EOF { $1 };
 
 pEndian : endian TOK_EOF { $1 };
 
@@ -507,7 +496,7 @@ field_list : /* empty */ { []  }
   | field SYMB2 field_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-field : str SYMB5 openParen typeT SYMB2 intVal closeParen { Field1 ($1, $3, $4, $6, $7) }
+field : str SYMB5 typeT { Field1 ($1, $3) }
   ;
 
 intType : iNTTYPE { IntType1 $1 }
@@ -517,9 +506,6 @@ boolType : bOOLTYPE { BoolType1 $1 }
   ;
 
 recordType : beginRec field_list endRec { RecordType1 ($1, $2, $3) }
-  ;
-
-pointerType : KW_ptr openParen typeT SYMB2 typeT closeParen { PointerType1 ($2, $3, $5, $6) }
   ;
 
 bVType : bVTYPE { BVType1 $1 }
@@ -536,7 +522,8 @@ recordField_list : recordField { (fun x -> [x]) $1 }
   ;
 
 sumCase : localIdent { SortType $1 }
-  | localIdent KW_of beginRec recordField_list endRec { VariantCase ($1, $3, $4, $5) }
+  | localIdent KW_of openParen typeT_list closeParen { VariantCase ($1, $3, $4, $5) }
+  | localIdent KW_of beginRec recordField_list endRec { VariantCaseInlineRec ($1, $3, $4, $5) }
   ;
 
 sumCase_list : sumCase { (fun x -> [x]) $1 }
@@ -546,7 +533,6 @@ sumCase_list : sumCase { (fun x -> [x]) $1 }
 type1 : intType { TypeIntType $1 }
   | boolType { TypeBoolType $1 }
   | bVType { TypeBVType $1 }
-  | pointerType { TypePointerType $1 }
   | recordType { TypeRecordType $1 }
   | localIdent { TypeVarType $1 }
   | openParen typeT closeParen { TypeParen ($1, $2, $3) }
@@ -561,14 +547,6 @@ intVal : integerHex { IntVal_Hex $1 }
   ;
 
 bVVal : intVal SYMB5 bVType { BVVal1 ($1, $3) }
-  ;
-
-fieldVal_list : /* empty */ { []  }
-  | fieldVal { (fun x -> [x]) $1 }
-  | fieldVal SYMB2 fieldVal_list { (fun (x,xs) -> x::xs) ($1, $3) }
-  ;
-
-fieldVal : openParen str SYMB5 bVVal SYMB2 typeT closeParen { FieldVal1 ($1, $2, $4, $6, $7) }
   ;
 
 endian : KW_le { Endian_Little  }
@@ -740,8 +718,6 @@ params_list : /* empty */ { []  }
 
 value : bVVal { Value_BV $1 }
   | intVal { Value_Int $1 }
-  | openParen beginRec fieldVal_list endRec SYMB2 typeT closeParen { Value_Record ($1, $2, $3, $4, $6, $7) }
-  | KW_ptr openParen bVVal SYMB2 pointerType closeParen { Value_Pointer ($2, $3, $5, $6) }
   | KW_true { Value_True  }
   | KW_false { Value_False  }
   ;
@@ -757,7 +733,9 @@ expr : expr1 {  $1 }
   | KW_fun attribSet lambdaDef { Expr_Lambda ($2, $3) }
   | KW_let localIdent localVarParen_list SYMB5 typeT SYMB6 expr KW_in expr { Expr_Let ($2, $3, $5, $7, $9) }
   | expr2 bIdent { Expr_Field ($1, $2) }
-  | localIdent beginRec fieldAssign_list endRec { SortValRec ($1, $2, $3, $4) }
+  | localIdent SYMB4 localIdent openParen expr_list closeParen { VariantConstr ($1, $3, $4, $5, $6) }
+  | beginRec fieldAssign_list endRec { RecordConstr ($1, $2, $3) }
+  | beginRec ident KW_with fieldAssign_list endRec { UpdateRecord ($1, $2, $4, $5) }
   ;
 
 expr1 : expr2 {  $1 }
@@ -923,6 +901,7 @@ progSpec_list : progSpec { (fun x -> [x]) $1 }
   | progSpec progSpec_list { (fun (x,xs) -> x::xs) ($1, $2) }
   ;
 
+ident : TOK_Ident  { Ident $1 };
 bVTYPE : TOK_BVTYPE { BVTYPE ($1)};
 iNTTYPE : TOK_INTTYPE { INTTYPE ($1)};
 bOOLTYPE : TOK_BOOLTYPE { BOOLTYPE ($1)};

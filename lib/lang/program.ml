@@ -86,7 +86,7 @@ let pretty_declaration d =
           ^+ text (Types.to_string rtype)
           ^ attrib_text ^+ text "="
           ^+ nest 2 (Expr.BasilExpr.pretty body))
-  | Type { binding; typ } -> text "type " ^ text (Types.to_string_decl typ)
+  | Type { binding; typ } -> text (Types.to_string_decl binding typ)
   | Procedure { definition } -> pretty_proc definition
 
 (*match definition with
@@ -325,26 +325,19 @@ let decl_global ?(attrib = StringMap.empty) ?(classification = None) p v =
   let decl = Variable { binding = v; attrib; classification } in
   { p with declarations = DeclsList.append id decl p.declarations }
 
-let decl_typ ?(attrib = StringMap.empty) p t =
+(** Declare a type alias *)
+let decl_typ p binding_name t =
   match t with
-  | Sort (type_name, []) as s ->
-      let id : ID.t = p.global_names.decl_exn type_name in
-      {
-        p with
-        declarations =
-          DeclsList.add id
-            (Type { binding = type_name; typ = s })
-            p.declarations;
-      }
-  | Sort (name, variants) as s ->
-      let id : ID.t = p.global_names.decl_exn name in
-
+  | Variant variants as s ->
+      let id : ID.t = p.global_names.decl_or_get binding_name in
       let new_decls =
-        (id, Type { binding = name; typ = s })
+        (id, Type { binding = binding_name; typ = s })
         :: (variants
-           |> List.map (function { variant; fields } ->
-               let variant = p.global_names.decl_exn variant in
-               let args = List.map (function { field; typ } -> typ) fields in
+           |> List.map (function variant, fields ->
+               let variant =
+                 p.global_names.decl_or_get (binding_name ^ "::" ^ variant)
+               in
+               let args = fields in
                let ty = Types.curry args s in
                let constructor =
                  Var.create (ID.name variant) ty ~scope:GlobalConst
@@ -356,7 +349,10 @@ let decl_typ ?(attrib = StringMap.empty) p t =
                )))
       in
       { p with declarations = DeclsList.append_list new_decls p.declarations }
-  | _ -> failwith "not declarable type"
+  | typ ->
+      let id : ID.t = p.global_names.decl_or_get binding_name in
+      let new_decls = [ (id, Type { binding = binding_name; typ }) ] in
+      { p with declarations = DeclsList.append_list new_decls p.declarations }
 
 let create_single_proc ?(name = "<module>") () =
   let global_names = ID.make_gen () in

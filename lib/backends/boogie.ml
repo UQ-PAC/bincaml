@@ -45,7 +45,7 @@ let rec type_to_string (t : Types.t) =
   | Types.Map (i, o) ->
       String.concat "" [ "["; type_to_string i; "]"; type_to_string o ]
   | Types.Variable s -> s
-  | Types.Sort (s, vs) -> s
+  | Types.NewType (vs, s) -> s
   | t ->
       raise
         (BoogieException (String.cat "Unsupported type" (Types.to_string t)))
@@ -71,11 +71,6 @@ let pretty_const (c : Ops.AllOps.const) =
   | `Integer i -> text @@ Z.format "%d" i
   | `Bitvector bv -> text @@ Printf.sprintf "%sbv%d" (Z.format "%d" bv.v) bv.w
   | `Bool b -> text @@ string_of_bool b
-  | `Record _ -> raise (BoogieException "records unsupported by boogie backend")
-  | `Pointer _ ->
-      raise (BoogieException "pointers unsupported by boogie backend")
-  | `Sort _ ->
-      raise (BoogieException "const sorts unsupported by boogie backend")
 
 let pretty_call_args_no_brackets (args : Containers_pp.t list) =
   let open Containers_pp in
@@ -283,24 +278,38 @@ let pretty_function_body funcname (e : Program.e) =
               (Var.to_string funcname)
               (Expr.BasilExpr.to_string e)))
 
-let pretty_variant_declaration (v : Types.variant) =
+let pretty_variant_declaration (variant, decls) =
   let open Containers_pp in
-  text v.variant
-  ^ bracket "("
-      (append_l
-         ~sep:(text "," ^ sp)
-         (List.map
-            (fun (f : Types.field) ->
-              text f.field ^ text ":" ^+ text (type_to_string f.typ))
-            v.fields))
-      ")"
+  let prettyv vs =
+    text variant
+    ^ bracket "("
+        (append_l
+           ~sep:(text "," ^ sp)
+           (List.map
+              (fun (fname, ftyp) ->
+                text fname ^ text ":" ^+ text (type_to_string ftyp))
+              vs))
+        ")"
+  in
+  match decls with
+  | [] -> text variant
+  | [ Types.Record vs ] -> prettyv vs
+  | os ->
+      let fields =
+        List.mapi (fun i ft -> (Stdlib.( ^ ) "field" (Int.to_string i), ft)) os
+      in
+      prettyv fields
 
 let pretty_type_declaration (binding : string) (typ : Types.t) =
   let open Containers_pp in
   match typ with
-  | Types.Sort (s, vs) ->
+  | Types.Variant vs ->
       text "datatype" ^+ text binding
       ^+ bracket "{" (append_sp (List.map pretty_variant_declaration vs)) "}"
+  | Types.Record _ as vs ->
+      let t = [(binding, [ vs ])] in
+      text "datatype" ^+ text binding
+      ^+ bracket "{" (append_sp (List.map pretty_variant_declaration t)) "}"
   | _ -> raise (BoogieException "Unsupported type declaration")
 
 let pretty_statement (s : Program.stmt) =

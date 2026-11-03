@@ -1,32 +1,6 @@
 open Common
 open Containers
 
-module Record = struct
-  type t = field StringMap.t * Types.t [@@deriving eq, ord]
-  and field = { value : Bitvec.t; typ : Types.t }
-
-  let get_field offset (record, _) : field =
-    match StringMap.find_opt offset record with
-    | None -> failwith @@ "No field at offset " ^ offset
-    | Some f -> f
-
-  let set_field field_name (record, typ) value =
-    let { typ; _ } = get_field field_name (record, typ) in
-    (StringMap.add field_name { typ; value } record, typ)
-
-  let show_field { value; typ } =
-    Printf.sprintf "(%s, %s)" (Bitvec.to_string value) @@ Types.to_string typ
-
-  let show (record, _) =
-    "{"
-    ^ (StringMap.bindings record
-      |> List.map (fun (k, v) -> "(\"" ^ k ^ "\": " ^ show_field v ^ ")")
-      |> String.concat ", ")
-    ^ "}"
-
-  let to_string v = show v
-  let pp fmt b = Format.pp_print_string fmt (show b)
-end
 
 module Maps = struct
   (* map, value -> result *)
@@ -253,38 +227,57 @@ module ADTOps = struct
     match u with `WriteField field -> set_field field
 end
 
-module RecordOps = struct
-  type const = [ `Record of Record.t ]
+module VariantOps = struct
+  type unary = [
+    `IsVariant of string (* boolean value if matches variant *)
+  ]
   [@@deriving show { with_path = false }, eq, ord]
 
+  type binary = [
+    `Pattern of string (* partial match like if then. first arg is variant, second argument
+                          is function applied to successfully matched destructured
+                          variant
+
+                          match v with TName::Variant(a,b, c) -> a + b + c
+
+                          would be:
+
+                          `Cases [
+                            (Pattern "TName::Variant") v (fun a b c -> a + b + c)
+                          ]
+
+                          *)
+  ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  type intrin = [
+  (** TName::Variant(a,b,c) === (VariantConstr "TName::Variant") (a,b,c) *)
+      `VariantConstr of string
+  ]
+  [@@deriving show { with_path = false }, eq, ord]
+
+  let show = function
+    | #intrin as u -> show_intrin u
+    | #unary as u -> show_unary u
+    | #binary as b -> show_binary b
+end
+
+
+module RecordOps = struct
   type unary = [ `ReadField of string ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type binary = [ `WriteField of string ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  let eval_unary (u : unary) record =
-    match u with
-    | `ReadField offset ->
-        let { value; _ } : Record.field = Record.get_field offset record in
-        value
-
-  let eval_binary (u : binary) =
-    match u with `WriteField offset -> Record.set_field offset
-
-  let show = function
-    | #unary as u -> show_unary u
-    | #binary as b -> show_binary b
-end
-
-module PointerOps = struct
-  type const = [ `Pointer of Bitvec.t * Types.pointer ]
+  (** {a=va;b=vb;c=vc} = (RecordConstr (a,b,c))(va,vb,vc) *)
+  type intrin = [ `RecordConstr of string list ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type binary = [ `PTRADD ] [@@deriving show { with_path = false }, eq, ord]
-
-  let eval_binary (u : binary) (bv, _) = match u with `PTRADD -> Bitvec.add bv
-  let show = function #binary as u -> show_binary u
+  let show = function
+    | #intrin as u -> show_intrin u
+    | #unary as u -> show_unary u
+    | #binary as b -> show_binary b
 end
 
 module Spec = struct
@@ -314,12 +307,10 @@ module Spec = struct
 end
 
 module AllOps = struct
-  type prim_const =
-    [ IntOps.const | BVOps.const | LogicalOps.const | PointerOps.const ]
+  type prim_const = [ IntOps.const | BVOps.const | LogicalOps.const ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type const = [ prim_const | RecordOps.const | `Sort of const ADTOps.t ]
-  [@@deriving show { with_path = false }, eq, ord]
+  type const = prim_const [@@deriving show { with_path = false }, eq, ord]
 
   module ADT = struct
     type 'a t = { name : string; fields : string * 'a }
@@ -338,11 +329,10 @@ module AllOps = struct
     | BVOps.binary
     | LogicalOps.binary
     | Spec.binary
-    | RecordOps.binary
-    | PointerOps.binary ]
+    | RecordOps.binary ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  type intrin = [ BVOps.intrin | LogicalOps.intrin | Spec.intrin | Maps.intrin ]
+  type intrin = [ BVOps.intrin | LogicalOps.intrin | Spec.intrin | Maps.intrin | RecordOps.intrin ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type lambda = Spec.lambda [@@deriving show { with_path = false }, eq, ord]
@@ -360,9 +350,6 @@ module AllOps = struct
     | `Bool _ -> return Boolean
     | `Integer _ -> return Integer
     | `Bitvector v -> return (Bitvector (Bitvec.size v))
-    | `Pointer (v, ty) -> return (Pointer ty)
-    | `Record ((fields, typ) : Record.t) -> return typ
-    | `Sort s -> return (ADTOps.get_typ s)
 
   let ret_type_lambda (o : [< lambda ]) args a =
     let open Types in
@@ -384,16 +371,7 @@ module AllOps = struct
         match a with
         | Bitvector s -> return @@ Bitvector (sz + s)
         | o -> Conflict [ (o, "<bitvector") ])
-    | `ReadField field -> (
-        match a with
-        | Sort _ ->
-            return
-            @@ Option.get_exn_or "no such field"
-            @@ adt_record_field field a
-        | Struct _ ->
-            let { typ } = struct_field field a in
-            return typ
-        | _ -> failwith "not a struct")
+    | `ReadField field -> (failwith "no local type info for field")
     | `BVNEG -> return a
     | `INTNEG -> return Integer
     | `Old -> return a
@@ -422,7 +400,6 @@ module AllOps = struct
     | `BVSREM | `BVSMOD | `BVASHR ->
         return l
     | `WriteField _ -> return l
-    | `PTRADD -> return l
     | `MapAccess ->
         let m, r = Types.uncurry l in
         return r
@@ -464,13 +441,12 @@ module AllOps = struct
   let is_commutative_intrin (o : intrin) =
     match o with
     | `BVADD | `BVMUL | `BVOR | `BVXOR | `BVAND | `OR | `AND -> true
-    | `Cases | `BVConcat | `MapUpdate | `IfThenElse -> false
+    | `Cases | `BVConcat | `MapUpdate | `RecordConstr _ | `IfThenElse -> false
 
   (** ops returning booleans *)
 
   let rec to_string (op : [< const | unary | binary | intrin | lambda ]) =
     match op with
-    | `Sort v -> ADTOps.to_string to_string v
     | `BVADD -> "bvadd"
     | `BVSREM -> "bvsrem"
     | `BVSDIV -> "bvsdiv"
@@ -492,7 +468,6 @@ module AllOps = struct
     | `ZeroExtend n -> Printf.sprintf "zero_extend_%d" n
     | `WriteField offset -> "write_field_" ^ offset
     | `ReadField offset -> "read_field_" ^ offset
-    | `PTRADD -> "ptradd"
     | `EQ -> "eq"
     | `INTADD -> "intadd"
     | `BVNAND -> "bvnand"
@@ -510,10 +485,6 @@ module AllOps = struct
     | `BVAND -> "bvand"
     | `INTMUL -> "intmul"
     | `Bitvector z -> Bitvec.to_string z
-    | `Pointer (value, typ) ->
-        Printf.sprintf "ptr(%s, %s)" (Bitvec.show value)
-          (Types.show_pointer typ)
-    | `Record record -> Record.to_string record
     | `BVSMOD -> "bvsmod"
     | `INTLT -> "intlt"
     | `IMPLIES -> "implies"
@@ -535,6 +506,7 @@ module AllOps = struct
     | `IfThen -> "case"
     | `IfThenElse -> "ite"
     | `Cases -> "match"
+    | `RecordConstr _ -> "record_constr"
 
   let eval_equal (a : const) (b : const) =
     match (a, b) with

@@ -25,6 +25,11 @@ let bvunk st i = fix st (TypeConstr ([ i ], "bv"))
 
 (** {2 Primitive types} *)
 
+let map_type st k v = fix st (TypeConstr ([ k; v ], "map"))
+
+let array_type st k v =
+  fix st (TypeConstr ([ bv_type st k; bv_type st v ], "array"))
+
 let int_type st = fix st (TypeConstr ([], "int"))
 let bool_type st = fix st (TypeConstr ([], "bool"))
 let unit_t st = fix st (TypeConstr ([], "unit"))
@@ -44,11 +49,12 @@ let rec ty_of_basil st (t : Types.t) : TypeExpr.t =
   | Types.Unit -> unit_t st
   | Types.Top -> top_t st
   | Types.Nothing -> nothing_t st
-  | Types.Map (a, b) -> fun_type st (ty_of_basil st a) (ty_of_basil st b)
-  | Types.Sort (n, _) -> fix st (TypeConstr ([], n))
-  | Types.Struct _ -> failwith "structs unsupp"
-  | Types.Pointer { lower; upper } ->
-      ptr_typ_sub st (ty_of_basil st lower) (ty_of_basil st upper)
+  | Types.Map (a, b) -> map_type st (ty_of_basil st a) (ty_of_basil st b)
+  | Types.ByteArray (a, b) -> array_type st a b
+  | Types.Function (a, b) -> fun_type st (ty_of_basil st a) (ty_of_basil st b)
+  | Types.NewType (ts, n) ->
+      fix st (TypeConstr (List.map (ty_of_basil st) ts, n))
+  | Types.Record fields -> failwith "structs unsupp"
   | Types.Variable n ->
       (*fix st (Var (st.gen.fresh ~name:n ()))*)
       (* type variables in the AST are references to declared types for now *)
@@ -120,7 +126,17 @@ let rec to_basil (t : TypeExpr.t) : Types.t =
   | TypeConstr ([ a; b ], "->") ->
       let a = wrapped a @@ fun () -> to_basil a in
       let b = wrapped b @@ fun () -> to_basil b in
+      Function (a, b)
+  | TypeConstr ([ a; b ], "map") ->
+      let a = wrapped a @@ fun () -> to_basil a in
+      let b = wrapped b @@ fun () -> to_basil b in
       Map (a, b)
+  | TypeConstr ([ a; b ], "array") -> (
+      let a = wrapped a @@ fun () -> to_basil a in
+      let b = wrapped b @@ fun () -> to_basil b in
+      match (a, b) with
+      | Bitvector i, Bitvector j -> ByteArray (i / 8, j / 8)
+      | _ -> failwith "unrch")
   | TypeConstr ([ w ], "bv") -> (
       match is_nat_val_type w with
       | Some i -> Bitvector i
@@ -130,8 +146,8 @@ let rec to_basil (t : TypeExpr.t) : Types.t =
   | TypeConstr ([], "int") -> Integer
   | TypeConstr ([], "top") -> Top
   | TypeConstr ([], "nothing") -> Nothing
-  | TypeConstr ([], o) -> Sort (o, [])
-  | Var o -> Sort (ID.to_string o, [])
+  | TypeConstr (ts, o) -> NewType (List.map to_basil ts, o)
+  | Var o -> NewType ([], ID.to_string o)
   | _ -> failwith @@ "not impl:" ^ type_to_string t
 
 let types_universe = "<types>"

@@ -91,8 +91,6 @@ let scheme_of_op st ~visit_constraint (gen : ID.generator)
       failwith @@ "unsupported binary op: " ^ Ops.AllOps.to_string o
   | #Ops.AllOps.unary as o ->
       failwith @@ "unsupported unary op: " ^ Ops.AllOps.to_string o
-  | #Ops.AllOps.const as o ->
-      failwith @@ "unsupported const op: " ^ Ops.AllOps.to_string o
 
 (** return the generic type scheme of an intrinsic operation *)
 let scheme_of_intrin st ?(visit_constraint = fun a -> ()) (gen : ID.generator)

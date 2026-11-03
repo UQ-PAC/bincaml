@@ -223,7 +223,6 @@ module KnownBitsValueAbstraction = struct
   let eval_binary op (a, _) (b, _) rt =
     match op with
     | #Lang.Ops.Spec.binary -> Top
-    | #Lang.Ops.PointerOps.binary -> Top
     | #Lang.Ops.RecordOps.binary -> Top
     | #Lang.Ops.IntOps.binary -> Top
     | #Lang.Ops.LogicalOps.binary -> Top
