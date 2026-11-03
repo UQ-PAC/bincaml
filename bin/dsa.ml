@@ -13,6 +13,8 @@ let () =
     ]
     anon_fun usage_msg;
 
+  Logs.set_reporter (Logs.format_reporter ());
+
   match !input_files with
   | [ filename ] ->
       let prog = (Loader.Loadir.ast_of_fname filename).prog in
@@ -35,6 +37,7 @@ let () =
       let prog = Bincaml.Passes.PassManager.(run_transform prog sparams) in
       let prog = Bincaml.Passes.PassManager.(run_transform prog sssa) in
 
+      Logs.(set_level (Some Debug));
       let dsgraph = Analysis.Dsa.dsa prog in
       let _, g =
         Bincaml_util.Common.IDMap.find

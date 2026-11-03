@@ -67,6 +67,12 @@ module Constraint = struct
             in
             Some (Call { lhs; args; callee_id = procid })
         | _ -> None)
+    |> Iter.map (fun x ->
+        Logs.debug (fun m ->
+            m "dsa constraint in %s: %s"
+              (ID.show (Procedure.id p))
+              (show Expr.BasilExpr.to_string x));
+        x)
 end
 
 module DSGraph = Dsgraph
@@ -463,7 +469,13 @@ let dot_string (graph : DSGraph.t) =
           (Hashtbl.get_or node_sbs nid ~default:"")
           (List.to_string ~sep:"|"
              (fun (id, cell) ->
-               Printf.sprintf "<%d>%s" id (Interval.show @@ DSGraph.offsets cell))
+               let interval = DSGraph.offsets cell in
+               let wd =
+                 match interval with
+                 | Interval (lo, hi) -> Z.(to_string (hi - lo + ~$1))
+                 | _ -> "?"
+               in
+               Printf.sprintf "<%d>%s:%sB" id (Interval.show interval) wd)
              cids))
       node_contents
   ^ "\n"
