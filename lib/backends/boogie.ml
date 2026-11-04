@@ -44,9 +44,11 @@ let rec type_to_string (t : Types.t) =
   | Types.Bitvector i -> String.cat "bv" (Int.to_string i)
   | Types.Map (i, o) ->
       String.concat "" [ "["; type_to_string i; "]"; type_to_string o ]
+  | Types.Function (i, o) ->
+      String.concat "" [ "["; type_to_string i; "]"; type_to_string o ]
   | Types.Variable s -> s
   | Types.NewType (vs, s) -> s
-  | t ->
+  | Unit | Top | ByteArray _ | Nothing | Record _ | Variant _ ->
       raise
         (BoogieException (String.cat "Unsupported type" (Types.to_string t)))
 

@@ -114,8 +114,12 @@ and showBVType (e : AbsBasilIR.bVType) : showable = match e with
        AbsBasilIR.BVType1 bvtype -> s2s "BVType1" >> c2s ' ' >> c2s '(' >> showBVTYPE bvtype >> c2s ')'
 
 
+and showFunType (e : AbsBasilIR.funType) : showable = match e with
+       AbsBasilIR.FunType1 (type'0, type') -> s2s "FunType1" >> c2s ' ' >> c2s '(' >> showTypeT type'0  >> s2s ", " >>  showTypeT type' >> c2s ')'
+
+
 and showMapType (e : AbsBasilIR.mapType) : showable = match e with
-       AbsBasilIR.MapType1 (type'0, type') -> s2s "MapType1" >> c2s ' ' >> c2s '(' >> showTypeT type'0  >> s2s ", " >>  showTypeT type' >> c2s ')'
+       AbsBasilIR.MapType1 (type'0, beginlist, type', endlist) -> s2s "MapType1" >> c2s ' ' >> c2s '(' >> showTypeT type'0  >> s2s ", " >>  showBeginList beginlist  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showEndList endlist >> c2s ')'
 
 
 and showRecordField (e : AbsBasilIR.recordField) : showable = match e with
@@ -136,6 +140,7 @@ and showTypeT (e : AbsBasilIR.typeT) : showable = match e with
   |    AbsBasilIR.TypeVarType localident -> s2s "TypeVarType" >> c2s ' ' >> c2s '(' >> showLocalIdent localident >> c2s ')'
   |    AbsBasilIR.TypeParen (openparen, type', closeparen) -> s2s "TypeParen" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.TypeMapType maptype -> s2s "TypeMapType" >> c2s ' ' >> c2s '(' >> showMapType maptype >> c2s ')'
+  |    AbsBasilIR.TypeFunType funtype -> s2s "TypeFunType" >> c2s ' ' >> c2s '(' >> showFunType funtype >> c2s ')'
 
 
 and showIntVal (e : AbsBasilIR.intVal) : showable = match e with
@@ -320,7 +325,6 @@ and showBinOp (e : AbsBasilIR.binOp) : showable = match e with
   |    AbsBasilIR.BinOpIntLogicalBinOp intlogicalbinop -> s2s "BinOpIntLogicalBinOp" >> c2s ' ' >> c2s '(' >> showIntLogicalBinOp intlogicalbinop >> c2s ')'
   |    AbsBasilIR.BinOpIntBinOp intbinop -> s2s "BinOpIntBinOp" >> c2s ' ' >> c2s '(' >> showIntBinOp intbinop >> c2s ')'
   |    AbsBasilIR.BinOpEqOp eqop -> s2s "BinOpEqOp" >> c2s ' ' >> c2s '(' >> showEqOp eqop >> c2s ')'
-  |    AbsBasilIR.BinOpPointerBinOp pointerbinop -> s2s "BinOpPointerBinOp" >> c2s ' ' >> c2s '(' >> showPointerBinOp pointerbinop >> c2s ')'
 
 
 and showUnOp (e : AbsBasilIR.unOp) : showable = match e with
@@ -404,10 +408,6 @@ and showIntrinOp (e : AbsBasilIR.intrinOp) : showable = match e with
   |    AbsBasilIR.IntrinOp_bvmul  -> s2s "IntrinOp_bvmul"
   |    AbsBasilIR.IntrinOp_update  -> s2s "IntrinOp_update"
   |    AbsBasilIR.IntrinOp_ite  -> s2s "IntrinOp_ite"
-
-
-and showPointerBinOp (e : AbsBasilIR.pointerBinOp) : showable = match e with
-       AbsBasilIR.PointerBinOp_ptradd  -> s2s "PointerBinOp_ptradd"
 
 
 and showRequireTok (e : AbsBasilIR.requireTok) : showable = match e with

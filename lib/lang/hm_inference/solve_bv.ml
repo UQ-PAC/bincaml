@@ -11,6 +11,11 @@ type dependent_bv_constraints =
   | Add of { a : TypeExpr.t; b : TypeExpr.t; equ : TypeExpr.t }
       (** a + b = equ*)
   | AddConst of { a : TypeExpr.t; b : int; equ : TypeExpr.t }  (** a + b = equ*)
+  | HasField of {
+      record : TypeExpr.t;
+      field_name : string;
+      field_type : TypeExpr.t;
+    }
 
 let show_dependent_bv_constraints = function
   | Add { a; b; equ } ->
@@ -19,6 +24,9 @@ let show_dependent_bv_constraints = function
   | AddConst { a; b; equ } ->
       Printf.sprintf "%s + (const %d) = %s" (type_to_string a) b
         (type_to_string equ)
+  | HasField { record; field_name; field_type } ->
+      Printf.sprintf "((%s).%s) : %s" (type_to_string record) field_name
+        (type_to_string field_type)
 
 (** Deduce the width if two values of the constraint have inferred widths *)
 let unify_bv_constraint st constr : TypeExpr.t option =
@@ -48,6 +56,17 @@ let unify_bv_constraint st constr : TypeExpr.t option =
       | Some a_n, None -> Some (unify ~pos:[%here] (nat_val_type (a_n + b)) equ)
       | None, Some e_n -> Some (unify ~pos:[%here] (nat_val_type (e_n - b)) a)
       | _ -> None)
+  | HasField { record; field_name; field_type } -> (
+      match is_record_type record with
+      | Some fields -> (
+          match
+            List.find_opt (fun (fn, ftyp) -> String.equal fn field_name) fields
+          with
+          | Some (_, inf_field) ->
+              Some (unify ~pos:[%here] inf_field field_type)
+          | None ->
+              Unification.type_error st ~msg:"not a record" record field_type)
+      | None -> None)
 
 (** Naive solver; loop over constraints and unify until everything is solved. *)
 let solve_constraints st ~max_iters cls =

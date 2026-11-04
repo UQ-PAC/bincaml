@@ -36,12 +36,17 @@ module TCtx = Map.Make (V)
 module ATyp = struct
   (** Open recursive type expression, either a variable or type constructor. *)
 
-  type 'a expr = Var of tvar | TypeConstr of 'a list * string
+  type 'a expr =
+    | Var of tvar  (** type variable *)
+    | TypeConstr of 'a list * string  (** type constructor *)
+    | RecordConstr of (string * 'a) list * string
+        (** type constructor with named parameters *)
   [@@deriving eq, ord, show, map, fold]
 
   let hash he = function
     | Var v -> ID.hash v
     | TypeConstr (l, t) -> Hash.pair (Hash.list he) Hash.string (l, t)
+    | RecordConstr (ts, n) -> Hash.(pair (list (pair string he)) string) (ts, n)
 end
 
 type t = nt UnionFind.elem Fix.HashCons.cell

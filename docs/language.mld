@@ -1,0 +1,57 @@
+{0 Bincaml Language}
+
+
+{1 Primitive Operations}
+
+All the operations are defined in Ops.ml. There are some categories.
+
+
+{2 Partial Operations}
+
+Bincaml is a total language, meaning that partial operations like division by
+zero are infeasible.
+
+Some conditional constructs are implemented by a chocie over a set of partial functions,
+by executing them in order and taking the first that returns. Therefore,
+the choice construct must be total.
+
+The partial operations consist of:
+
+{ul
+{- [IfThen cond value]: does not return if cond is false. }
+{- [Pattern VariantCase value handlefunction]: calls [handlefunction(value)] if
+   [value] is of case [VariantCase]. [handlefunction] itself may also be
+   partial.  }
+{- Divisions by zero: [IntDIV] and [BVDIV] }
+{- Forall and Exists in an evaluation context }
+}
+
+
+{1 Types}
+
+
+{2 Memory Layout}
+
+Types which have a defined memory layout are:
+
+{ul
+    {- Bitvectors }
+    {- Booleans }
+    {- Records containing only layoutable types. }
+}
+
+To implement this we define the primitive ops:
+
+[ToBitvector] which converts a layoutable type to an equal sized bitvector, and
+
+[FromBitvector type] which converts a bitvector to [type] if it is layoutable.
+
+
+
+{2 Notable Exclusions}
+
+{3 Polymorphism}
+
+SMTLib datatypes take type parameters, allowing an initial generic declaration with subsequent
+concrete instantiations. While we have parametric type constructors, we only allow declaring a concrete
+type.

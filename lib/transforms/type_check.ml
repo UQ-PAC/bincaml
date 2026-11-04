@@ -201,6 +201,7 @@ let type_check stmt_id block_id expr =
                 (Ops.AllOps.to_string op);
             ]
         | _ -> [ type_err "map update expects 3 arguments" ])
+    | _ -> failwith "unsupported"
   in
 
   let type_error_alg e =

@@ -3,11 +3,11 @@
 open Common
 open Abstract_expr
 
-let type_error st a b =
+let type_error st ?(msg = "") a b =
   let a, b = TypeExpr.(find st a, find st b) in
   raise
     (Hm_types.TypeErr
-       ("type_error: " ^ Hm_types.type_to_string a ^ " <> "
+       ("type_error: " ^ msg ^ Hm_types.type_to_string a ^ " <> "
       ^ Hm_types.type_to_string b))
 
 let recursion_error st a b =
@@ -22,6 +22,7 @@ let occurs_in a b =
   let check = function
     | TypeExpr.ATyp.Var t -> TypeExpr.equal_tvar t a
     | TypeConstr (ls, _) -> List.exists Fun.id ls
+    | RecordConstr (ls, _) -> List.exists snd ls
   in
   TypeExpr.cata check b
 
@@ -40,7 +41,8 @@ let rec unify st ?(pos = Lexing.dummy_pos) t t' =
   | _, TypeConstr ([], "nothing") -> t'
   | Var x, Var y -> TypeExpr.union st t t'
   | Var x, _ when occurs_in x t' -> recursion_error st x t'
-  | Var _, TypeConstr _ -> TypeExpr.merge st (fun a b -> b) t t'
+  | Var _, TypeConstr _ | Var _, RecordConstr _ ->
+      TypeExpr.merge st (fun a b -> b) t t'
   | _, Var x -> unify st ~pos:[%here] t' t
   | TypeConstr (ars, n), TypeConstr (ars', n') when not (String.equal n n') ->
       type_error st t t'
@@ -60,6 +62,21 @@ let rec unify st ?(pos = Lexing.dummy_pos) t t' =
         |> List.map (fun (a, b) -> unify st ~pos:[%here] (fix a) (fix b))
       in
       TypeExpr.merge st (fun a b -> TypeConstr (args, n)) t t'
+  | RecordConstr _, TypeConstr _ | TypeConstr _, RecordConstr _ ->
+      type_error st t t'
+  | RecordConstr (ars, n), RecordConstr (ars', n') ->
+      if
+        not
+          (List.combine ars ars'
+          |> List.for_all (Pair.map_same fst %> Fun.uncurry String.equal))
+      then type_error st ~msg:"record fields differ in name" t t'
+      else
+        let args =
+          List.combine ars ars'
+          |> List.map (Pair.map_same snd)
+          |> List.map (fun (a, b) -> unify st ~pos:[%here] (fix a) (fix b))
+        in
+        TypeExpr.merge st (fun a b -> TypeConstr (args, n)) t t'
 
 (** instantiate typescheme for a single type-annotated variable *)
 let inst_annot_v st ?(no_constraint = false) v =

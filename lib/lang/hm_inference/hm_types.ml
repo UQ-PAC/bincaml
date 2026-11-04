@@ -30,6 +30,16 @@ let map_type st k v = fix st (TypeConstr ([ k; v ], "map"))
 let array_type st k v =
   fix st (TypeConstr ([ bv_type st k; bv_type st v ], "array"))
 
+let record_type st args = fix st (RecordConstr (args, "record"))
+
+(** represent variants as a product of their cases *)
+let variant_type st variants =
+  let tuple_type st args = fix st (TypeConstr (args, "variantcase")) in
+  let vs =
+    List.map (fun (vname, args) -> (vname, tuple_type st args)) variants
+  in
+  fix st (RecordConstr (vs, "variant"))
+
 let int_type st = fix st (TypeConstr ([], "int"))
 let bool_type st = fix st (TypeConstr ([], "bool"))
 let unit_t st = fix st (TypeConstr ([], "unit"))
@@ -54,11 +64,14 @@ let rec ty_of_basil st (t : Types.t) : TypeExpr.t =
   | Types.Function (a, b) -> fun_type st (ty_of_basil st a) (ty_of_basil st b)
   | Types.NewType (ts, n) ->
       fix st (TypeConstr (List.map (ty_of_basil st) ts, n))
-  | Types.Record fields -> failwith "structs unsupp"
+  | Types.Record fields ->
+      List.map (Pair.map_snd @@ ty_of_basil st) fields |> record_type st
+  | Types.Variant fields ->
+      List.map (Pair.map_snd (List.map (ty_of_basil st))) fields
+      |> variant_type st
   | Types.Variable n ->
-      (*fix st (Var (st.gen.fresh ~name:n ()))*)
-      (* type variables in the AST are references to declared types for now *)
-      fix st (TypeConstr ([], n))
+      (* names for type variables in ast are reserved *)
+      fix st (Var (st.gen.decl_or_get n))
 
 module Make_smart_constructors (S : sig
   val state : TypeExpr.state
@@ -88,6 +101,11 @@ let smart_constructors st : (module Smart_constructors) =
     let state = st
   end))
 
+let is_record_type (i : TypeExpr.t) =
+  match TypeExpr.unfix i with
+  | RecordConstr (args, "record") -> Some args
+  | _ -> None
+
 let is_nat_val_type (i : TypeExpr.t) =
   match TypeExpr.unfix i with
   | TypeConstr ([ num ], "ℕ") -> (
@@ -104,6 +122,11 @@ let printer_alg = function
   | TypeConstr ([], e) -> e
   | TypeConstr (ls, e) ->
       List.to_string ~start:"(" ~stop:")" ~sep:"," Fun.id ls ^ " " ^ e
+  | RecordConstr (ls, e) ->
+      List.to_string ~start:"{" ~stop:"}" ~sep:";"
+        (Pair.to_string ~sep:":" Fun.id Fun.id)
+        ls
+      ^ " " ^ e
 
 let type_to_string t = TypeExpr.cata printer_alg t
 let plpos (l : Lexing.position) = Printf.sprintf "%s:%d" l.pos_fname l.pos_lnum
@@ -148,7 +171,6 @@ let rec to_basil (t : TypeExpr.t) : Types.t =
   | TypeConstr ([], "nothing") -> Nothing
   | TypeConstr (ts, o) -> NewType (List.map to_basil ts, o)
   | Var o -> NewType ([], ID.to_string o)
-  | _ -> failwith @@ "not impl:" ^ type_to_string t
 
 let types_universe = "<types>"
 let global_universe = "<global>"

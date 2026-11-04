@@ -264,14 +264,21 @@ end
 
 
 module RecordOps = struct
-  type unary = [ `ReadField of string ]
+  type unary = [ `ReadField of string (* access a specific field *)
+               | `ToBitvector (* cast layoutable record tobitvector *)
+               | `OfBitvector of Types.t (* cast bitvector to layoutable type *) ]
   [@@deriving show { with_path = false }, eq, ord]
 
   type binary = [ `WriteField of string ]
   [@@deriving show { with_path = false }, eq, ord]
 
-  (** {a=va;b=vb;c=vc} = (RecordConstr (a,b,c))(va,vb,vc) *)
-  type intrin = [ `RecordConstr of string list ]
+  type intrin = [
+      `RecordConstr of string list
+    (** {a=va;b=vb;c=vc} = (RecordConstr (a,b,c))(va,vb,vc)
+        !! fields are ordered
+    *)
+
+  ]
   [@@deriving show { with_path = false }, eq, ord]
 
   let show = function
@@ -371,7 +378,13 @@ module AllOps = struct
         match a with
         | Bitvector s -> return @@ Bitvector (sz + s)
         | o -> Conflict [ (o, "<bitvector") ])
-    | `ReadField field -> (failwith "no local type info for field")
+    | `ReadField field ->  (match a with
+      | Record (fs) -> List.find_opt (fst %> (String.equal field)) fs |> (function
+          | Some (_,field_typ) -> return field_typ
+          | _ -> Conflict [(a, "no such field: " ^ field)]
+          )
+      | _ -> Conflict [(a, "not a record")]
+      )
     | `BVNEG -> return a
     | `INTNEG -> return Integer
     | `Old -> return a
@@ -387,6 +400,10 @@ module AllOps = struct
         let args, r = Types.uncurry a in
         let t = Types.curry args Boolean in
         return t
+    | `ToBitvector ->
+      let l = Types.bit_width a |> Option.get_exn_or "not layoutable" in
+      return @@ Bitvector l
+    | `OfBitvector v -> return v
 
   let ret_type_bin (o : binary) l r =
     let open Types in
@@ -410,6 +427,7 @@ module AllOps = struct
     let open Types in
     let return ret = Fun { args; ret } in
     match o with
+    | `RecordConstr (vs) -> return @@ (Record (List.combine vs args))
     | `Cases -> return @@ List.hd @@ List.tl args
     | `BVADD -> return @@ List.hd args
     | `BVMUL -> return @@ List.hd args
@@ -445,7 +463,7 @@ module AllOps = struct
 
   (** ops returning booleans *)
 
-  let rec to_string (op : [< const | unary | binary | intrin | lambda ]) =
+  let to_string (op : [< const | unary | binary | intrin | lambda ]) =
     match op with
     | `BVADD -> "bvadd"
     | `BVSREM -> "bvsrem"
@@ -507,6 +525,8 @@ module AllOps = struct
     | `IfThenElse -> "ite"
     | `Cases -> "match"
     | `RecordConstr _ -> "record_constr"
+    | `OfBitvector t -> Printf.sprintf "of_bitvec<%s>" (Types.to_string t)
+    | `ToBitvector  -> "to_bitvec"
 
   let eval_equal (a : const) (b : const) =
     match (a, b) with

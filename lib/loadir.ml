@@ -223,7 +223,8 @@ module BasilASTLoader = struct
             Program.decl_global p ~classification
               (Var.create
                  (unsafe_unsigil (`Global bident))
-                 ~scope (trans_type type')))
+                 ~scope
+                 (trans_type ~is_array:true type')))
           prog
     | Decl_Var (modifiers, bident, type', spec) ->
         let classification = trans_varspec prog spec in
@@ -496,8 +497,13 @@ module BasilASTLoader = struct
         (* declarations only: handled by first pass *)
         prog
 
-  and transMapType (x : mapType) : Types.t =
-    match x with MapType1 (t0, t1) -> Map (trans_type t0, trans_type t1)
+  and transMapType ?(force_fun = false) (x : mapType) : Types.t =
+    match x with MapType1 (t0, _, t1, _) -> Map (trans_type t0, trans_type t1)
+
+  and transFunType ?(force_map = false) (x : funType) : Types.t =
+    match x with
+    | FunType1 (t0, t1) when force_map -> Map (trans_type t0, trans_type t1)
+    | FunType1 (t0, t1) -> Function (trans_type t0, trans_type t1)
 
   and trans_recordfield field : string * Types.t =
     match field with
@@ -511,11 +517,12 @@ module BasilASTLoader = struct
            | Field1 (field_name, t) -> (transStr field_name, trans_type t))
          fields)
 
-  and trans_type (x : typeT) : Types.t =
+  and trans_type ?(is_array = false) (x : typeT) : Types.t =
     match x with
     | TypeIntType inttype -> Integer
     | TypeBoolType booltype -> Boolean
-    | TypeMapType maptype -> transMapType maptype
+    | TypeMapType maptype -> transMapType ~force_fun:is_array maptype
+    | TypeFunType funtype -> transFunType funtype
     | TypeBVType (BVType1 bvtype) -> transBVTYPE bvtype
     | TypeParen (_, typeT, _) -> trans_type typeT
     | TypeVarType name -> Types.Variable (unsafe_unsigil (`Type name))
@@ -1434,7 +1441,6 @@ module BasilASTLoader = struct
     | IntBinOp_intsub -> `INTSUB
     | IntBinOp_intdiv -> `INTDIV
     | IntBinOp_intmod -> `INTMOD
-
 
   and transIntLogicalBinOp (x : intLogicalBinOp) =
     match x with

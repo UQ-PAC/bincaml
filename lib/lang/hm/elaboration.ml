@@ -162,6 +162,8 @@ let infer_decl st visit_constraint prog scheme =
     match d with
     | Type { binding; typ } ->
         let ty = ty_of_basil st typ in
+        let v = ty_of_basil st (Types.Variable binding) in
+        let _ = unify st ty v in
         let nty scheme =
           Type { binding; typ = to_basil (TypeExpr.find st ty) }
         in

@@ -87,10 +87,20 @@ let scheme_of_op st ~visit_constraint (gen : ID.generator)
       let key_ty = fv () and val_ty = bvunk (fv ()) in
       let map_ty = fun_type key_ty val_ty in
       curry_f [ map_ty; key_ty ] (bv_type sz)
-  | #Ops.AllOps.binary as o ->
-      failwith @@ "unsupported binary op: " ^ Ops.AllOps.to_string o
-  | #Ops.AllOps.unary as o ->
+  | (`Gamma | `Classification | `ToBitvector | `OfBitvector _) as o ->
       failwith @@ "unsupported unary op: " ^ Ops.AllOps.to_string o
+  | `ReadField fn ->
+      let k = fv () in
+      let v = fv () in
+      visit_constraint
+      @@ HasField { record = k; field_name = fn; field_type = v };
+      curry_f [ k ] v
+  | `WriteField fn ->
+      let record = fv () in
+      let field_t = fv () in
+      visit_constraint
+      @@ HasField { record; field_name = fn; field_type = field_t };
+      curry_f [ record; field_t ] record
 
 (** return the generic type scheme of an intrinsic operation *)
 let scheme_of_intrin st ?(visit_constraint = fun a -> ()) (gen : ID.generator)
@@ -100,6 +110,10 @@ let scheme_of_intrin st ?(visit_constraint = fun a -> ()) (gen : ID.generator)
   | `BVADD | `BVMUL | `BVOR | `BVXOR | `BVAND ->
       let a = fv () in
       curry_f st (List.init args (fun _ -> a)) a
+  | `RecordConstr fnames ->
+      let argt = List.map (fun fname -> (fname, fv ())) fnames in
+      let rt = record_type st argt in
+      curry_f st (List.map snd argt) rt
   | `BVConcat ->
       let args = List.init args (fun _ -> fv ()) in
       let rs =

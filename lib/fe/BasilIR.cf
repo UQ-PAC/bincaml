@@ -81,7 +81,8 @@ BoolType1. BoolType ::= BOOLTYPE ;
 RecordType1 . RecordType ::= BeginRec [Field] EndRec ;
 BVType1 . BVType ::= BVTYPE ;
 -- map types are right associative. left of -> cannot be another MapType.
-MapType1 . MapType ::=  Type1 "->" Type ; 
+FunType1 . FunType ::=  Type1 "->" Type ;
+MapType1 . MapType ::=  Type1 BeginList Type EndList;
 
 rules RecordField ::= LocalIdent ":" Type ;
 separator nonempty RecordField ";";
@@ -100,6 +101,7 @@ TypeRecordType  . Type1 ::= RecordType ;
 TypeVarType     . Type1 ::= LocalIdent ;
 TypeParen       . Type1 ::= OpenParen Type CloseParen; 
 TypeMapType     . Type ::= MapType;
+TypeFunType     . Type ::= FunType;
 _ . Type ::= Type1;
 
 IntVal_Hex . IntVal ::= IntegerHex ;
@@ -260,7 +262,7 @@ Expr_FunctionOp . Expr1       ::= Expr1 OpenParen [Expr] CloseParen;
 
 -- binary expr
 
-rules BinOp ::= "implies" | "get" | BVBinOp | BVLogicalBinOp | IntLogicalBinOp | IntBinOp | EqOp | PointerBinOp ;
+rules BinOp ::= "implies" | "get" | BVBinOp | BVLogicalBinOp | IntLogicalBinOp | IntBinOp | EqOp ;
 Expr_Binary . Expr2      ::= BinOp OpenParen Expr "," Expr CloseParen ;
 Expr_Assoc  . Expr2      ::= IntrinOp OpenParen [Expr] CloseParen ;
 
@@ -309,7 +311,6 @@ rules BVLogicalBinOp ::= "bvule" |  "bvugt" |  "bvuge" | "bvult" | "bvslt" |  "b
 rules IntBinOp ::= "intadd" | "intmul" | "intsub" | "intdiv" | "intmod"  ;
 rules IntLogicalBinOp ::=  "intlt" | "intle" | "intgt" | "intge" ;
 rules IntrinOp ::=  "booland" | "boolor" | "bvand" | "bvor" | "bvadd" | "bvxor" | "bvconcat" | "bvmul" | "update" | "ite";
-rules PointerBinOp ::= "ptradd" ;
 
 {- SPECIFICATION -}
 

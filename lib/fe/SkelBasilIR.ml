@@ -141,8 +141,12 @@ and transBVType (x : bVType) : result = match x with
     BVType1 bvtype -> failure x
 
 
+and transFunType (x : funType) : result = match x with
+    FunType1 (type'0, type') -> failure x
+
+
 and transMapType (x : mapType) : result = match x with
-    MapType1 (type'0, type') -> failure x
+    MapType1 (type'0, beginlist, type', endlist) -> failure x
 
 
 and transRecordField (x : recordField) : result = match x with
@@ -163,6 +167,7 @@ and transType (x : typeT) : result = match x with
   | TypeVarType localident -> failure x
   | TypeParen (openparen, type', closeparen) -> failure x
   | TypeMapType maptype -> failure x
+  | TypeFunType funtype -> failure x
 
 
 and transIntVal (x : intVal) : result = match x with
@@ -347,7 +352,6 @@ and transBinOp (x : binOp) : result = match x with
   | BinOpIntLogicalBinOp intlogicalbinop -> failure x
   | BinOpIntBinOp intbinop -> failure x
   | BinOpEqOp eqop -> failure x
-  | BinOpPointerBinOp pointerbinop -> failure x
 
 
 and transUnOp (x : unOp) : result = match x with
@@ -431,10 +435,6 @@ and transIntrinOp (x : intrinOp) : result = match x with
   | IntrinOp_bvmul  -> failure x
   | IntrinOp_update  -> failure x
   | IntrinOp_ite  -> failure x
-
-
-and transPointerBinOp (x : pointerBinOp) : result = match x with
-    PointerBinOp_ptradd  -> failure x
 
 
 and transRequireTok (x : requireTok) : result = match x with

@@ -34,7 +34,7 @@ type t =
   | Top  (** greatest type *)
   | Nothing  (** least type / empty set *)
   | Map of t * t  (** abstrct map type *)
-  | ByteArray of int * int  (** byte-aligned bitvector map *)
+  | ByteArray of int * int  (** byte-aligned layoutable map *)
   | Function of t * t  (** function type *)
   | Record of (string * t) list
   | Variant of (string * t list) list
@@ -44,7 +44,6 @@ type t =
 
 (* named type *)
 type type_decl = string * t
-type memory_cell = ScalarBits of int | Box of { tag : int; value : int }
 type mem_layout = Scalar of int | Vector of mem_layout list
 
 module TS = List.Traverse (Option)
@@ -75,11 +74,8 @@ let rec layout_of_typ t =
   | Record fields ->
       TS.map_m (fun (fname, ftyp) -> layout_of_typ ftyp) fields
       |> Option.map (fun m -> Vector m)
-  | Map _ -> None
-  | Integer -> None
-  | ByteArray _ -> None
+  | Map _ | ByteArray _ | Integer | Variant _ -> None
   | Unit | Nothing | Top | Function _ | NewType _ | Variable _ -> None
-  | Variant _ -> None
 
 let bv i = Bitvector i
 let int = Integer
@@ -154,11 +150,11 @@ let leq a b =
 
 let rec uncurry ?(acc = []) (l : t) : t list * t =
   match l with
-  | Map (l, ts) -> uncurry ~acc:(l :: acc) ts
+  | Function (l, ts) -> uncurry ~acc:(l :: acc) ts
   | l -> (List.rev acc, l)
 
 let curry (args : t list) (v : t) =
-  List.fold_left (fun a p -> Map (p, a)) v args
+  List.fold_left (fun a p -> Function (p, a)) v args
 
 let rec to_string = function
   | Boolean -> "bool"
@@ -168,13 +164,7 @@ let rec to_string = function
   | Top -> "⊤"
   | Nothing -> "⊥"
   | Variable name -> name
-  | Map ((Map _ as a), (Map _ as b)) ->
-      "(" ^ "(" ^ to_string a ^ ")" ^ "->" ^ "(" ^ to_string b ^ ")" ^ ")"
-  | Map ((Map _ as a), b) ->
-      "(" ^ ("(" ^ to_string a ^ ")" ^ "->" ^ to_string b) ^ ")"
-  | Map (a, (Map _ as b)) ->
-      "(" ^ ("(" ^ to_string a ^ ")" ^ "->" ^ to_string b) ^ ")"
-  | Map (a, b) -> "(" ^ (to_string a ^ "->" ^ to_string b) ^ ")"
+  | Map (b, a) -> "(" ^ to_string b ^ "[" ^ to_string a ^ "])"
   | Function ((Function _ as a), (Function _ as b)) ->
       "(" ^ "(" ^ to_string a ^ ")" ^ "->" ^ "(" ^ to_string b ^ ")" ^ ")"
   | Function ((Function _ as a), b) ->
@@ -182,6 +172,7 @@ let rec to_string = function
   | Function (a, (Function _ as b)) ->
       "(" ^ ("(" ^ to_string a ^ ")" ^ "->" ^ to_string b) ^ ")"
   | Function (a, b) -> "(" ^ (to_string a ^ "->" ^ to_string b) ^ ")"
+  | NewType ([], name) -> name
   | NewType (ls, name) ->
       List.to_string ~start:"(" ~stop:")" to_string ls ^ " " ^ name
   | Record fields ->
@@ -216,11 +207,27 @@ let%expect_test "dtp" =
   print_endline @@ to_string lst;
   print_endline @@ to_string rc;
   [%expect {|
-    list
-    recs
+    cons of ({head: E; tail: (E) list}) | nil
+    {a: bv12; b: bool}
     |}]
 
 let show (b : t) = to_string b
+
+let%expect_test "complex_type" =
+  print_endline @@ to_string
+  @@ Variant
+       [
+         ( "MemEncoding",
+           [
+             Record
+               [
+                 mk_field "alloc_live" (Map (Bitvector 64, Bitvector 2));
+                 mk_field "alloc_size" (Map (Bitvector 64, Bitvector 64));
+                 mk_field "addr_is_heap" (Map (Bitvector 64, Boolean));
+               ];
+           ] );
+       ];
+  [%expect {| MemEncoding of ({alloc_live: (bv64[bv2]); alloc_size: (bv64[bv64]); addr_is_heap: (bv64[bool])}) |}]
 
 let show_pointer = function
   | NewType ([ lo; hi ], "ptr") ->

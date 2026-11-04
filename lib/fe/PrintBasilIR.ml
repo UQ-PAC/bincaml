@@ -208,8 +208,12 @@ and prtBVType (i:int) (e : AbsBasilIR.bVType) : doc = match e with
        AbsBasilIR.BVType1 bvtype -> prPrec i 0 (concatD [prtBVTYPE 0 bvtype])
 
 
+and prtFunType (i:int) (e : AbsBasilIR.funType) : doc = match e with
+       AbsBasilIR.FunType1 (type_1, type_2) -> prPrec i 0 (concatD [prtTypeT 1 type_1 ; render "->" ; prtTypeT 0 type_2])
+
+
 and prtMapType (i:int) (e : AbsBasilIR.mapType) : doc = match e with
-       AbsBasilIR.MapType1 (type_1, type_2) -> prPrec i 0 (concatD [prtTypeT 1 type_1 ; render "->" ; prtTypeT 0 type_2])
+       AbsBasilIR.MapType1 (type_1, beginlist, type_2, endlist) -> prPrec i 0 (concatD [prtTypeT 1 type_1 ; prtBeginList 0 beginlist ; prtTypeT 0 type_2 ; prtEndList 0 endlist])
 
 
 and prtRecordField (i:int) (e : AbsBasilIR.recordField) : doc = match e with
@@ -236,6 +240,7 @@ and prtTypeT (i:int) (e : AbsBasilIR.typeT) : doc = match e with
   |    AbsBasilIR.TypeVarType localident -> prPrec i 1 (concatD [prtLocalIdent 0 localident])
   |    AbsBasilIR.TypeParen (openparen, type_, closeparen) -> prPrec i 1 (concatD [prtOpenParen 0 openparen ; prtTypeT 0 type_ ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.TypeMapType maptype -> prPrec i 0 (concatD [prtMapType 0 maptype])
+  |    AbsBasilIR.TypeFunType funtype -> prPrec i 0 (concatD [prtFunType 0 funtype])
 
 and prtTypeTListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
@@ -467,7 +472,6 @@ and prtBinOp (i:int) (e : AbsBasilIR.binOp) : doc = match e with
   |    AbsBasilIR.BinOpIntLogicalBinOp intlogicalbinop -> prPrec i 0 (concatD [prtIntLogicalBinOp 0 intlogicalbinop])
   |    AbsBasilIR.BinOpIntBinOp intbinop -> prPrec i 0 (concatD [prtIntBinOp 0 intbinop])
   |    AbsBasilIR.BinOpEqOp eqop -> prPrec i 0 (concatD [prtEqOp 0 eqop])
-  |    AbsBasilIR.BinOpPointerBinOp pointerbinop -> prPrec i 0 (concatD [prtPointerBinOp 0 pointerbinop])
 
 
 and prtUnOp (i:int) (e : AbsBasilIR.unOp) : doc = match e with
@@ -557,10 +561,6 @@ and prtIntrinOp (i:int) (e : AbsBasilIR.intrinOp) : doc = match e with
   |    AbsBasilIR.IntrinOp_bvmul  -> prPrec i 0 (concatD [render "bvmul"])
   |    AbsBasilIR.IntrinOp_update  -> prPrec i 0 (concatD [render "update"])
   |    AbsBasilIR.IntrinOp_ite  -> prPrec i 0 (concatD [render "ite"])
-
-
-and prtPointerBinOp (i:int) (e : AbsBasilIR.pointerBinOp) : doc = match e with
-       AbsBasilIR.PointerBinOp_ptradd  -> prPrec i 0 (concatD [render "ptradd"])
 
 
 and prtRequireTok (i:int) (e : AbsBasilIR.requireTok) : doc = match e with

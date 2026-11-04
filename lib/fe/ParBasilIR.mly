@@ -7,7 +7,7 @@ open AbsBasilIR
 open Lexing
 %}
 
-%token KW_shared KW_observable KW_axiom KW_memory KW_var KW_val KW_let KW_prog KW_entry KW_proc KW_and KW_type KW_of KW_le KW_be KW_nop KW_store KW_load KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_phi KW_block KW_true KW_false KW_forall KW_exists KW_fun KW_in KW_old KW_implies KW_get KW_boolnot KW_intneg KW_booltobv1 KW_gamma KW_classification KW_load_be KW_load_le KW_zero_extend KW_sign_extend KW_extract KW_if KW_then KW_else KW_match KW_with KW_cases KW_eq KW_neq KW_bvnot KW_bvneg KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_bvand KW_bvor KW_bvadd KW_bvxor KW_bvconcat KW_bvmul KW_update KW_ite KW_ptradd KW_require KW_requires KW_ensure KW_ensures KW_rely KW_relies KW_guarantee KW_guarantees KW_captures KW_modifies KW_invariant
+%token KW_shared KW_observable KW_axiom KW_memory KW_var KW_val KW_let KW_prog KW_entry KW_proc KW_and KW_type KW_of KW_le KW_be KW_nop KW_store KW_load KW_call KW_indirect KW_assume KW_guard KW_assert KW_goto KW_unreachable KW_return KW_phi KW_block KW_true KW_false KW_forall KW_exists KW_fun KW_in KW_old KW_implies KW_get KW_boolnot KW_intneg KW_booltobv1 KW_gamma KW_classification KW_load_be KW_load_le KW_zero_extend KW_sign_extend KW_extract KW_if KW_then KW_else KW_match KW_with KW_cases KW_eq KW_neq KW_bvnot KW_bvneg KW_bvudiv KW_bvurem KW_bvshl KW_bvlshr KW_bvnand KW_bvnor KW_bvxnor KW_bvcomp KW_bvsub KW_bvsdiv KW_bvsrem KW_bvsmod KW_bvashr KW_bvule KW_bvugt KW_bvuge KW_bvult KW_bvslt KW_bvsle KW_bvsgt KW_bvsge KW_intadd KW_intmul KW_intsub KW_intdiv KW_intmod KW_intlt KW_intle KW_intgt KW_intge KW_booland KW_boolor KW_bvand KW_bvor KW_bvadd KW_bvxor KW_bvconcat KW_bvmul KW_update KW_ite KW_require KW_requires KW_ensure KW_ensures KW_rely KW_relies KW_guarantee KW_guarantees KW_captures KW_modifies KW_invariant
 
 %token SYMB1 /* ; */
 %token SYMB2 /* , */
@@ -45,7 +45,7 @@ open Lexing
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
 
-%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pRecordType pBVType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pFieldAssign pFieldAssign_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pIntrinOp pPointerBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pRecordType pBVType pFunType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pFieldAssign pFieldAssign_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pIntrinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -63,6 +63,7 @@ open Lexing
 %type <AbsBasilIR.boolType> pBoolType
 %type <AbsBasilIR.recordType> pRecordType
 %type <AbsBasilIR.bVType> pBVType
+%type <AbsBasilIR.funType> pFunType
 %type <AbsBasilIR.mapType> pMapType
 %type <AbsBasilIR.recordField> pRecordField
 %type <AbsBasilIR.recordField list> pRecordField_list
@@ -128,7 +129,6 @@ open Lexing
 %type <AbsBasilIR.intBinOp> pIntBinOp
 %type <AbsBasilIR.intLogicalBinOp> pIntLogicalBinOp
 %type <AbsBasilIR.intrinOp> pIntrinOp
-%type <AbsBasilIR.pointerBinOp> pPointerBinOp
 %type <AbsBasilIR.requireTok> pRequireTok
 %type <AbsBasilIR.ensureTok> pEnsureTok
 %type <AbsBasilIR.relyTok> pRelyTok
@@ -156,6 +156,7 @@ open Lexing
 %type <AbsBasilIR.boolType> boolType
 %type <AbsBasilIR.recordType> recordType
 %type <AbsBasilIR.bVType> bVType
+%type <AbsBasilIR.funType> funType
 %type <AbsBasilIR.mapType> mapType
 %type <AbsBasilIR.recordField> recordField
 %type <AbsBasilIR.recordField list> recordField_list
@@ -221,7 +222,6 @@ open Lexing
 %type <AbsBasilIR.intBinOp> intBinOp
 %type <AbsBasilIR.intLogicalBinOp> intLogicalBinOp
 %type <AbsBasilIR.intrinOp> intrinOp
-%type <AbsBasilIR.pointerBinOp> pointerBinOp
 %type <AbsBasilIR.requireTok> requireTok
 %type <AbsBasilIR.ensureTok> ensureTok
 %type <AbsBasilIR.relyTok> relyTok
@@ -287,6 +287,8 @@ pBoolType : boolType TOK_EOF { $1 };
 pRecordType : recordType TOK_EOF { $1 };
 
 pBVType : bVType TOK_EOF { $1 };
+
+pFunType : funType TOK_EOF { $1 };
 
 pMapType : mapType TOK_EOF { $1 };
 
@@ -418,8 +420,6 @@ pIntLogicalBinOp : intLogicalBinOp TOK_EOF { $1 };
 
 pIntrinOp : intrinOp TOK_EOF { $1 };
 
-pPointerBinOp : pointerBinOp TOK_EOF { $1 };
-
 pRequireTok : requireTok TOK_EOF { $1 };
 
 pEnsureTok : ensureTok TOK_EOF { $1 };
@@ -511,7 +511,10 @@ recordType : beginRec field_list endRec { RecordType1 ($1, $2, $3) }
 bVType : bVTYPE { BVType1 $1 }
   ;
 
-mapType : type1 SYMB3 typeT { MapType1 ($1, $3) }
+funType : type1 SYMB3 typeT { FunType1 ($1, $3) }
+  ;
+
+mapType : type1 beginList typeT endList { MapType1 ($1, $2, $3, $4) }
   ;
 
 recordField : localIdent SYMB5 typeT { RecordField1 ($1, $3) }
@@ -539,6 +542,7 @@ type1 : intType { TypeIntType $1 }
   ;
 
 typeT : mapType { TypeMapType $1 }
+  | funType { TypeFunType $1 }
   | type1 {  $1 }
   ;
 
@@ -771,7 +775,6 @@ binOp : KW_implies { BinOp_implies  }
   | intLogicalBinOp { BinOpIntLogicalBinOp $1 }
   | intBinOp { BinOpIntBinOp $1 }
   | eqOp { BinOpEqOp $1 }
-  | pointerBinOp { BinOpPointerBinOp $1 }
   ;
 
 unOp : bVUnOp { UnOpBVUnOp $1 }
@@ -855,9 +858,6 @@ intrinOp : KW_booland { IntrinOp_booland  }
   | KW_bvmul { IntrinOp_bvmul  }
   | KW_update { IntrinOp_update  }
   | KW_ite { IntrinOp_ite  }
-  ;
-
-pointerBinOp : KW_ptradd { PointerBinOp_ptradd  }
   ;
 
 requireTok : KW_require { RequireTok_require  }

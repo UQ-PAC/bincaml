@@ -65,8 +65,11 @@ and recordType =
 and bVType =
    BVType1 of bVTYPE
 
+and funType =
+   FunType1 of typeT * typeT
+
 and mapType =
-   MapType1 of typeT * typeT
+   MapType1 of typeT * beginList * typeT * endList
 
 and recordField =
    RecordField1 of localIdent * typeT
@@ -84,6 +87,7 @@ and typeT =
  | TypeVarType of localIdent
  | TypeParen of openParen * typeT * closeParen
  | TypeMapType of mapType
+ | TypeFunType of funType
 
 and intVal =
    IntVal_Hex of integerHex
@@ -239,7 +243,6 @@ and binOp =
  | BinOpIntLogicalBinOp of intLogicalBinOp
  | BinOpIntBinOp of intBinOp
  | BinOpEqOp of eqOp
- | BinOpPointerBinOp of pointerBinOp
 
 and unOp =
    UnOpBVUnOp of bVUnOp
@@ -313,9 +316,6 @@ and intrinOp =
  | IntrinOp_bvmul
  | IntrinOp_update
  | IntrinOp_ite
-
-and pointerBinOp =
-   PointerBinOp_ptradd
 
 and requireTok =
    RequireTok_require
