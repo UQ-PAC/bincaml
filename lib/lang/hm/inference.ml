@@ -122,9 +122,9 @@ let scheme_of_intrin st ?(visit_constraint = fun a -> ()) (gen : ID.generator)
       let b = fv () in
       let m = curry_f st [ a ] b in
       curry_f st [ m; a; b ] m
-  | `IfThenElse -> 
-      let br =  fv () in
-      curry_f st [bool_type st; br; br] br
+  | `IfThenElse ->
+      let br = fv () in
+      curry_f st [ bool_type st; br; br ] br
   | `Cases ->
       let a = fv () in
       curry_f st (List.init args (fun _ -> a)) a
