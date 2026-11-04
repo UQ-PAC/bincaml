@@ -10,25 +10,28 @@ phony:
 	@true
 
 nix: ../flake.nix ../flake.lock
-	touch nix
+	echo > nix
 
-$(DDISASM): nix
-	nix build '.#pac.ddisasm' --out-link ddisasm
+ddisasm: nix
+	nix build '.#pac.ddisasm' --out-link ddisasm-link
+	ln -f -s ddisasm-link/bin/ddisasm ddisasm
 
-$(BWRAP): nix
-	nix build '.#pkgs.bubblewrap' --out-link bwrap
+bwrap: nix
+	nix build '.#pkgs.bubblewrap' --out-link bwrap-link
+	ln -f -s bwrap-link/bin/bwrap bwrap
 
-$(GCC): nix
-	nix build '.#pkgs.pkgsCross.aarch64-multiplatform.pkgsBuildHost.gcc' --out-link gcc
+aarch64-unknown-linux-gnu-gcc: nix
+	nix build '.#pkgs.pkgsCross.aarch64-multiplatform.pkgsBuildHost.gcc^out' --out-link gcc-link
+	ln -f -s gcc-link/bin/aarch64-unknown-linux-gnu-gcc aarch64-unknown-linux-gnu-gcc
 
-%.exe: %.c $(GCC) $(BWRAP)
-	GCC=`realpath $(GCC)` eval $(BWRAP) --unshare-all \
+%.exe: %.c aarch64-unknown-linux-gnu-gcc bwrap
+	GCC=`readlink -f aarch64-unknown-linux-gnu-gcc` eval ./bwrap --unshare-all \
 	  --ro-bind /nix/store /nix/store --ro-bind $< $< --bind . /out --chdir /out \
 	  --die-with-parent \
 	  '$$GCC' $< -o $@
 
 %.gtirb: %.exe $(DDISASM)
-	$(DDISASM) $< --ir $@
+	./ddisasm $< --ir $@
 
 %.il: %.gtirb
 	printf '%s\n' "(load-gtirb $<)" "(dump-il $@)" | $(BINCAML) script -
