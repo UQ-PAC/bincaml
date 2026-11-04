@@ -9,23 +9,21 @@ BINCAML ?= bincaml
 phony:
 	@true
 
-$(DDISASM):
-	nix build '.#pac.ddisasm' --out-link ddisasm
+nix.env: ../flake.nix ../flake.lock
+	printf '%s=%s\n' \
+		DDISASM `nix build '.#pac.ddisasm^out' --no-link --print-out-paths`/bin/ddisasm \
+		BWRAP   `nix build '.#pkgs.bubblewrap^out' --no-link --print-out-paths`/bin/bwrap \
+		GCC     `nix build '.#pkgs.pkgsCross.aarch64-multiplatform.pkgsBuildHost.gcc^out' --no-link --print-out-paths`/bin/aarch64-unknown-linux-gnu-gcc \
+		> $@
 
-$(BWRAP):
-	nix build '.#pkgs.bubblewrap' --out-link bwrap
-
-$(GCC):
-	nix build '.#pkgs.pkgsCross.aarch64-multiplatform.pkgsBuildHost.gcc' --out-link gcc
-
-%.exe: %.c $(GCC) $(BWRAP)
-	GCC=`realpath $(GCC)` eval $(BWRAP) --unshare-all \
+%.exe: %.c nix.env
+	source ./nix.env; $$BWRAP --unshare-all \
 	  --ro-bind /nix/store /nix/store --ro-bind $< $< --bind . /out --chdir /out \
 	  --die-with-parent \
-	  '$$GCC' $< -o $@
+	  $$GCC $< -o $@
 
-%.gtirb: %.exe $(DDISASM)
-	$(DDISASM) $< --ir $@
+%.gtirb: %.exe nix.env
+	source ./nix.env; $$DDISASM $< --ir $@
 
 %.il: %.gtirb
 	printf '%s\n' "(load-gtirb $<)" "(dump-il $@)" | $(BINCAML) script -
