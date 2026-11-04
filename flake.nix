@@ -3,6 +3,7 @@
     self.submodules = true;
 
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    pac-nix.url = "github:katrinafyi/pac-nix";
 
     infuse-src.url = "https://codeberg.org/awarina/infuse.nix/archive/trunk.tar.gz";
     infuse-src.flake = false;
@@ -12,6 +13,7 @@
       self,
       infuse-src,
       nixpkgs,
+      pac-nix,
     }@args:
     let
       inherit (nixpkgs) lib;
@@ -96,6 +98,7 @@
           self,
           system,
           nixpkgs,
+          pac-nix,
           ...
         }:
         let
@@ -138,6 +141,7 @@
             ocamlPackages = selfOcamlPackages;
             bincamlDocs = selfOcamlPackages.bincamlDocs;
             pkgs = pkgs;
+            pac = pac-nix.legacyPackages;
             devShells = self.devShells;
             versions =
               let
