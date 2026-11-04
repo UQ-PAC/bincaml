@@ -1,21 +1,24 @@
 .DELETE_ON_ERROR:
 
+BINCAML ?= bincaml
 DDISASM = ddisasm/bin/ddisasm
 BWRAP = bwrap/bin/bwrap
 GCC = gcc/bin/aarch64-unknown-linux-gnu-gcc
-BINCAML ?= bincaml
 
 .PHONY: phony
 phony:
 	@true
 
-$(DDISASM):
+nix: ../flake.nix ../flake.lock
+	touch nix
+
+$(DDISASM): nix
 	nix build '.#pac.ddisasm' --out-link ddisasm
 
-$(BWRAP):
+$(BWRAP): nix
 	nix build '.#pkgs.bubblewrap' --out-link bwrap
 
-$(GCC):
+$(GCC): nix
 	nix build '.#pkgs.pkgsCross.aarch64-multiplatform.pkgsBuildHost.gcc' --out-link gcc
 
 %.exe: %.c $(GCC) $(BWRAP)
