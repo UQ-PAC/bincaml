@@ -64,4 +64,4 @@
      block %Return_1 [ nop; goto (%Return_2); ];
      block %Return_2 [ nop; return; ]
   ];
-  prog entry @f;
+  prog entry @f { .invariants = [ "SSA"; "Params" ] };

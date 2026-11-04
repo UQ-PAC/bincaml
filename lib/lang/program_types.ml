@@ -36,6 +36,14 @@ type declaration =
           created by another construct, e.g. type constructors. *)
 [@@deriving show]
 
+let[@warning "+missing-record-field-pattern"] attrib_of_declaration d :
+    Attrib.attrib_map option =
+  match d with
+  | Variable { attrib; _ } -> Some attrib
+  | Function { attrib; _ } -> Some attrib
+  | Procedure { definition; _ } -> Some (Procedure.attrib definition)
+  | Type { binding = _; typ = _ } | Implicit _ -> None
+
 (** {1 Printers (for debugging only)} *)
 
 let show_e = show_e

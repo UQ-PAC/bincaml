@@ -93,6 +93,12 @@ let decl_type st ctx name vt =
     ctx
 
 (** declare var with type in type scheme *)
+let shadow_var_typ st univ ?(no_constraint = false) c v =
+  let vvar = TypeExpr.V.of_var univ v in
+  let vt = inst_annot_v st v in
+  TypeExpr.TCtx.update vvar (function _ -> Some (Hm_types.Forall ([], vt))) c
+
+(** declare var with type in type scheme *)
 let decl_var_typ st univ ?(no_constraint = false) c v =
   let vvar = TypeExpr.V.of_var univ v in
   let vt = inst_annot_v st v in

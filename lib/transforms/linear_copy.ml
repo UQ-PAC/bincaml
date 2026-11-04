@@ -18,13 +18,13 @@ let expr_of f v =
 let transform_proc (p : Program.t) g (proc : Program.proc) =
   let copied_by v =
     VarMap.get v g
-    |> Option.map CopyNode.(var % find_copy)
+    |> Option.map CopyNode.(var % EQ.find_eq)
     |> Option.get_or ~default:v
   in
   let trans v =
     VarMap.get v g
     |> Option.flat_map (fun n ->
-        let f, n = CopyNode.find n in
+        let f, n = CopyNode.EQ.find n in
         match f with IdEdge | Linear _ -> Some (f, CopyNode.var n) | _ -> None)
   in
 

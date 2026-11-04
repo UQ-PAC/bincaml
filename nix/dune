@@ -1,0 +1,12 @@
+(cram
+ (applies_to nix_versions)
+ (package bincaml)
+ (deps
+  ../flake.nix
+  ../flake.lock
+  ../.gitignore
+  (source_tree .))
+ (enabled_if
+  (and
+   %{bin-available:nix}
+   (not %{ignoring_promoted_rules}))))

@@ -50,10 +50,13 @@
   containers
   iter
   containers-data
-  ppx_deriving
+  (ppx_deriving :build)
+  (ppx_protocol_conv :build)
   ocamlgraph
   (cmdliner (>= 2.0.0))
   pp_loc
+  base64
+  decompress
   fmt
   patricia-tree
   ppx_here

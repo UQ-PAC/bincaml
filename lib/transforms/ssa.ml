@@ -53,6 +53,14 @@ let intro_ssi_assigns proc (should_lift : Var.t -> bool) =
   in
   Procedure.map_blocks_nondet fix_block proc
 
+let should_lift ~skip_observable ~skip_maps v =
+  let skip =
+    (skip_observable && Var.is_shared v)
+    || (skip_maps && Var.typ v |> function Map _ -> true | _ -> false)
+    || (Var.is_global v && Var.is_constant v)
+  in
+  not skip
+
 let check_ssa ?(skipping = Skip.empty) proc =
   let add_assign m v =
     VarMap.get_or ~default:0 v m |> fun n -> VarMap.add v (n + 1) m

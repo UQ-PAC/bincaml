@@ -382,12 +382,32 @@ module BasilExpr = struct
     | SomeInfo of { v : t; __LINE__ : int; __FILE__ : string }
     | Keep
 
-  (** Algebra that infers types of expressions *)
+  let show_simple show e =
+    AbstractExpr.map show e |> function
+    | RVar { id } -> Var.to_string id
+    | Constant { const } -> Ops.AllOps.to_string const
+    | UnaryExpr { op; arg } -> Ops.AllOps.to_string op ^ "(" ^ arg ^ ")"
+    | BinaryExpr { op; arg1; arg2 } ->
+        Ops.AllOps.to_string op ^ "(" ^ arg1 ^ " " ^ arg2 ^ ")"
+    | ApplyIntrin { op; args } ->
+        Ops.AllOps.to_string op
+        ^ List.to_string ~start:"(" ~stop:")" ~sep:" " Fun.id args
+    | ApplyFun { func; args } ->
+        func ^ List.to_string ~start:"(" ~stop:")" ~sep:" " Fun.id args
+    | Lambda { op; bound_vars; in_body } -> "lambda"
+    | Let _ -> "let"
+
+  (** Algebra that infers types of expressions for trivial types *)
   let type_alg (e : Types.t abstract_expr) =
     let open AbstractExpr in
     let open Ops.AllOps in
     let get_ty o =
-      match o with Fun { ret } -> ret | _ -> failwith "type error"
+      match o with
+      | Fun { ret } -> ret
+      | Conflict m ->
+          failwith
+            ("type conflict: "
+            ^ List.to_string (Pair.to_string Types.to_string Fun.id) m)
     in
     match e with
     | RVar { id } -> Var.typ id
@@ -395,52 +415,42 @@ module BasilExpr = struct
     | UnaryExpr { op; arg } -> ret_type_unary op arg |> get_ty
     | BinaryExpr { op; arg1 = l; arg2 = r } -> ret_type_bin op l r |> get_ty
     | ApplyIntrin { op; args } -> ret_type_intrin op args |> get_ty
-    | ApplyFun { func; args } ->
-        (* FIXME: this is wrong *)
-        let _, rt = Types.uncurry func in
-        rt
+    | ApplyFun { func; args } -> (
+        let n = Hm_inference.type_applied func args in
+        match n with
+        | Ok e -> e
+        | Error m -> failwith @@ m ^ " " ^ show_simple Types.to_string e)
     | Lambda { op; bound_vars; in_body = b } ->
         ret_type_lambda op (bound_vars |> List.map Var.typ) b |> get_ty
-        (*Types.curry (List.map Var.typ bound_vars) b*)
     | Let { bound_vars; in_body } -> in_body
 
-  let type_of e = cata type_alg e
+  let type_of e = unfix e |> AbstractExpr.get_typ
 
   (** {1 Additional traversals}*)
 
-  let idk alg = para alg
-  let fold_with_type (alg : 'e abstract_expr -> 'a) = zygo_l ~cata type_alg alg
-  let fold_with_type_r (alg : 'e abstract_expr -> 'a) = zygo ~cata type_alg alg
+  let fold_with_type (alg : 'e abstract_expr -> 'a) =
+    zygo_l ~cata AbstractExpr.get_typ alg
 
-  let elaborate_typ e =
-    fold_with_type
-      (fun t ->
-        let typ = type_alg (AbstractExpr.map snd t) in
-        fix (AbstractExpr.set_typ (AbstractExpr.map fst t) typ))
-      e
+  let fold_with_type_r (alg : 'e abstract_expr -> 'a) =
+    zygo ~cata AbstractExpr.get_typ alg
 
-  let rec fixup_typ (eo : t) : t =
-    let get_typ (e : t abstract_expr) =
-      AbstractExpr.(
-        match e with
-        | Constant { const = `Bitvector i } -> Types.Bitvector (Bitvec.size i)
-        | Constant { const = `Bool _ } -> Types.Boolean
-        | Constant { const = `Integer _ } -> Types.Integer
-        | RVar { id } -> Var.typ id
-        | e -> AbstractExpr.get_typ e)
+  (** Perform one layer of local type inference *)
+  let fixup_typ (exp : t) : t =
+    let type_alg_opt e =
+      try type_alg e
+      with Failure er ->
+        Logs.warn (fun m -> m "%s at construction of %s" er (to_string exp));
+        Types.Top
     in
-
-    let e = unfix eo in
-    let et : t abstract_expr =
-      match get_typ e with
-      | Types.Top ->
-          let ne = AbstractExpr.map fixup_typ e in
-          let t = AbstractExpr.map (unfix %> get_typ) ne in
-          let t = try type_alg t with _ -> Top in
-          AbstractExpr.set_typ ne t
-      | t -> AbstractExpr.set_typ e t
-    in
-    fix et
+    let e = unfix exp in
+    match AbstractExpr.get_typ e with
+    | Types.Top | Types.Nothing -> begin
+        let t =
+          e |> AbstractExpr.map (unfix %> AbstractExpr.get_typ) |> type_alg_opt
+        in
+        AbstractExpr.set_typ e t |> fix
+      end
+    | _ -> exp
 
   type rwinfo = {
     from : t;

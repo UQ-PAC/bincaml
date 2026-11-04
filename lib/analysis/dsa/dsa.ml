@@ -418,7 +418,7 @@ let dot_string (graph : DSGraph.t) =
 
   let nodes =
     DSGraph.nodes graph
-    |> List.map DSGraph.(fun n -> (node_id n, fst @@ find_node n))
+    |> List.map DSGraph.(fun n -> (node_id n, snd @@ find_node n))
     |> IDMap.of_list |> IDMap.to_list |> List.map snd
   in
 

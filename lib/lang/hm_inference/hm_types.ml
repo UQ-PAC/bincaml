@@ -46,10 +46,13 @@ let rec ty_of_basil st (t : Types.t) : TypeExpr.t =
   | Types.Nothing -> nothing_t st
   | Types.Map (a, b) -> fun_type st (ty_of_basil st a) (ty_of_basil st b)
   | Types.Sort (n, _) -> fix st (TypeConstr ([], n))
-  | Types.Struct _ -> failwith "unsupp"
+  | Types.Struct _ -> failwith "structs unsupp"
   | Types.Pointer { lower; upper } ->
       ptr_typ_sub st (ty_of_basil st lower) (ty_of_basil st upper)
-  | Types.Variable n -> fix st (Var (st.gen.fresh ~name:n ()))
+  | Types.Variable n ->
+      (*fix st (Var (st.gen.fresh ~name:n ()))*)
+      (* type variables in the AST are references to declared types for now *)
+      fix st (TypeConstr ([], n))
 
 module Make_smart_constructors (S : sig
   val state : TypeExpr.state
@@ -89,7 +92,7 @@ let is_nat_val_type (i : TypeExpr.t) =
 
 (** Recursion algebra for printing types *)
 let printer_alg = function
-  | TypeExpr.ATyp.Var e -> ID.to_string e
+  | TypeExpr.ATyp.Var e -> "tvar:" ^ ID.to_string e
   | TypeConstr ([ l ], e) -> l ^ " " ^ e
   | TypeConstr ([ a; b ], "->") -> a ^ " -> " ^ b
   | TypeConstr ([], e) -> e
@@ -128,7 +131,8 @@ let rec to_basil (t : TypeExpr.t) : Types.t =
   | TypeConstr ([], "top") -> Top
   | TypeConstr ([], "nothing") -> Nothing
   | TypeConstr ([], o) -> Sort (o, [])
-  | _ -> failwith "not impl"
+  | Var o -> Sort (ID.to_string o, [])
+  | _ -> failwith @@ "not impl:" ^ type_to_string t
 
 let types_universe = "<types>"
 let global_universe = "<global>"

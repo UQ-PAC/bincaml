@@ -100,3 +100,29 @@ let%expect_test "fold_block" =
     3e0: 0000 0000 0000 0000 0000 0000 0000 0000  ................
     3f0: 0000 0000 0000 0000 0000 0000 0000 0000  ................
     |}]
+
+let%expect_test "blitting" =
+  let open Bitvec in
+  print_endline "0xfff:bv12[4..0] := zero:";
+  blit_low_bits (ones ~size:12) (zero ~size:4)
+  |> Fun.compose to_string print_endline;
+  print_endline "1:bv1[1..0] := ones:";
+  blit_low_bits (zero ~size:1) (zero ~size:1)
+  |> Fun.compose to_string print_endline;
+  print_endline "0:bv1[3..0] := ones:";
+  blit_low_bits (zero ~size:1) (ones ~size:3)
+  |> Fun.compose to_string print_endline;
+  print_endline "0:bv1[0..0] := ones:";
+  blit_low_bits (zero ~size:1) (ones ~size:0)
+  |> Fun.compose to_string print_endline;
+  [%expect
+    {|
+    0xfff:bv12[4..0] := zero:
+    0xff0:bv12
+    1:bv1[1..0] := ones:
+    0x0:bv1
+    0:bv1[3..0] := ones:
+    0x1:bv1
+    0:bv1[0..0] := ones:
+    0x0:bv1
+    |}]

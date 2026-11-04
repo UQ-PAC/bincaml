@@ -14,7 +14,10 @@
   containers.pp
   fmt
   trace.core
-  bincaml.util)
+  bincaml.util
+  ppx_protocol_conv.driver
+  decompress.gz
+  base64)
  (inline_tests)
  (preprocess
   (pps

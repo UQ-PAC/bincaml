@@ -3,6 +3,14 @@ open Common
 open Interval
 module SBMap = Map.Make (Sva.SymBase)
 
+module N_UF = Bincaml_util.Labelled_unionfind.Make (struct
+  type t = Z.t
+
+  let equal = Z.equal
+  let compose = Z.( + )
+  let identity = Z.zero
+end)
+
 (** A path compressed cell. Cells store a set of offsets from an abstract base
     address, the node that it belongs to, and a list of cells it points to (that
     will be a singleton or empty after unification). *)
@@ -24,14 +32,12 @@ and node_content =
   (* ID's CAN change when nodes are mutated (e.g. when replaced with a
        path)!! Make sure that if ids are ever used, the nodes with ids are
        being used won't change!!!! *)
-  | Node of {
-      mutable cells : cell list;
-      mutable flags : Node_flags.t;
-      id : ID.t;
-    }
-  | NodePath of node * Z.t
+  | Node of { cells : cell list; flags : Node_flags.t; id : ID.t }
+  | Dead
+      (** A node is marked as dead if it has been merged into another node with
+          its former content discarded *)
 
-and node = node_content ref
+and node = node_content N_UF.t
 
 type t = { mutable nodes : node list; mutable node_map : node SBMap.t }
 (** A graph, which keeps track of all nodes and also which nodes come from each
@@ -54,13 +60,7 @@ let rec find_cell (c : cell) =
   | Cell _ -> c
 
 (** Get the union find parent of this node *)
-let rec find_node (n : node) =
-  match !n with
-  | NodePath (n', off) ->
-      let p, off' = find_node n' in
-      n := NodePath (p, Z.add off off');
-      (p, Z.add off off')
-  | Node _ -> (n, Z.zero)
+let find_node (n : node) = N_UF.find n
 
 (** Get the offsets interval of this cell's parent *)
 let offsets (c : cell) =
@@ -111,33 +111,35 @@ let add_pointees pointees (c : cell) =
 
 (** Get the cells of this node's parent *)
 let cells (n : node) =
-  match !(fst @@ find_node n) with
+  match N_UF.get @@ snd @@ find_node n with
   | Node r -> r.cells
   | _ -> failwith "find_node returned non terminal"
 
 (** Get the flags of this node's parent *)
 let flags (n : node) =
-  match !(fst @@ find_node n) with
+  match N_UF.get @@ snd @@ find_node n with
   | Node r -> r.flags
   | _ -> failwith "find_node returned non terminal"
 
 (** Get the id of this node's parent *)
 let node_id (n : node) =
-  match !(fst @@ find_node n) with
+  match N_UF.get @@ snd @@ find_node n with
   | Node r -> r.id
   | _ -> failwith "find_node returned non terminal"
 
 (** Set the cells of this node *)
 let set_cells cells (n : node) =
-  match !(fst @@ find_node n) with
-  | Node r -> r.cells <- cells
-  | _ -> failwith "find_node returned non terminal"
+  find_node n |> snd
+  |> N_UF.update (function
+    | Node r -> Node { r with cells }
+    | Dead -> failwith "find_node returned non terminal")
 
 (** Join the flags of this node with the new flags *)
 let join_flags flags (n : node) =
-  match !(fst @@ find_node n) with
-  | Node r -> r.flags <- Node_flags.join r.flags flags
-  | _ -> failwith "find_node returned non terminal"
+  find_node n |> snd
+  |> N_UF.update (function
+    | Node r -> Node { r with flags = Node_flags.join r.flags flags }
+    | Dead -> failwith "find_node returned non terminal")
 
 (** Make the second cell point to the first *)
 let join_paths (c1 : cell) (c2 : cell) =
@@ -157,7 +159,7 @@ let is_sorted node =
 
 (** Returns whether every cell of this node has its node set to this. *)
 let valid_cell_nodes node =
-  let f, _ = find_node node in
+  let _, f = find_node node in
   List.for_all (CCEqual.physical f % node_of) (cells f)
 
 (** Check that the node satisfies its invariants *)
@@ -177,22 +179,22 @@ let check_unique_pointee g =
 
 (** Collapse all cells in the node into a single cell, with offsets Top *)
 let collapse node =
-  match !(fst @@ find_node node) with
-  | NodePath _ -> failwith "find_node returned non terminal"
-  | Node r ->
-      let pointees =
-        List.fold_left
-          (fun acc c ->
-            List.fold_left
-              (flip (List.add_nodup ~eq:CCEqual.physical))
-              acc (pointees c))
-          [] (cells node)
-      in
-      let c = ref (Cell { offsets = Top; node; pointees }) in
-      List.iter (fun c' -> join_paths c c') r.cells;
-      let flags = Node_flags.(set_flag collapsed r.flags) in
-      r.cells <- [ c ];
-      r.flags <- flags
+  find_node node |> snd
+  |> N_UF.update (function
+    | Dead -> failwith "find_node returned non terminal"
+    | Node r ->
+        let pointees =
+          List.fold_left
+            (fun acc c ->
+              List.fold_left
+                (flip (List.add_nodup ~eq:CCEqual.physical))
+                acc (pointees c))
+            [] (cells node)
+        in
+        let c = ref (Cell { offsets = Top; node; pointees }) in
+        List.iter (fun c' -> join_paths c c') r.cells;
+        let flags = Node_flags.(set_flag collapsed r.flags) in
+        Node { r with cells = [ c ]; flags })
 
 (** Join c2 into c1 under the assumption that they are in the same node. It is
     left to the caller to preserve node structure. *)
@@ -217,10 +219,10 @@ let join_cells_only c1 c2 =
 let join_nodes_at off n1 n2 =
   check_valid_node n1;
   check_valid_node n2;
-  let n1, off' = find_node n1 in
-  let n2, off'' = find_node n2 in
+  let off', n1 = find_node n1 in
+  let off'', n2 = find_node n2 in
   let off = Z.(off - off' - off'') in
-  match (!n1, !n2) with
+  match (N_UF.get n1, N_UF.get n2) with
   | Node r1, Node r2 ->
       if CCEqual.physical n1 n2 then assert (Z.equal Z.zero off)
       else (
@@ -228,7 +230,7 @@ let join_nodes_at off n1 n2 =
         List.iter (shift off) r2.cells;
         List.iter (set_node n1) r2.cells;
         let flags = Node_flags.join r1.flags r2.flags in
-        (* To a simultaneous walk along both sorted lists to avoid an O(n^2) algorithm *)
+        (* Do a simultaneous walk along both sorted lists to avoid an O(n^2) algorithm *)
         let rec join_nodes' n1' n2' =
           match (n1', n2') with
           | [], cs | cs, [] -> Some cs
@@ -236,8 +238,11 @@ let join_nodes_at off n1 n2 =
               match (offsets c, offsets c') with
               | Bot, _ | _, Bot -> failwith "Bottom cells should not exist."
               | Top, _ | _, Top ->
-                  n1 := Node { r1 with cells = r1.cells @ r2.cells; flags };
-                  n2 := NodePath (n1, off);
+                  N_UF.set
+                    (Node { r1 with cells = r1.cells @ r2.cells; flags })
+                    n1;
+                  N_UF.set Dead n2;
+                  N_UF.join n2 off n1;
                   collapse n1;
                   check_valid_node n1;
                   check_valid_node n2;
@@ -259,8 +264,9 @@ let join_nodes_at off n1 n2 =
         in
         match join_nodes' r1.cells r2.cells with
         | Some n ->
-            n1 := Node { r1 with cells = n; flags };
-            n2 := NodePath (n1, off);
+            N_UF.set (Node { r1 with cells = n; flags }) n1;
+            N_UF.set Dead n2;
+            N_UF.join n2 off n1;
             check_valid_node n1;
             check_valid_node n2
         | _ -> ())
@@ -268,14 +274,14 @@ let join_nodes_at off n1 n2 =
 
 (** Inserts the cell into the node. *)
 let insert node cell =
-  let node, off = find_node node in
+  let off, node = find_node node in
   let cell = find_cell cell in
   shift off cell;
-  match (!node, !cell) with
+  match (N_UF.get node, !cell) with
   | Node r, Cell { offsets = Interval.Bot } ->
       failwith "Bot cells should not exist"
   | Node r, Cell { offsets = Top } ->
-      r.cells <- cell :: r.cells;
+      N_UF.set (Node { r with cells = cell :: r.cells }) node;
       collapse node
   | Node r, Cell ({ offsets = Interval _ as i } as cr) -> (
       check_valid_node node;
@@ -287,7 +293,7 @@ let insert node cell =
             match !(find_cell c) with
             | Path _ -> failwith "find_cell returned non terminal"
             | Cell { offsets = Top } ->
-                node := Node { r with cells = cell :: r.cells };
+                N_UF.set (Node { r with cells = cell :: r.cells }) node;
                 collapse node;
                 None
             | Cell { offsets = Bot } -> failwith "Bot cells should not exist"
@@ -301,12 +307,14 @@ let insert node cell =
                 join_cells_only cell c;
                 insert' cs)
       in
-      match insert' r.cells with Some n -> r.cells <- n | None -> ())
+      match insert' r.cells with
+      | Some cells -> N_UF.set (Node { r with cells }) node
+      | None -> ())
   | _ -> failwith "union find returned non terminal node"
 
 (** Creates an empty node *)
 let empty_node ?(flags = Node_flags.empty) () =
-  ref (Node { cells = []; flags; id = ID.fresh id_gen () })
+  N_UF.make (Node { cells = []; flags; id = ID.fresh id_gen () })
 
 (** Make a new cell with no pointees and add it to the graph *)
 let add_cell (g : t) ?(sb = None) offsets flags : cell =
@@ -340,8 +348,8 @@ let join (c1 : cell) (c2 : cell) =
         Cell { offsets = i'; pointees = p; node = n2 } ) ->
         (* Note that cells know their up to date interval relative to the
                  unification offset, so the intervals should not be updated. *)
-        let n1, _ = find_node n1 in
-        let n2, _ = find_node n2 in
+        let _, n1 = find_node n1 in
+        let _, n2 = find_node n2 in
         if not @@ CCEqual.physical n1 n2 then
           match Interval.(start i, start i') with
           | Some a, Some b when Z.lt a b -> join_nodes_at (Z.sub a b) n1 n2
@@ -407,10 +415,10 @@ and unify_node_of c = node_of c |> cells |> List.iter unify_pointees
 (** Find a cell corresponding to an interval in a node. If the interval overlaps
     with multiple cells, they are merged, and if it overlaps with no cells None
     is returned. *)
-let get_cell i (n : node) : cell option =
-  let n, off = find_node n in
+let get_cell i (node : node) : cell option =
+  let off, node = find_node node in
   let i = Interval.shift off i in
-  match !n with
+  match N_UF.get node with
   | Node r -> (
       let rec aux = function
         | [] -> []

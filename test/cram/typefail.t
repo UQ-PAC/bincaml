@@ -1,6 +1,14 @@
-  $ bincaml script ./typefail.sexp 2>/dev/null
+  $ bincaml script ./typefail.sexp
   (load-il incorrect_types.il)
+  bincaml: [WARNING] type conflict: int, <bitvector at construction of zero_extend(32, 2)
+  bincaml: [WARNING] type conflict: int, <bitvector at construction of zero_extend(32, 2)
+  bincaml: [WARNING] type conflict: int, <bitvector at construction of sign_extend(32, 2)
+  bincaml: [WARNING] type conflict: int, <bitvector at construction of sign_extend(32, 2)
   (run-transforms type-check)
+  bincaml: (run-transforms type-check): Failure("Check failed: @main_1876")
+           2 | (run-transforms "type-check")
+                                          ^
+           
   Paramters for the function has a type mismatch: type of eq(1, 0x1:bv32) != type of $NF:bv1 (bool != bv1) at statement 0 in %main_entry
   Arguments are not of the same type in eq at statement 0 in %main_entry
   Paramters for the function has a type mismatch: type of neq(1, 0x1:bv32) != type of $NF:bv1 (bool != bv1) at statement 1 in %main_entry

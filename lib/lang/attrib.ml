@@ -50,6 +50,10 @@ let to_string ?show_internal e =
 
 let empty : attrib_map = StringMap.empty
 
+let to_attrib_map : t -> attrib_map = function
+  | `Assoc x -> x
+  | _ -> invalid_arg "to_attrib_map: not an `Assoc"
+
 type loc = int * int
 (** a text token range; beginchar, endchar*)
 
@@ -118,3 +122,9 @@ let find_int_opt k (e : t option) =
 
 let find_loc_opt (e : t option) =
   find_opt location_key e |> Option.map loc_of_attr
+
+let find_int_map k (m : attrib_map) =
+  match StringMap.get k m with
+  | Some (`CamlInt n) -> Some (Z.of_int n)
+  | Some (`Integer n) -> Some n
+  | _ -> None

@@ -16,6 +16,7 @@ open Lang
 module Flags = Flags
 module Analysis = Cfg_analysis
 module Rewriter = Rewriter
+module Pc_ite = Pc_ite
 
 (** Add flag semantic annotations as attributes for debugging *)
 let annotate_flag_assigns stmt =
@@ -60,8 +61,7 @@ let annotate_stmt_flags m stmt =
   match stmt with
   | Instr_Assume { attrib; body; branch } ->
       let annotations =
-        Analysis.FlagDomain.to_list m
-        |> snd
+        Flags.FlagMap.to_list m |> snd
         |> List.filter_map (fun (v, s) ->
             match s with Analysis.FlagLattice.V s -> Some (v, s) | _ -> None)
       in
@@ -92,7 +92,7 @@ let stmt_transform trans (p : Program.proc) =
       in
       Block.map_fold_forwards
         ~phi:(fun m phi -> (List.fold_left FlagDomain.transfer_phi m phi, phi))
-        ~f:(fun m stmt -> (FlagDomain.transfer m stmt, trans m stmt))
+        ~f:(fun m stmt -> (FlagDomain.transfer m stmt, trans m.flags stmt))
         r b
       |> snd)
     p
@@ -104,4 +104,4 @@ let annotate_assume_flags = stmt_transform annotate_stmt_flags
 (** Rewrite boolean expressions of flags into numerical conditions *)
 let rewrite_conditions = stmt_transform rewrite_stmt_conditions
 
-let transform = rewrite_conditions
+let transform = rewrite_conditions %> Pc_ite.transform

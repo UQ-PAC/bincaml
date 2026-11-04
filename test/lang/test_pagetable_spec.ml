@@ -1,6 +1,6 @@
 (** Private immplementation modules. *)
 open struct
-  module IntegerMap = Map.Make (Z)
+  module RefModel = Bincaml_util.Page_table.Naive
 
   module Z = struct
     include Z
@@ -17,50 +17,46 @@ end
     operations. *)
 module Model = struct
   type cmd =
-    | Read of { addr : Z.t; nbytes : int }
+    | Read of { addr : Z.t; nbits : int }
     | Write of { addr : Z.t; bv : Bitvec.t }
   [@@deriving show { with_path = false }]
 
-  type state = char IntegerMap.t
+  let show_cmd = function
+    | Read { addr; nbits } ->
+        Printf.sprintf "read %x %d bits" (Z.to_int addr) nbits
+    | Write { addr; bv } ->
+        Printf.sprintf "write %x %s" (Z.to_int addr) (Bitvec.show bv)
+
+  type state = RefModel.t
   (** The abstract model of the page table is a map of integer addresses to
       bytes. *)
 
-  let init_state = IntegerMap.empty
+  let init_state = RefModel.empty ()
 
   (** Precondition of page table commands. Addresses are non-negative and
       reads/writes are byte-sized and non-zero sized. *)
   let precond cmd _ =
     match cmd with
-    | Read { addr; nbytes } -> Z.(geq addr zero) && nbytes > 0
-    | Write { addr; bv } -> Z.(geq addr zero) && bv.w mod 8 == 0 && bv.w > 0
+    | Read { addr; nbits } -> Z.(geq addr zero) && nbits > 0
+    | Write { addr; bv } -> Z.(geq addr zero) && bv.w > 0
 
   (** Given an abstract state and a command, computes the abstract state after
       the command. *)
   let next_state cmd st =
     match cmd with
     | Read _ -> st
-    | Write { addr; bv } ->
-        Bitvec.to_bytes bv |> Bytes.to_seq
-        |> Seq.fold_lefti (fun st i c -> IntegerMap.add Z.(addr + ~$i) c st) st
-
-  let read_byte ~addr st =
-    IntegerMap.find_opt addr st |> Option.value ~default:'\x00'
+    | Write { addr; bv } -> RefModel.write_bv st ~addr bv
 
   (** Generates a non-negative {!Z.t} (currently up to int64 size). *)
   let arb_zint_nonneg =
     let open QCheck.Gen in
-    let+ n = int64 in
-    Z.of_int64_unsigned n
+    let+ n = int_range 1 ((5 * 1024) + 400) in
+    Z.of_int n
 
   let gen_addr st =
     let open QCheck.Gen in
-    let* addr =
-      match IntegerMap.bindings st |> List.map fst with
-      | [] -> arb_zint_nonneg
-      | addrs -> oneof [ oneof_list addrs; arb_zint_nonneg ]
-    in
-    let+ fuzz = int_range (-10) 10 in
-    Z.(max zero @@ (addr + ~$fuzz))
+    let* addr = arb_zint_nonneg in
+    return @@ Z.(max zero addr)
 
   let is_digit = function '0' .. '9' -> true | _ -> false
 
@@ -78,8 +74,8 @@ module Model = struct
     |> Iter.map (fun size -> Bitvec.create ~size bv.v)
 
   let shrink_cmd : cmd Shrink.t = function
-    | Read { addr; nbytes } ->
-        Iter.map (fun nbytes -> Read { addr; nbytes }) (Shrink.int nbytes)
+    | Read { addr; nbits } ->
+        Iter.map (fun nbits -> Read { addr; nbits }) (Shrink.int nbits)
     | Write { addr; bv } ->
         Iter.map (fun bv -> Write { addr; bv }) (shrink_bitvec bv)
 
@@ -87,13 +83,13 @@ module Model = struct
     let open QCheck.Gen in
     QCheck.make ~print:show_cmd ~shrink:shrink_cmd
     @@
-    let* nbytes = nat_small >|= Int.add 1 in
+    let* nbits = nat_small >|= Int.add 1 in
     let* addr = gen_addr st in
     oneof
       [
-        return (Read { addr; nbytes });
+        return (Read { addr; nbits });
         (let+ v = arb_zint_nonneg in
-         Write { addr; bv = Bitvec.create ~size:(nbytes * 8) v });
+         Write { addr; bv = Bitvec.create ~size:nbits v });
       ]
 end
 
@@ -114,17 +110,18 @@ module Spec : STM.Spec = struct
   let cleanup _ = ()
 
   type 'a STM.ty += BitvecTy : Bitvec.t STM.ty
+  type 'a STM.ty += PageTableTy : PageTable.t STM.ty
 
   let bitvec_show = (BitvecTy, Bitvec.to_string)
+  let pt_ty = (PageTableTy, fun x -> "\n" ^ PageTable.show x)
 
   (** Performs a command on the concrete system under test and returns the
       result of the command. *)
   let run cmd sut =
     match cmd with
-    | Read { addr; nbytes } ->
-        let nbits = nbytes * 8 in
+    | Read { addr; nbits } ->
         STM.Res (bitvec_show, PageTable.read_bv ~addr ~nbits sut)
-    | Write { addr; bv } -> STM.Res (STM.unit, PageTable.write_bv sut ~addr bv)
+    | Write { addr; bv } -> STM.Res (pt_ty, PageTable.write_bv sut ~addr bv)
 
   (** Postcondition for validating the returned value from {!run} aligns with
       that expected by the abstract operation.
@@ -133,12 +130,11 @@ module Spec : STM.Spec = struct
       because a later read could expose errors). *)
   let postcond cmd oldst res =
     match (cmd, res) with
-    | Read { addr; nbytes }, STM.Res ((BitvecTy, _), bv) ->
-        bv.w = nbytes * 8
-        && Bitvec.to_bytes bv |> Bytes.to_seq
-           |> Seq.fold_lefti
-                (fun ok i c -> ok && read_byte ~addr:Z.(addr + ~$i) oldst = c)
-                true
-    | Write _, STM.Res ((STM.Unit, _), ()) -> true
-    | _ -> false
+    | Read { addr; nbits }, STM.Res ((BitvecTy, _), bv) ->
+        bv.w = nbits
+        && (Bitvec.equal bv @@ RefModel.read_bv oldst ~addr ~nbits:bv.w)
+    | Write { addr; bv }, STM.Res ((PageTableTy, _), rst) ->
+        let rp = PageTable.read_bv rst ~addr ~nbits:bv.w in
+        Bitvec.equal bv rp
+    | _ -> true
 end

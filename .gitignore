@@ -11,3 +11,5 @@ trace.json
 .helix/
 .direnv
 .envrc
+
+.bincaml_repl_history

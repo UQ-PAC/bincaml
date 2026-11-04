@@ -76,7 +76,7 @@
  (applies_to malloc_free memory_safety memory_interproc loop_removal)
  (package bincaml)
  (enabled_if
-  (and %{bin-available:boogie} %{bin-available:cvc5}))
+  (and %{bin-available:boogie} %{bin-available:z3}))
  (deps
   %{bin:bincaml}
   ../../examples/memory/malloc_free.il

@@ -3,26 +3,31 @@
 open Lang.Common
 open Lang
 
-(** Gets the used variable declarations in a procedure. *)
-let used_var_declarations p =
+(** Delete unused local var declarations and return used global variables.
+    assumes captures/modifies are up to date. *)
+let drop_unused_var_declarations_proc p =
+  let spec = Procedure.specification p in
+  let used = Procedure.free_vars_specification spec |> VarSet.of_iter in
   let used =
     Procedure.fold_blocks_topo_fwd
       (fun acc id bl ->
         Iter.append (Block.read_vars_iter bl) (Block.assigned_vars_iter bl)
         |> Iter.fold (fun acc i -> VarSet.add i acc) acc)
-      VarSet.empty p
+      used p
   in
   Var.Decls.filter_map_inplace
     (fun _ v -> if VarSet.mem v used then Some v else None)
     (Procedure.local_decls p);
   VarSet.filter Var.is_global used
 
-(* Transform the program, removing unused variable declarations. *)
+(** Update modsets and delete unused variable definitions *)
 let drop_unused_var_declarations_prog (p : Program.t) =
+  let p = Spec_modifies.set_modsets p in
   let used =
     Program.procs p
     |> Iter.fold
-         (fun acc (i, p) -> VarSet.union acc (used_var_declarations p))
+         (fun acc (i, p) ->
+           VarSet.union acc (drop_unused_var_declarations_proc p))
          VarSet.empty
   in
   Program.filter_map_decls
