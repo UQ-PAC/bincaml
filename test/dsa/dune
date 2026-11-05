@@ -1,6 +1,6 @@
 (rule
  (targets bayat1.il)
- (enabled_if %{file-available:../runmake})
+ (enabled_if %{file-available:../compile/runmake})
  (mode promote)
  (deps bayat1.c)
  (action
@@ -8,7 +8,7 @@
 
 (rule
  (targets bayat2.il)
- (enabled_if %{file-available:../runmake})
+ (enabled_if %{file-available:../compile/runmake})
  (mode promote)
  (deps bayat2.c)
  (action
