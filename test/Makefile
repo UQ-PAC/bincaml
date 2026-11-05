@@ -1,10 +1,8 @@
 .DELETE_ON_ERROR:
 
-DDISASM = ddisasm/bin/ddisasm
-BWRAP = bwrap/bin/bwrap
-GCC = gcc/bin/aarch64-unknown-linux-gnu-gcc
 BINCAML ?= bincaml
 ROOT ?= ..
+NIX_ENV ?= ./nix.env
 
 .PHONY: phony
 phony:
@@ -18,14 +16,14 @@ nix.env: $(ROOT)/flake.nix $(ROOT)/flake.lock
 		GCC     `nix build '.#pkgs.pkgsCross.aarch64-multiplatform.pkgsBuildHost.gcc^out' --no-link --print-out-paths`/bin/aarch64-unknown-linux-gnu-gcc \
 		> $@
 
-%.exe: %.c nix.env
-	source ./nix.env; $$BWRAP --unshare-all \
+%.exe: %.c $(NIX_ENV)
+	if [ -n "$(NIX_ENV)" ]; then source $(NIX_ENV); fi ; $$BWRAP --unshare-all \
 	  --ro-bind /nix/store /nix/store --ro-bind $< $< --bind . /out --chdir /out \
 	  --die-with-parent \
 	  $$GCC $< -o $@
 
-%.gtirb: %.exe nix.env
-	source ./nix.env; $$DDISASM $< --ir $@
+%.gtirb: %.exe $(NIX_ENV)
+	if [ -n "$(NIX_ENV)" ]; then source $(NIX_ENV); fi ; $$DDISASM $< --ir $@
 
 %.il: %.gtirb
 	printf '%s\n' "(load-gtirb $<)" "(dump-il $@)" | $(BINCAML) script -

@@ -1,0 +1,60 @@
+(rule
+ (target ./nix)
+ (deps %{project_root}/flake.nix %{project_root}/flake.lock)
+ (action
+  (progn
+   (run rm %{deps})
+   (write-file %{target} ""))))
+
+(rule
+ (target ddisasm)
+ (deps ./nix)
+ (action
+  (progn
+   (run nix build ".#pac.ddisasm^out" --out-link ddisasm-out)
+   (bash "ln -s `realpath ddisasm-out/bin/ddisasm` ddisasm"))))
+
+(rule
+ (target aarch64-unknown-linux-gnu-gcc)
+ (deps ./nix)
+ (action
+  (progn
+   (run
+    nix
+    build
+    ".#pkgs.pkgsCross.aarch64-multiplatform.pkgsBuildHost.gcc^out"
+    --out-link
+    gcc-out)
+   (bash "ln -s `realpath gcc-out/bin/%{target}` %{target}"))))
+
+(rule
+ (target bwrap)
+ (deps ./nix)
+ (action
+  (progn
+   (run nix build ".#pkgs.bubblewrap^out" --out-link bwrap-out)
+   (bash "ln -s `realpath bwrap-out/bin/%{target}` %{target}"))))
+
+(rule
+ (enabled_if
+  (and
+   %{bin-available:nix}
+   (= %{system} linux)))
+ (deps %{bin:bincaml})
+ (action
+  (progn
+   (with-stdout-to
+    runmake
+    (progn
+     (echo "#!/usr/bin/env sh\n")
+     (echo "export NIX_ENV=\n")
+     (echo "export BINCAML=")
+     (run command -v bincaml)
+     (echo "export BWRAP=")
+     (run readlink -f "%{dep:./bwrap}")
+     (echo "export GCC=")
+     (run readlink -f "%{dep:./aarch64-unknown-linux-gnu-gcc}")
+     (echo "export DDISASM=")
+     (run readlink -f "%{dep:./ddisasm}")
+     (echo "exec make -f%{dep:../Makefile} \"$@\"")
+     (run chmod +x runmake))))))

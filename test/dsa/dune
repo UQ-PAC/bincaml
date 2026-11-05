@@ -1,20 +1,18 @@
 (rule
  (targets bayat1.il)
- (alias runtest)
  (enabled_if %{file-available:../runmake})
  (mode promote)
  (deps bayat1.c)
  (action
-  (run ../runmake %{targets})))
+  (run ../compile/runmake %{targets} --assume-new=%{deps})))
 
 (rule
  (targets bayat2.il)
- (alias runtest)
  (enabled_if %{file-available:../runmake})
  (mode promote)
  (deps bayat2.c)
  (action
-  (run ../runmake %{targets})))
+  (run ../compile/runmake %{targets} --assume-new=%{deps})))
 
 (library
  (name dsa_tests)
