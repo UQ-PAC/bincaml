@@ -60,3 +60,6 @@
      (echo "exec make \"$@\" -f")
      (run realpath %{dep:../Makefile})))
    (run chmod +x %{target}))))
+
+(alias
+ (name default))
