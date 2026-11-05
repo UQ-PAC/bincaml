@@ -1,16 +1,20 @@
 (rule
  (targets bayat1.il)
- (deps %{bin:bincaml})
- (mode fallback)
+ (alias runtest)
+ (enabled_if %{file-available:../runmake})
+ (mode promote)
+ (deps bayat1.c)
  (action
-  (run make "SRCS=%{dep:bayat1.c}" -f %{dep:../Makefile} %{targets})))
+  (run ../runmake %{targets})))
 
 (rule
  (targets bayat2.il)
- (deps %{bin:bincaml})
- (mode fallback)
+ (alias runtest)
+ (enabled_if %{file-available:../runmake})
+ (mode promote)
+ (deps bayat2.c)
  (action
-  (run make "SRCS=%{dep:bayat2.c}" -f %{dep:../Makefile} %{targets})))
+  (run ../runmake %{targets})))
 
 (library
  (name dsa_tests)

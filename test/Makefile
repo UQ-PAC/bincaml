@@ -4,12 +4,14 @@ DDISASM = ddisasm/bin/ddisasm
 BWRAP = bwrap/bin/bwrap
 GCC = gcc/bin/aarch64-unknown-linux-gnu-gcc
 BINCAML ?= bincaml
+ROOT ?= ..
 
 .PHONY: phony
 phony:
 	@true
 
-nix.env: ../flake.nix ../flake.lock
+nix.env: $(ROOT)/flake.nix $(ROOT)/flake.lock
+	nix build '.#pac.ddisasm^out' --no-link
 	printf '%s=%s\n' \
 		DDISASM `nix build '.#pac.ddisasm^out' --no-link --print-out-paths`/bin/ddisasm \
 		BWRAP   `nix build '.#pkgs.bubblewrap^out' --no-link --print-out-paths`/bin/bwrap \

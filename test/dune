@@ -12,3 +12,23 @@
  (libraries bincaml.util)
  (preprocess
   (pps ppx_expect)))
+
+(rule
+ (enabled_if
+  (and
+   %{bin-available:nix}
+   (= %{system} linux)))
+ (deps ./Makefile %{bin:bincaml})
+ (action
+  (progn
+   (with-stdout-to
+    runmake
+    (progn
+     (echo "#!/usr/bin/env sh\n")
+     (echo "export ROOT=$(git rev-parse --show-toplevel || echo ")
+     (run realpath "%{project_root}/../..")
+     (echo ")\n")
+     (echo "export BINCAML=")
+     (run command -v bincaml)
+     (echo "exec make -f $ROOT/test/Makefile \"$@\"\n")))
+   (run chmod +x runmake))))
