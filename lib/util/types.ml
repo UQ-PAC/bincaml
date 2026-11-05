@@ -206,7 +206,8 @@ let%expect_test "dtp" =
   in
   print_endline @@ to_string lst;
   print_endline @@ to_string rc;
-  [%expect {|
+  [%expect
+    {|
     cons of ({head: E; tail: (E) list}) | nil
     {a: bv12; b: bool}
     |}]
@@ -227,7 +228,8 @@ let%expect_test "complex_type" =
                ];
            ] );
        ];
-  [%expect {| MemEncoding of ({alloc_live: (bv64[bv2]); alloc_size: (bv64[bv64]); addr_is_heap: (bv64[bool])}) |}]
+  [%expect
+    {| MemEncoding of ({alloc_live: (bv64[bv2]); alloc_size: (bv64[bv64]); addr_is_heap: (bv64[bool])}) |}]
 
 let show_pointer = function
   | NewType ([ lo; hi ], "ptr") ->
