@@ -174,7 +174,8 @@ and prtDeclListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
   | (_,x::xs) -> (concatD [prtDecl 0 x ; render ";" ; prtDeclListBNFC 0 xs])
 and prtTypeAssign (i:int) (e : AbsBasilIR.typeAssign) : doc = match e with
-       AbsBasilIR.TypeAssign_Sum (localident, sumcases) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render "=" ; prtSumCaseListBNFC 0 sumcases])
+       AbsBasilIR.TypeAssign_Sum (localident, sumcases) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render "=" ; render "|" ; prtSumCaseListBNFC 0 sumcases])
+  |    AbsBasilIR.TypeAssign_Alias (localident, type_) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render "=" ; prtTypeT 0 type_])
 
 and prtTypeAssignListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
@@ -186,12 +187,12 @@ and prtProcDef (i:int) (e : AbsBasilIR.procDef) : doc = match e with
 
 
 and prtField (i:int) (e : AbsBasilIR.field) : doc = match e with
-       AbsBasilIR.Field1 (str, type_) -> prPrec i 0 (concatD [prtStr 0 str ; render ":" ; prtTypeT 0 type_])
+       AbsBasilIR.Field1 (localident, type_) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render ":" ; prtTypeT 0 type_])
 
 and prtFieldListBNFC i es : doc = match (i, es) with
     (_,[]) -> (concatD [])
   | (_,[x]) -> (concatD [prtField 0 x])
-  | (_,x::xs) -> (concatD [prtField 0 x ; render "," ; prtFieldListBNFC 0 xs])
+  | (_,x::xs) -> (concatD [prtField 0 x ; render ";" ; prtFieldListBNFC 0 xs])
 and prtIntType (i:int) (e : AbsBasilIR.intType) : doc = match e with
        AbsBasilIR.IntType1 inttype -> prPrec i 0 (concatD [prtINTTYPE 0 inttype])
 
@@ -224,7 +225,7 @@ and prtRecordFieldListBNFC i es : doc = match (i, es) with
   | (_,[x]) -> (concatD [prtRecordField 0 x])
   | (_,x::xs) -> (concatD [prtRecordField 0 x ; render ";" ; prtRecordFieldListBNFC 0 xs])
 and prtSumCase (i:int) (e : AbsBasilIR.sumCase) : doc = match e with
-       AbsBasilIR.SortType localident -> prPrec i 0 (concatD [prtLocalIdent 0 localident])
+       AbsBasilIR.NoArgsVariant localident -> prPrec i 0 (concatD [prtLocalIdent 0 localident])
   |    AbsBasilIR.VariantCase (localident, openparen, types, closeparen) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render "of" ; prtOpenParen 0 openparen ; prtTypeTListBNFC 0 types ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.VariantCaseInlineRec (localident, beginrec, recordfields, endrec) -> prPrec i 0 (concatD [prtLocalIdent 0 localident ; render "of" ; prtBeginRec 0 beginrec ; prtRecordFieldListBNFC 0 recordfields ; prtEndRec 0 endrec])
 

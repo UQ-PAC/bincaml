@@ -410,7 +410,7 @@ module DependencyGraph = struct
         get_decl_by_name_id name prog
         |> Option.flat_map (function id, Type _ -> Some id | _ -> None)
         |> Option.map_or IDSet.singleton ~default:IDSet.empty
-    | Unit | Top | Nothing | Boolean | Integer | Bitvector _ | ByteArray _
+    | Unit | Top | Nothing | Boolean | Integer | Bitvector _
     | Function _ | NewType _ ->
         IDSet.empty
 

@@ -189,9 +189,9 @@ module BasilASTLoader = struct
   and trans_typedecl t =
     let trans_variant_case c =
       match c with
-      | SortType variant -> (unsafe_unsigil (`TypeConstructor variant), [])
       | VariantCase (variant, _, fields, _) ->
           (unsafe_unsigil (`TypeConstructor variant), List.map trans_type fields)
+      | NoArgsVariant variant -> (unsafe_unsigil (`TypeConstructor variant), [])
       | VariantCaseInlineRec (variant, _, fields, _) ->
           ( unsafe_unsigil (`TypeConstructor variant),
             [ Types.Record (List.map trans_recordfield fields) ] )
@@ -200,6 +200,10 @@ module BasilASTLoader = struct
     | TypeAssign_Sum (localIdent, typeT) ->
         let n = unsafe_unsigil (`Type localIdent) in
         (n, Types.mk_adt (typeT |> List.map trans_variant_case))
+    | TypeAssign_Alias (name, typ) ->
+        let n = unsafe_unsigil (`Type name) in
+        let t = trans_type typ in
+        (n, t)
 
   (* First pass; process like forward declaration: only add the information
       needed to do non-local reslolution of names such as for procedure calls *)
@@ -514,7 +518,8 @@ module BasilASTLoader = struct
     Types.Record
       (List.map
          (function
-           | Field1 (field_name, t) -> (transStr field_name, trans_type t))
+           | Field1 (field_name, t) ->
+               (unsafe_unsigil (`Type field_name), trans_type t))
          fields)
 
   and trans_type ?(is_array = false) (x : typeT) : Types.t =

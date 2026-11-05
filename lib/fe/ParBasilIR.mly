@@ -480,7 +480,8 @@ typeT_list : /* empty */ { []  }
   | typeT SYMB2 typeT_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-typeAssign : localIdent SYMB6 sumCase_list { TypeAssign_Sum ($1, $3) }
+typeAssign : localIdent SYMB6 SYMB7 sumCase_list { TypeAssign_Sum ($1, $4) }
+  | localIdent SYMB6 typeT { TypeAssign_Alias ($1, $3) }
   ;
 
 typeAssign_list : typeAssign { (fun x -> [x]) $1 }
@@ -493,10 +494,10 @@ procDef : /* empty */ { ProcDef_Empty  }
 
 field_list : /* empty */ { []  }
   | field { (fun x -> [x]) $1 }
-  | field SYMB2 field_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  | field SYMB1 field_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-field : str SYMB5 typeT { Field1 ($1, $3) }
+field : localIdent SYMB5 typeT { Field1 ($1, $3) }
   ;
 
 intType : iNTTYPE { IntType1 $1 }
@@ -524,7 +525,7 @@ recordField_list : recordField { (fun x -> [x]) $1 }
   | recordField SYMB1 recordField_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-sumCase : localIdent { SortType $1 }
+sumCase : localIdent { NoArgsVariant $1 }
   | localIdent KW_of openParen typeT_list closeParen { VariantCase ($1, $3, $4, $5) }
   | localIdent KW_of beginRec recordField_list endRec { VariantCaseInlineRec ($1, $3, $4, $5) }
   ;

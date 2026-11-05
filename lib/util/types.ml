@@ -34,7 +34,6 @@ type t =
   | Top  (** greatest type *)
   | Nothing  (** least type / empty set *)
   | Map of t * t  (** abstrct map type *)
-  | ByteArray of int * int  (** byte-aligned layoutable map *)
   | Function of t * t  (** function type *)
   | Record of (string * t) list
   | Variant of (string * t list) list
@@ -74,7 +73,7 @@ let rec layout_of_typ t =
   | Record fields ->
       TS.map_m (fun (fname, ftyp) -> layout_of_typ ftyp) fields
       |> Option.map (fun m -> Vector m)
-  | Map _ | ByteArray _ | Integer | Variant _ -> None
+  | Map _ | Integer | Variant _ -> None
   | Unit | Nothing | Top | Function _ | NewType _ | Variable _ -> None
 
 let bv i = Bitvector i
@@ -128,8 +127,6 @@ let rec compare_partial (a : t) (b : t) =
       compare_partial k k2 |> function Some 0 -> compare_partial v v2 | o -> o)
   | Function (k, v), Function (k2, v2) -> (
       compare_partial k k2 |> function Some 0 -> compare_partial v v2 | o -> o)
-  | ByteArray (k, v), ByteArray (k', v') ->
-      if k = k' && v = v' then Some 0 else None
   | NewType (ts, n), NewType (ts', n') ->
       if
         List.length ts = List.length ts'
@@ -189,7 +186,6 @@ let rec to_string = function
       List.to_string ~sep:" | " ~start:"" ~stop:""
         (function variant, fields -> fsort variant fields)
         variants
-  | ByteArray (k, v) -> Printf.sprintf "(%d, %d) array" k v
 
 let to_string_decl name typ = "type " ^ name ^ " = " ^ to_string typ
 let to_string_rexp ty = to_string ty

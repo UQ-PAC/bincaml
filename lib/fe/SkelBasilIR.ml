@@ -114,6 +114,7 @@ and transDecl (x : decl) : result = match x with
 
 and transTypeAssign (x : typeAssign) : result = match x with
     TypeAssign_Sum (localident, sumcases) -> failure x
+  | TypeAssign_Alias (localident, type') -> failure x
 
 
 and transProcDef (x : procDef) : result = match x with
@@ -122,7 +123,7 @@ and transProcDef (x : procDef) : result = match x with
 
 
 and transField (x : field) : result = match x with
-    Field1 (str, type') -> failure x
+    Field1 (localident, type') -> failure x
 
 
 and transIntType (x : intType) : result = match x with
@@ -154,7 +155,7 @@ and transRecordField (x : recordField) : result = match x with
 
 
 and transSumCase (x : sumCase) : result = match x with
-    SortType localident -> failure x
+    NoArgsVariant localident -> failure x
   | VariantCase (localident, openparen, types, closeparen) -> failure x
   | VariantCaseInlineRec (localident, beginrec, recordfields, endrec) -> failure x
 

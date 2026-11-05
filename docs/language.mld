@@ -30,6 +30,28 @@ The partial operations consist of:
 {1 Types}
 
 
+
+[[
+type b;
+type b = int;
+
+type abc = {f1: bool; f2: int};
+
+type cde = {f1: abc; f2: bv32};
+
+type vtest =
+   | ABC of (abc)
+   | CDE of (bool, bool, bool)
+   | DEF of ({a: int; b: bv32});
+
+type enumt = | A | B | C | D;
+
+type unitt = | Unit;
+
+]]
+
+
+
 {2 Memory Layout}
 
 Types which have a defined memory layout are:

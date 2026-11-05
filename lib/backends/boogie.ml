@@ -48,7 +48,7 @@ let rec type_to_string (t : Types.t) =
       String.concat "" [ "["; type_to_string i; "]"; type_to_string o ]
   | Types.Variable s -> s
   | Types.NewType (vs, s) -> s
-  | Unit | Top | ByteArray _ | Nothing | Record _ | Variant _ ->
+  | Unit | Top | Nothing | Record _ | Variant _ ->
       raise
         (BoogieException (String.cat "Unsupported type" (Types.to_string t)))
 

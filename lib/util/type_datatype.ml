@@ -163,7 +163,7 @@ let rec desc_datatype ctx binding_name (ty : Types.t) =
       in
       let typedef = ADT { name; cases = List.map snd variants } in
       (Some mapping, typedef)
-  | Types.Function _ | Types.Variable _ | Types.ByteArray _ | Types.Boolean
+  | Types.Function _ | Types.Variable _ |  Types.Boolean
   | Types.Integer | Types.Bitvector _ | Types.Unit | Types.Top | Types.Nothing
   | Types.Map _ ->
       (None, Prim ty)
@@ -171,7 +171,7 @@ let rec desc_datatype ctx binding_name (ty : Types.t) =
 (** lookup a previously declared datatype *)
 and get_datatype ctx typ =
   match typ with
-  | Types.Function _ | Types.Variable _ | Types.ByteArray _ | Types.Boolean
+  | Types.Function _ | Types.Variable _ |  Types.Boolean
   | Types.Integer | Types.Bitvector _ | Types.Unit | Types.Top | Types.Nothing
   | Types.Map _ ->
       Prim typ

@@ -63,8 +63,8 @@ Decl_ProgWithSpec . Decl ::= "prog" "entry" ProcIdent AttribSet [ ProgSpec ] ;
 Decl_Proc . Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenParen [Params] CloseParen AttribSet [ FunSpec ] ProcDef ;
 
 
-
-TypeAssign_Sum. TypeAssign ::= LocalIdent "=" [SumCase] ;
+TypeAssign_Sum. TypeAssign ::= LocalIdent "=" "|" [SumCase] ;
+TypeAssign_Alias . TypeAssign ::= LocalIdent "=" Type ;
 
 separator nonempty TypeAssign "and";
 Decl_RecType . Decl ::= "type" [TypeAssign] ;
@@ -73,8 +73,8 @@ Decl_Type . Decl ::= "type" LocalIdent;
 ProcDef_Empty . ProcDef ::= ;
 ProcDef_Some  . ProcDef ::= BeginList [Block] EndList ;
 
-separator Field "," ;
-Field1 . Field ::= Str ":" Type ;
+separator Field ";" ;
+Field1 . Field ::= LocalIdent ":" Type ;
 
 IntType1 . IntType ::= INTTYPE ;
 BoolType1. BoolType ::= BOOLTYPE ;
@@ -87,9 +87,9 @@ MapType1 . MapType ::=  Type1 BeginList Type EndList;
 rules RecordField ::= LocalIdent ":" Type ;
 separator nonempty RecordField ";";
 
-SortType    . SumCase    ::= LocalIdent;
+NoArgsVariant . SumCase    ::= LocalIdent ;
 VariantCase . SumCase    ::= LocalIdent "of" OpenParen [Type] CloseParen;
-VariantCaseInlineRec . SumCase    ::= LocalIdent "of" BeginRec [RecordField] EndRec;
+VariantCaseInlineRec . SumCase   ::= LocalIdent "of" BeginRec [RecordField] EndRec;
 
 separator nonempty SumCase "|";
 

@@ -143,8 +143,9 @@ let children_lspsymbols_of_decl input (decl : BasilIR.AbsBasilIR.decl) =
     Iter.of_list cases
     |> Iter.map (fun case ->
         match case with
-        | SortType name | VariantCase (name, _, _, _) ->
-            (of_lident name, Constructor, context case))
+        | VariantCase (name, _, _, _) ->
+            (of_lident name, Constructor, context case)
+        | NoArgsVariant name -> (of_lident name, Constructor, context case))
   in
 
   (match decl with

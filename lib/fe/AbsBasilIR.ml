@@ -45,13 +45,14 @@ and decl =
 
 and typeAssign =
    TypeAssign_Sum of localIdent * sumCase list
+ | TypeAssign_Alias of localIdent * typeT
 
 and procDef =
    ProcDef_Empty
  | ProcDef_Some of beginList * block list * endList
 
 and field =
-   Field1 of str * typeT
+   Field1 of localIdent * typeT
 
 and intType =
    IntType1 of iNTTYPE
@@ -75,7 +76,7 @@ and recordField =
    RecordField1 of localIdent * typeT
 
 and sumCase =
-   SortType of localIdent
+   NoArgsVariant of localIdent
  | VariantCase of localIdent * openParen * typeT list * closeParen
  | VariantCaseInlineRec of localIdent * beginRec * recordField list * endRec
 

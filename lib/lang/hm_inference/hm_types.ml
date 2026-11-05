@@ -26,10 +26,6 @@ let bvunk st i = fix st (TypeConstr ([ i ], "bv"))
 (** {2 Primitive types} *)
 
 let map_type st k v = fix st (TypeConstr ([ k; v ], "map"))
-
-let array_type st k v =
-  fix st (TypeConstr ([ bv_type st k; bv_type st v ], "array"))
-
 let record_type st args = fix st (RecordConstr (args, "record"))
 
 (** represent variants as a product of their cases *)
@@ -60,7 +56,6 @@ let rec ty_of_basil st (t : Types.t) : TypeExpr.t =
   | Types.Top -> top_t st
   | Types.Nothing -> nothing_t st
   | Types.Map (a, b) -> map_type st (ty_of_basil st a) (ty_of_basil st b)
-  | Types.ByteArray (a, b) -> array_type st a b
   | Types.Function (a, b) -> fun_type st (ty_of_basil st a) (ty_of_basil st b)
   | Types.NewType (ts, n) ->
       fix st (TypeConstr (List.map (ty_of_basil st) ts, n))
@@ -154,12 +149,6 @@ let rec to_basil (t : TypeExpr.t) : Types.t =
       let a = wrapped a @@ fun () -> to_basil a in
       let b = wrapped b @@ fun () -> to_basil b in
       Map (a, b)
-  | TypeConstr ([ a; b ], "array") -> (
-      let a = wrapped a @@ fun () -> to_basil a in
-      let b = wrapped b @@ fun () -> to_basil b in
-      match (a, b) with
-      | Bitvector i, Bitvector j -> ByteArray (i / 8, j / 8)
-      | _ -> failwith "unrch")
   | TypeConstr ([ w ], "bv") -> (
       match is_nat_val_type w with
       | Some i -> Bitvector i

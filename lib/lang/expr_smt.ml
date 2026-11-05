@@ -159,11 +159,6 @@ module SMTLib2 = struct
         let tr, lr = of_typ r in
         let log = LSet.union (LSet.singleton Array) (LSet.union ll lr) in
         (list [ atom "Array"; tl; tr ], log)
-    | Types.ByteArray (l, r) ->
-        let tl, ll = of_typ @@ Bitvector (l * 8) in
-        let tr, lr = of_typ @@ Bitvector (r * 8) in
-        let log = LSet.union (LSet.singleton Array) (LSet.union ll lr) in
-        (list [ atom "Array"; tl; tr ], log)
     | Types.Variable v -> (atom v, LSet.empty)
     | Record _ -> failwith "not supported yet"
     | Variant _ ->  failwith "not supported yet"

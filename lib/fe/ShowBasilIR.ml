@@ -87,6 +87,7 @@ and showDecl (e : AbsBasilIR.decl) : showable = match e with
 
 and showTypeAssign (e : AbsBasilIR.typeAssign) : showable = match e with
        AbsBasilIR.TypeAssign_Sum (localident, sumcases) -> s2s "TypeAssign_Sum" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showList showSumCase sumcases >> c2s ')'
+  |    AbsBasilIR.TypeAssign_Alias (localident, type') -> s2s "TypeAssign_Alias" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showTypeT type' >> c2s ')'
 
 
 and showProcDef (e : AbsBasilIR.procDef) : showable = match e with
@@ -95,7 +96,7 @@ and showProcDef (e : AbsBasilIR.procDef) : showable = match e with
 
 
 and showField (e : AbsBasilIR.field) : showable = match e with
-       AbsBasilIR.Field1 (str, type') -> s2s "Field1" >> c2s ' ' >> c2s '(' >> showStr str  >> s2s ", " >>  showTypeT type' >> c2s ')'
+       AbsBasilIR.Field1 (localident, type') -> s2s "Field1" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showTypeT type' >> c2s ')'
 
 
 and showIntType (e : AbsBasilIR.intType) : showable = match e with
@@ -127,7 +128,7 @@ and showRecordField (e : AbsBasilIR.recordField) : showable = match e with
 
 
 and showSumCase (e : AbsBasilIR.sumCase) : showable = match e with
-       AbsBasilIR.SortType localident -> s2s "SortType" >> c2s ' ' >> c2s '(' >> showLocalIdent localident >> c2s ')'
+       AbsBasilIR.NoArgsVariant localident -> s2s "NoArgsVariant" >> c2s ' ' >> c2s '(' >> showLocalIdent localident >> c2s ')'
   |    AbsBasilIR.VariantCase (localident, openparen, types, closeparen) -> s2s "VariantCase" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showTypeT types  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.VariantCaseInlineRec (localident, beginrec, recordfields, endrec) -> s2s "VariantCaseInlineRec" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showBeginRec beginrec  >> s2s ", " >>  showList showRecordField recordfields  >> s2s ", " >>  showEndRec endrec >> c2s ')'
 
