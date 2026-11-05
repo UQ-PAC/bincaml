@@ -161,9 +161,8 @@ module SMTLib2 = struct
         (list [ atom "Array"; tl; tr ], log)
     | Types.Variable v -> (atom v, LSet.empty)
     | Record _ -> failwith "not supported yet"
-    | Variant _ ->  failwith "not supported yet"
+    | Variant _ -> failwith "not supported yet"
     | Function _ -> failwith "not supported yet"
-
 
   let add_logic l s = ((), { s with logics = LSet.add l s.logics })
 
