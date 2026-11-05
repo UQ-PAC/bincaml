@@ -395,24 +395,24 @@ module DependencyGraph = struct
   let rec type_depends_on (prog : t) : Types.t -> IDSet.t = function
     | Map (k, v) ->
         IDSet.union (type_depends_on prog k) (type_depends_on prog v)
-    | Sort (name, variants) ->
+    | Variant variants ->
         variants
-        |> List.flat_map (fun { fields } -> fields)
-        |> List.map (fun { field; typ } -> type_depends_on prog typ)
+        |> List.flat_map (fun (_, fields) -> fields)
+        |> List.map (fun typ -> type_depends_on prog typ)
         |> List.fold_left IDSet.union IDSet.empty
-    | Struct fields ->
-        StringMap.to_list fields
-        |> List.map (fun (_, { typ }) -> typ)
+    | Record fields ->
+        fields
+        |> List.map (fun (_, typ) -> typ)
         |> List.map (type_depends_on prog)
         |> List.fold_left IDSet.union IDSet.empty
-    | Pointer { lower; upper } ->
-        IDSet.union (type_depends_on prog lower) (type_depends_on prog upper)
     | Variable name ->
         (* Base case. Should always be a type, no other decl. *)
         get_decl_by_name_id name prog
         |> Option.flat_map (function id, Type _ -> Some id | _ -> None)
         |> Option.map_or IDSet.singleton ~default:IDSet.empty
-    | _ -> IDSet.empty
+    | Unit | Top | Nothing | Boolean | Integer | Bitvector _ | ByteArray _
+    | Function _ | NewType _ ->
+        IDSet.empty
 
   (** Get all type declarations immediately depended on by this variable.
       Include this variable if include_self is true and the variable is global.

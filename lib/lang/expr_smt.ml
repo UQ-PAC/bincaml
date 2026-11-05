@@ -580,7 +580,7 @@ module SMTLib2 = struct
                       fields ))
             vs
         in
-        let sexp = Bincaml_util.Smt.Expr.declare_datatype name [] fields in
+        let sexp = Bincaml_util.Smt.Expr.declare_datatype binding [] fields in
         let* _ = declare_sort sexp in
         let* _ = add_logic DT in
         return sexp
