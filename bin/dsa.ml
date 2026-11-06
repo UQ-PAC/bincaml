@@ -47,6 +47,6 @@ let () =
             (Lang.Program.get_id_by_name !graph_proc prog)
             dsgraph
         in
-        print_endline @@ Analysis.Dsa.dot_string g
+        print_endline @@ Analysis.Dsa.Dot.dot_string g
       end
   | _ -> invalid_arg "requires exactly one filename argument"
