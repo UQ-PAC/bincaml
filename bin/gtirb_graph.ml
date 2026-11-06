@@ -13,7 +13,9 @@ let () =
   | [ filename ] ->
       let g = Gtirb_frontend.Gtirb.of_file filename in
 
-      Gtirb_frontend.Gtirb_graph.Graph_dot.output_graph
-        (open_out (filename ^ ".dot"))
-        (Gtirb_frontend.Gtirb_graph.Loader.graph_of_module (List.hd g.modules))
+      let graph = Gtirb_frontend.Gtirb_graph.Loader.graph_of_gtirb_ir g in
+      Gtirb_frontend.Gtirb_graph.Graph_dot.graph := Some graph;
+      graph
+      |> Gtirb_frontend.Gtirb_graph.Graph_dot.output_graph
+           (open_out (filename ^ ".dot"))
   | _ -> invalid_arg "requires exactly one filename argument"
