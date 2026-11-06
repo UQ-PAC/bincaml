@@ -10,13 +10,17 @@ type block_data =
 type symbol_data = { name : string; at_end : bool; int_value : int option }
 [@@deriving show { with_path = false }]
 
+type control_flow_kind = [ `In_proc | `Out_of_proc ]
+[@@deriving show { with_path = false }]
+
 (** A relation between two UUIDs. For example, an edge [a -> b] with label
     [Function_has_entry] means that the function [a] has entry [b].
 
+    Unless specified otherwise, these relations are binary relations.
+
     @canonical Gtirb_frontend.Gtirb_graph.relation *)
 type relation =
-  | Self_data
-      (** Self data about a particular UUID. *)
+  | Self_data  (** Self data about a particular UUID. *)
   | Function_has_name
       (** The UUID of a Symbol whose name field contains the name of the
           function.
@@ -48,28 +52,43 @@ type relation =
           references via the Global Offset Table (GOT) used to resolve addresses
           of global variables at runtime. *)
   | Ipcfg
-      (** A control-flow edge in the original GTIRB IPCFG. *)
-  | Control_flow
-      (** {b Ternary relation of [(SRC, TGT, CONTROL_FLOW_KIND)].} May be inter- or intra-procedural. *)
+      (** {b Relation of [(src, tgt, is_cond, is_direct, edge_type)].} This
+          corresponds directly to a control-flow edge in the original GTIRB
+          IPCFG, along with its associated edge label. Edge types are
+          {!Gtirb_proto'.edge_type}. *)
+  | Control_flow_same_proc
+      (** Derived relation between UUIDs if this control-flow is within the same
+          procedure. *)
+  | Control_flow_diff_proc
+      (** Derived relation between UUIDs if this control-flow is {b not} within
+          the same procedure. *)
+[@@deriving show { with_path = false }, enum]
+
+(** A Datalog literal. These can be parsed from a text format, so they can be
+    used in queries. *)
+type literal =
+  | Uuid of UUID.t
+  | Int of int
+  | Bool of bool
+  | Edge_type of Gtirb_proto'.edge_type
 [@@deriving show { with_path = false }]
 
+(** Datalog data value. These are more complex values and cannot be parsed. *)
 type data =
   | Block_data of block_data
   | Symbol_data of symbol_data
   | Function_data of unit
-  | Control_flow_data of Gtirb_proto'.edge_label
 [@@deriving show { with_path = false }]
 
-type literal =
-  | Uuid of UUID.t
-  | Control_flow_kind of [`In_proc | `Out_of_proc]
+(** Symbols used in the Datalog relations *)
+type symbol = Data of data | Literal of literal | Relation of relation
 [@@deriving show { with_path = false }]
 
-(** Symbols used in the Datalog relations, including unary symbols (literals) and relation names. *)
-type symbol =
-  | Data of data
-  | Literal of literal
-  | Relation of relation
-[@@deriving show { with_path = false }]
+let of_string =
+  let relation_of_string =
+    Bincaml_util.Enum.make_of_string ~min:min_relation ~max:max_relation
+      ~of_int:relation_of_enum ~show:show_relation
+  in
+  2
 
 (** {3 Derived functions} *)

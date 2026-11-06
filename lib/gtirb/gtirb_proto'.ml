@@ -61,7 +61,11 @@ type edge_type = EdgeType.t =
   | Type_Return
   | Type_Syscall
   | Type_Sysret
-[@@deriving eq, ord, show { with_path = false }]
+[@@deriving eq, ord, show { with_path = false }, enum]
+
+let edge_type_of_string =
+  Bincaml_util.Enum.make_of_string ~min:min_edge_type ~max:max_edge_type
+    ~of_int:edge_type_of_enum ~show:show_edge_type
 
 type edge_label = EdgeLabel.t = {
   conditional : bool;

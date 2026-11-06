@@ -13,6 +13,7 @@
   extras
   unicode
   var
+  enum
   ID
   types
   bitvec
