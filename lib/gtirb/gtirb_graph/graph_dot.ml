@@ -3,7 +3,9 @@
 open Graph.Graphviz.DotAttributes
 
 let sanitise =
-  String.map (function c when Char.Ascii.is_alphanum c -> c | _ -> '_')
+  String.map (function
+    | c when CCChar.is_letter_ascii c || CCChar.is_digit_ascii c -> c
+    | _ -> '_')
 
 let quote = Printf.sprintf {|%S|}
 let escape = String.escaped
