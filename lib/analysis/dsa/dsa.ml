@@ -386,6 +386,11 @@ let dsa (p : Program.t) =
         (pid, (constraints, make_local_graph proc sva constraints)))
     |> IDMap.of_list
   in
+  (* IDMap.iter *)
+  (*   (fun k (_, g) -> *)
+  (*     print_endline (ID.show k); *)
+  (*     print_endline (Dot.dot_string g)) *)
+  (*   local_graphs; *)
   let bu_graphs =
     Trace_core.with_span ~__FILE__ ~__LINE__ "bottom up phase" @@ fun _ ->
     bottom_up p local_graphs
