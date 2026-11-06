@@ -79,6 +79,8 @@ end
 module DSGraph = Dsgraph
 module Dot = Dot
 
+let pointer_size_bits = 64
+
 (** Determine node flags for a node coming from a specified symbolic base. *)
 let flags_of_base b =
   match b with
@@ -116,7 +118,7 @@ let make_local_graph proc sva
     (fun constr ->
       match constr with
       | Constraint.Mem { addr; value; size } ->
-          let ptrs = add_cells size addr in
+          let ptrs = add_cells pointer_size_bits addr in
           let vals = add_cells size value in
           List.iter (DSGraph.add_pointees vals) ptrs
       | Constraint.Call { lhs; args } -> ())
