@@ -8,7 +8,12 @@ let z_signed_extract = checked_extract Z.signed_extract
 type t = { w : int; v : Z.t }
 (** Representation of bitvector with non-negative Z.t and an explicit size. *)
 
-let show (b : t) = Printf.sprintf "0x%s:bv%d" (Z.format "%x" @@ b.v) b.w
+let show (b : t) =
+  Printf.sprintf "0x%s:bv%d (= %s)"
+    (Z.format "%x" @@ b.v)
+    b.w
+    (Int64.to_string (Z.to_int64_unsigned b.v))
+
 let to_string v = show v
 let pp fmt b = Format.pp_print_string fmt (show b)
 let hash b = Hash.pair Int.hash Z.hash (b.w, b.v)

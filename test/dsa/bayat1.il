@@ -495,7 +495,7 @@ proc @__do_global_dtors_aux()  -> () {  }
      goto (%__do_global_dtors_aux_code);
    ]
 ];
-prog entry @_start { .initial_memory = [ { .address = 0;
+prog entry @main { .initial_memory = [ { .address = 0;
             .bytes = "A#\000\000\000aeabi_feature_and_bits\000\001\000\000\000\001\000\002\000";
             .name = ".ARM.attributes"; .read_only = true; .size = 36 };
         { .address = 568;

@@ -382,6 +382,12 @@ let dsa (p : Program.t) =
           Constraint.gen_constraints p proc
           |> Iter.map (Constraint.map (translate pid) ~per_proc_f:translate)
           |> Iter.persistent
+          |> Iter.map (fun x ->
+              Logs.debug (fun m ->
+                  m "dsa constraint in %s= %s" (ID.show pid)
+                    (Constraint.show Sva.SymAddrSetLattice.show x));
+              x)
+          |> Iter.persistent
         in
         (pid, (constraints, make_local_graph proc sva constraints)))
     |> IDMap.of_list
