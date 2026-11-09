@@ -4,7 +4,7 @@
  (mode promote)
  (deps bayat1.c)
  (action
-  (run ../compile/runmake %{targets} --assume-new=%{deps})))
+  (run ../compile/runmake %{targets})))
 
 (rule
  (targets bayat2.il)
@@ -12,7 +12,7 @@
  (mode promote)
  (deps bayat2.c)
  (action
-  (run ../compile/runmake %{targets} --assume-new=%{deps})))
+  (run ../compile/runmake %{targets})))
 
 (library
  (name dsa_tests)

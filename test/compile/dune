@@ -12,7 +12,7 @@
  (action
   (progn
    (run nix build ".#pac.ddisasm^out" --out-link ddisasm-out)
-   (bash "ln -s `realpath ddisasm-out/bin/ddisasm` ddisasm"))))
+   (bash "ln -s `realpath ddisasm-out/bin/ddisasm` %{target}"))))
 
 (rule
  (target aarch64-unknown-linux-gnu-gcc)
