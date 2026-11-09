@@ -330,6 +330,7 @@ and showBinOp (e : AbsBasilIR.binOp) : showable = match e with
 
 and showUnOp (e : AbsBasilIR.unOp) : showable = match e with
        AbsBasilIR.UnOpBVUnOp bvunop -> s2s "UnOpBVUnOp" >> c2s ' ' >> c2s '(' >> showBVUnOp bvunop >> c2s ')'
+  |    AbsBasilIR.UnOp_not  -> s2s "UnOp_not"
   |    AbsBasilIR.UnOp_boolnot  -> s2s "UnOp_boolnot"
   |    AbsBasilIR.UnOp_intneg  -> s2s "UnOp_intneg"
   |    AbsBasilIR.UnOp_booltobv1  -> s2s "UnOp_booltobv1"
@@ -347,7 +348,8 @@ and showFieldAssign (e : AbsBasilIR.fieldAssign) : showable = match e with
 
 
 and showEqOp (e : AbsBasilIR.eqOp) : showable = match e with
-       AbsBasilIR.EqOp_eq  -> s2s "EqOp_eq"
+       AbsBasilIR.EqOp_equal  -> s2s "EqOp_equal"
+  |    AbsBasilIR.EqOp_eq  -> s2s "EqOp_eq"
   |    AbsBasilIR.EqOp_neq  -> s2s "EqOp_neq"
 
 

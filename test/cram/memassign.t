@@ -1,6 +1,8 @@
 
   $ cat << EOF | bincaml script -
   > (load-il "memassign.il")
+  > (dump-il)
+  > (run-transforms "hindley-milner-elaborate")
   > (dump-il "memout.il")
   > EOF
   (load-il memassign.il)

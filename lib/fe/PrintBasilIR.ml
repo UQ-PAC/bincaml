@@ -477,6 +477,7 @@ and prtBinOp (i:int) (e : AbsBasilIR.binOp) : doc = match e with
 
 and prtUnOp (i:int) (e : AbsBasilIR.unOp) : doc = match e with
        AbsBasilIR.UnOpBVUnOp bvunop -> prPrec i 0 (concatD [prtBVUnOp 0 bvunop])
+  |    AbsBasilIR.UnOp_not  -> prPrec i 0 (concatD [render "not"])
   |    AbsBasilIR.UnOp_boolnot  -> prPrec i 0 (concatD [render "boolnot"])
   |    AbsBasilIR.UnOp_intneg  -> prPrec i 0 (concatD [render "intneg"])
   |    AbsBasilIR.UnOp_booltobv1  -> prPrec i 0 (concatD [render "booltobv1"])
@@ -500,7 +501,8 @@ and prtFieldAssignListBNFC i es : doc = match (i, es) with
   | (_,[x]) -> (concatD [prtFieldAssign 0 x])
   | (_,x::xs) -> (concatD [prtFieldAssign 0 x ; render ";" ; prtFieldAssignListBNFC 0 xs])
 and prtEqOp (i:int) (e : AbsBasilIR.eqOp) : doc = match e with
-       AbsBasilIR.EqOp_eq  -> prPrec i 0 (concatD [render "eq"])
+       AbsBasilIR.EqOp_equal  -> prPrec i 0 (concatD [render "equal"])
+  |    AbsBasilIR.EqOp_eq  -> prPrec i 0 (concatD [render "eq"])
   |    AbsBasilIR.EqOp_neq  -> prPrec i 0 (concatD [render "neq"])
 
 

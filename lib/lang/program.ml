@@ -335,7 +335,7 @@ let decl_typ p binding_name t =
         :: (variants
            |> List.map (function variant, fields ->
                let variant =
-                 p.global_names.decl_or_get (binding_name ^ "::" ^ variant)
+                 p.global_names.decl_or_get (binding_name ^ "#" ^ variant)
                in
                let args = fields in
                let ty = Types.curry args s in

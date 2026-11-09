@@ -357,6 +357,7 @@ and transBinOp (x : binOp) : result = match x with
 
 and transUnOp (x : unOp) : result = match x with
     UnOpBVUnOp bvunop -> failure x
+  | UnOp_not  -> failure x
   | UnOp_boolnot  -> failure x
   | UnOp_intneg  -> failure x
   | UnOp_booltobv1  -> failure x
@@ -374,7 +375,8 @@ and transFieldAssign (x : fieldAssign) : result = match x with
 
 
 and transEqOp (x : eqOp) : result = match x with
-    EqOp_eq  -> failure x
+    EqOp_equal  -> failure x
+  | EqOp_eq  -> failure x
   | EqOp_neq  -> failure x
 
 

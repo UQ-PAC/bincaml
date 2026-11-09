@@ -255,9 +255,9 @@ module BasilASTLoader = struct
     | Decl_Fun (glident, params, _, typ, _) ->
         let bound = unpac_lambdaparen ~bound:StringMap.empty prog params in
         let arg_types = List.map Var.typ bound in
-        let rtype = Types.curry arg_types (trans_type typ) in
+        let func_type = Types.curry arg_types (trans_type typ) in
         let bvar =
-          Var.create (unsafe_unsigil (`Global glident)) ~scope:GlobalConst rtype
+          Var.create (unsafe_unsigil (`Global glident)) ~scope:GlobalConst func_type
         in
         let fundef : Program.declaration =
           Function
@@ -502,7 +502,8 @@ module BasilASTLoader = struct
         prog
 
   and transMapType (x : mapType) : Types.t =
-    match x with MapType1 (t0, _, t1, _) -> Map (trans_type t0, trans_type t1)
+    match x with
+    | MapType1 (valt, _, keyt, _) -> Map (trans_type keyt, trans_type valt)
 
   and transFunType ?(force_map = false) (x : funType) : Types.t =
     match x with
@@ -1402,6 +1403,7 @@ module BasilASTLoader = struct
     match x with
     | UnOpBVUnOp bvunop -> transBVUnOp bvunop
     | UnOp_boolnot -> `BoolNOT
+    | UnOp_not -> `BoolNOT
     | UnOp_intneg -> `INTNEG
     | UnOp_booltobv1 -> `BOOLTOBV1
     | UnOp_gamma -> `Gamma
@@ -1437,7 +1439,8 @@ module BasilASTLoader = struct
     | BVLogicalBinOp_bvsgt -> `BVSGT
     | BVLogicalBinOp_bvsge -> `BVSGE
 
-  and transEqOp (x : eqOp) = match x with EqOp_eq -> `EQ | EqOp_neq -> `NEQ
+  and transEqOp (x : eqOp) =
+    match x with EqOp_eq | EqOp_equal -> `EQ | EqOp_neq -> `NEQ
 
   and transIntBinOp (x : intBinOp) =
     match x with

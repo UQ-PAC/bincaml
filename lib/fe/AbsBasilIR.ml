@@ -247,6 +247,7 @@ and binOp =
 
 and unOp =
    UnOpBVUnOp of bVUnOp
+ | UnOp_not
  | UnOp_boolnot
  | UnOp_intneg
  | UnOp_booltobv1
@@ -261,7 +262,8 @@ and fieldAssign =
    FieldAssign1 of localIdent * expr
 
 and eqOp =
-   EqOp_eq
+   EqOp_equal
+ | EqOp_eq
  | EqOp_neq
 
 and bVUnOp =

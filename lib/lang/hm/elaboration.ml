@@ -8,8 +8,8 @@ open Unification
 open Inference
 open Solve_bv
 
-let retype_var st univ ctx id =
-  lookup_var_typ st ~no_constraint:true univ ctx id
+let retype_var ?(no_constraint=true) st univ ctx id =
+  lookup_var_typ st ~no_constraint univ ctx id
   |> TypeExpr.find st |> to_basil
   |> fun typ -> Var.copy ~typ id
 
@@ -187,6 +187,7 @@ let infer_decl st visit_constraint prog scheme =
         (scheme, `Decl (decl_id, new_def))
     | Function { binding; definition; attrib } -> (
         (* elaboration of var binding *)
+        let scheme = decl_var_typ st global_universe scheme binding in
         let binding s = retype_var st global_universe s binding in
         match definition with
         | Axiom b ->

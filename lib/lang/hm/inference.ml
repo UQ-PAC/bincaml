@@ -45,6 +45,8 @@ let scheme_of_op st ~visit_constraint (gen : ID.generator)
   let fv () = TypeExpr.fix st @@ Var (gen.fresh ~name:"a" ()) in
   match o with
   | `Extract (hi, lo) -> curry_f [ bvunk (fv ()) ] (bv_type (hi - lo))
+  | `EQ -> curry_f [ fv (); fv () ] bool_type
+  | `NEQ -> curry_f [ fv (); fv () ] bool_type
   | `SignExtend bits ->
       let a = fv () in
       let equ = fv () in
@@ -81,7 +83,7 @@ let scheme_of_op st ~visit_constraint (gen : ID.generator)
       curry_f [ a ] a
   | `MapAccess ->
       let key_ty = fv () and val_ty = fv () in
-      let map_ty = fun_type key_ty val_ty in
+      let map_ty = map_type st key_ty val_ty in
       curry_f [ map_ty; key_ty ] val_ty
   | `Load (endian, sz) ->
       let key_ty = fv () and val_ty = bvunk (fv ()) in
@@ -90,11 +92,11 @@ let scheme_of_op st ~visit_constraint (gen : ID.generator)
   | (`Gamma | `Classification | `ToBitvector | `OfBitvector _) as o ->
       failwith @@ "unsupported unary op: " ^ Ops.AllOps.to_string o
   | `ReadField fn ->
-      let k = fv () in
-      let v = fv () in
+      let record = fv () in
+      let field_t = fv () in
       visit_constraint
-      @@ HasField { record = k; field_name = fn; field_type = v };
-      curry_f [ k ] v
+      @@ HasField { record; field_name = fn; field_type = field_t };
+      curry_f [ record ] field_t
   | `WriteField fn ->
       let record = fv () in
       let field_t = fv () in

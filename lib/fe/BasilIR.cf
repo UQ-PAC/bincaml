@@ -266,7 +266,7 @@ rules BinOp ::= "implies" | "get" | BVBinOp | BVLogicalBinOp | IntLogicalBinOp |
 Expr_Binary . Expr2      ::= BinOp OpenParen Expr "," Expr CloseParen ;
 Expr_Assoc  . Expr2      ::= IntrinOp OpenParen [Expr] CloseParen ;
 
-rules UnOp ::= BVUnOp | "boolnot" | "intneg" | "booltobv1" | "gamma" | "classification";
+rules UnOp ::= BVUnOp | "not" | "boolnot" | "intneg" | "booltobv1" | "gamma" | "classification";
 Expr_Unary  . Expr2      ::= UnOp OpenParen Expr CloseParen ;
 
 Expr_LoadBe . Expr2 ::= "load_be" OpenParen IntVal "," Expr "," Expr CloseParen ;
@@ -302,7 +302,7 @@ UpdateRecord . Expr ::= BeginRec Ident "with" [FieldAssign] EndRec;
 
 -- operators
 
-rules EqOp ::= "eq" | "neq" ;
+rules EqOp ::= "equal" | "eq" | "neq" ;
 rules BVUnOp ::= "bvnot" | "bvneg" ;
 rules BVBinOp ::= "bvudiv"|"bvurem"|"bvshl"|"bvlshr"|"bvnand"|"bvnor"
   |"bvxnor"|"bvcomp"|"bvsub"|"bvsdiv"|"bvsrem"|"bvsmod"|"bvashr" ;

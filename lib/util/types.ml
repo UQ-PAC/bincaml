@@ -161,7 +161,7 @@ let rec to_string = function
   | Top -> "⊤"
   | Nothing -> "⊥"
   | Variable name -> name
-  | Map (b, a) -> "(" ^ to_string b ^ "[" ^ to_string a ^ "])"
+  | Map (key, valt) -> "(" ^ to_string valt ^ "[" ^ to_string key ^ "])"
   | Function ((Function _ as a), (Function _ as b)) ->
       "(" ^ "(" ^ to_string a ^ ")" ^ "->" ^ "(" ^ to_string b ^ ")" ^ ")"
   | Function ((Function _ as a), b) ->
