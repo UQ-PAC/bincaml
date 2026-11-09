@@ -58,7 +58,7 @@
      (echo "export DDISASM=")
      (run readlink -f "%{dep:./ddisasm}")
      (echo "exec make \"$@\" -f")
-     (run realpath %{dep:../Makefile})))
+     (run realpath %{dep:./Makefile})))
    (run chmod +x %{target}))))
 
 (alias

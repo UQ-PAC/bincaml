@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+set -eu
+
+project_root="$1"
+runmake="${project_root}/test/compile/runmake"
+
+for f in *.c; do
+  base="$(basename "$f" .c)"
+  cat <<EOF
+(rule
+ (targets $base.il)
+ (deps $f)
+ (enabled_if %{file-available:$runmake})
+ (mode promote)
+ (action
+  (run $runmake %{targets})))
+
+EOF
+done

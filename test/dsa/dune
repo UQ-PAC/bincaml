@@ -1,18 +1,16 @@
-(rule
- (targets bayat1.il)
- (enabled_if %{file-available:../compile/runmake})
- (mode promote)
- (deps bayat1.c)
- (action
-  (run ../compile/runmake %{targets})))
+(include dune.inc)
 
 (rule
- (targets bayat2.il)
- (enabled_if %{file-available:../compile/runmake})
- (mode promote)
- (deps bayat2.c)
+ (deps (glob_files *.c))
  (action
-  (run ../compile/runmake %{targets})))
+(with-stdout-to
+  dune.inc.new
+  (run %{project_root}/test/compile/makedune %{project_root}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff dune.inc dune.inc.new)))
 
 (library
  (name dsa_tests)
