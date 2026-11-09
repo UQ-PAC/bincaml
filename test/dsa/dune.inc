@@ -1,3 +1,7 @@
+(alias (name exe) (deps (glob_files *.exe)))
+(alias (name gtirb) (deps (glob_files *.gtirb)))
+(alias (name il) (deps (glob_files *.il)))
+
 (rule (targets bayat1.exe) (deps bayat1.c) (enabled_if %{file-available:../../test/compile/runmake}) (action (run ../../test/compile/runmake %{targets})))
 (rule (targets bayat1.gtirb) (deps bayat1.exe) (enabled_if %{file-available:../../test/compile/runmake}) (action (run ../../test/compile/runmake %{targets})))
 (rule (targets bayat1.il) (deps bayat1.gtirb) (mode promote) (enabled_if %{file-available:../../test/compile/runmake}) (action (run ../../test/compile/runmake %{targets})))

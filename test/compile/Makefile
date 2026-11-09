@@ -20,7 +20,7 @@ nix.env: $(ROOT)/flake.nix $(ROOT)/flake.lock
 	if [ -n '$(NIX_ENV)' ]; then source '$(NIX_ENV)'; fi ; $$BWRAP --unshare-all \
 	  --ro-bind /nix/store /nix/store --ro-bind $< $< --bind . /out --chdir /out \
 	  --die-with-parent \
-	  $$GCC $< -o $@
+	  $$GCC $< -o $@ -fdiagnostics-color
 
 %.gtirb: %.exe $(NIX_ENV)
 	if [ -n '$(NIX_ENV)' ]; then source '$(NIX_ENV)'; fi ; $$DDISASM $< --ir $@

@@ -5,6 +5,11 @@ set -eu
 project_root="$1"
 runmake="${project_root}/test/compile/runmake"
 
+for ext in exe gtirb il; do
+  echo "(alias (name $ext) (deps (glob_files *.$ext)))"
+done
+echo
+
 for f in *.c; do
   base="$(basename "$f" .c)"
 
