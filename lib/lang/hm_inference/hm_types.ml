@@ -159,6 +159,19 @@ let rec to_basil (t : TypeExpr.t) : Types.t =
   | TypeConstr ([], "top") -> Top
   | TypeConstr ([], "nothing") -> Nothing
   | TypeConstr (ts, o) -> NewType (List.map to_basil ts, o)
+  | RecordConstr (fields, "record") ->
+      let fields = List.map (Pair.map_snd to_basil) fields in
+      Record fields
+  | RecordConstr (fields, "variant") ->
+      let fields =
+        List.map
+          (Pair.map_snd
+          @@ TypeExpr.unfix %> function
+             | TypeConstr (args, "variantcase") -> List.map to_basil args
+             | _ -> failwith "variant with field that is not a constructor???")
+          fields
+      in
+      Variant fields
   | Var o -> NewType ([], ID.to_string o)
 
 let types_universe = "<types>"

@@ -418,8 +418,12 @@ module AllOps = struct
         return l
     | `WriteField _ -> return l
     | `MapAccess ->
-        let m, r = Types.uncurry l in
-        return r
+      (match l with
+        | Map (k, v) -> return v
+        | Function (_, v) ->
+          Logs.warn (fun m -> m "mapaccess on function type %s" (Types.to_string l));
+          return v
+        | _ -> Conflict [(l, "not a map type")])
     | `Load (e, i) -> return (Bitvector i)
     | `IfThen -> return r
 

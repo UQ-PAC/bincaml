@@ -175,7 +175,9 @@ module BasilExpr = struct
             } ) ->
             let binding =
               fill (text ", ")
-                (List.map (fun v -> bracket "(" (Var.pretty v) ")") inner_bound)
+                (List.map
+                   (fun v -> bracket "(" (Var.pretty v ^ newline) ")")
+                   inner_bound)
             in
             let _, rtype = Types.uncurry (Var.typ name) in
             text (Var.name name)

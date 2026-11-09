@@ -69,6 +69,15 @@ let get_adt_maping ctx typ = TMap.find_opt typ ctx.translating
 let get_adt_desc ctx typ = TMap.find typ ctx.adt_for_typ
 let unique_name ctx n = ctx.name_gen.fresh ~name:n () |> ID.name |> ctx.sanitise
 
+let record_field_selector_name ctx typ fname =
+  Option.bind (get_adt_maping ctx typ) @@ fun m ->
+  match m.type_mapping with
+  | Record { fields } ->
+      List.find_opt
+        (function { orig_field } -> String.equal orig_field fname)
+        fields
+  | _ -> None
+
 (** flatten sorts to adts *)
 let rec sort_to_adt ctx datatype =
   match datatype with

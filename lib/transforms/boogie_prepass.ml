@@ -95,7 +95,6 @@ module Builtins = struct
     | `INTNEG -> Prefix "-"
     | `BVConcat -> Infix "++"
     | `IMPLIES -> Infix "==>"
-    | `ReadField s -> Postfix (Printf.sprintf "->%s" s)
     | `Extract (hi, lo) -> Postfix (Printf.sprintf "[%d:%d]" hi lo)
     | `BOOLTOBV1 -> Function "bool_to_bv1"
     | #Ops.AllOps.binary | #Ops.AllOps.unary | #Ops.AllOps.intrin -> Unsup

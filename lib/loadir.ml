@@ -501,7 +501,7 @@ module BasilASTLoader = struct
         (* declarations only: handled by first pass *)
         prog
 
-  and transMapType ?(force_fun = false) (x : mapType) : Types.t =
+  and transMapType (x : mapType) : Types.t =
     match x with MapType1 (t0, _, t1, _) -> Map (trans_type t0, trans_type t1)
 
   and transFunType ?(force_map = false) (x : funType) : Types.t =
@@ -526,8 +526,8 @@ module BasilASTLoader = struct
     match x with
     | TypeIntType inttype -> Integer
     | TypeBoolType booltype -> Boolean
-    | TypeMapType maptype -> transMapType ~force_fun:is_array maptype
-    | TypeFunType funtype -> transFunType funtype
+    | TypeMapType maptype -> transMapType maptype
+    | TypeFunType funtype -> transFunType ~force_map:is_array funtype
     | TypeBVType (BVType1 bvtype) -> transBVTYPE bvtype
     | TypeParen (_, typeT, _) -> trans_type typeT
     | TypeVarType name -> Types.Variable (unsafe_unsigil (`Type name))

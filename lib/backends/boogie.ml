@@ -105,12 +105,16 @@ let pretty_call_args (args : Containers_pp.t list) =
            (List.tl args)))
     (newline_or_spaces 0 ^ text ")")
 
-let pretty_binary_expr (op : Ops.AllOps.binary) (ty1, arg1) (ty2, arg2)
+let pretty_binary_expr types (op : Ops.AllOps.binary) (ty1, arg1) (ty2, arg2)
     (t : Types.t) =
   let open Containers_pp in
   match op with
   | `MapAccess -> arg1 ^ bracket "[" arg2 "]"
   | `WriteField s ->
+      let s =
+        Bincaml_util.Types_datatype.record_field_selector_name types ty1 s
+      in
+      let s = (Option.get_exn_or "no such field" s).selector_name in
       arg1 ^ text "->" ^ bracket "(" (text s ^+ text ":=" ^+ arg2) ")"
   | `Load e ->
       let name =
@@ -129,12 +133,18 @@ let pretty_binary_expr (op : Ops.AllOps.binary) (ty1, arg1) (ty2, arg2)
             (Printf.sprintf "Unsupported binary expr: %s"
                (Ops.AllOps.to_string op)))
 
-let pretty_unary_expr (op : Ops.AllOps.unary) (ty, arg) (rt : Types.t) =
+let pretty_unary_expr types (op : Ops.AllOps.unary) (ty, arg) (rt : Types.t) =
   let open Containers_pp in
   match op with
   | `BOOLTOBV1 -> bracket "(if (" arg ")" ^+ text "then (1bv1) else (0bv1))"
   | `BoolNOT -> bracket "(!(" arg "))"
   | `Old -> bracket "old(" arg ")"
+  | `ReadField s ->
+      let s =
+        Bincaml_util.Types_datatype.record_field_selector_name types ty s
+      in
+      let s = (Option.get_exn_or "no such field" s).selector_name in
+      arg ^ text "->" ^ text s
   | _ -> (
       match Transforms.Boogie_prepass.Builtins.name op [ ty; rt ] with
       | Function name -> text name ^ pretty_call_args [ arg ]
@@ -251,8 +261,9 @@ and pretty_expr_alg types
              (List.map (List.map snd) triggers)
              bound_vars in_body)
         ")"
-  | UnaryExpr { op; arg } -> pretty_unary_expr op arg (type_of e)
-  | BinaryExpr { op; arg1; arg2 } -> pretty_binary_expr op arg1 arg2 (type_of e)
+  | UnaryExpr { op; arg } -> pretty_unary_expr types op arg (type_of e)
+  | BinaryExpr { op; arg1; arg2 } ->
+      pretty_binary_expr types op arg1 arg2 (type_of e)
   | ApplyIntrin { op; args } -> pretty_apply_intrinsic types op args (type_of e)
   | ApplyFun { func; args } -> pretty_apply_function (snd func) args
   | Let _ -> failwith "removed in prepass"
