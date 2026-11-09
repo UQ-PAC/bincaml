@@ -37,35 +37,45 @@ let join_lines_end ls =
   let ls = List.map (fun t -> t ^ text ";") ls in
   append_l ~sep:newline ls
 
-let rec type_to_string (t : Types.t) =
+let rec type_to_string types (t : Types.t) =
   match t with
   | Types.Boolean -> "bool"
   | Types.Integer -> "int"
   | Types.Bitvector i -> String.cat "bv" (Int.to_string i)
   | Types.Map (i, o) ->
-      String.concat "" [ "["; type_to_string i; "]"; type_to_string o ]
+      String.concat ""
+        [ "["; type_to_string types i; "]"; type_to_string types o ]
   | Types.Function (i, o) ->
-      String.concat "" [ "["; type_to_string i; "]"; type_to_string o ]
+      String.concat ""
+        [ "["; type_to_string types i; "]"; type_to_string types o ]
   | Types.Variable s -> s
-  | Types.NewType (vs, s) -> s
-  | Unit | Top | Nothing | Record _ | Variant _ ->
+  | Types.NewType _ | Record _ | Variant _ ->
+      let t = Bincaml_util.Types_datatype.get_datatype types t in
+      datatype_rpos_to_string types t
+  | Unit | Top | Nothing ->
       raise
         (BoogieException (String.cat "Unsupported type" (Types.to_string t)))
 
-let pretty_variable_declaration ?(const = false) (v : Var.t) =
+and datatype_rpos_to_string types (dt : Bincaml_util.Types_datatype.datatype) =
+  match dt with
+  | ADT { name; cases } -> name
+  | Sort { name } -> name
+  | Prim typ -> type_to_string types typ
+
+let pretty_variable_declaration types ?(const = false) (v : Var.t) =
   let open Containers_pp in
   (if const then text "const " else text "var ")
   ^ text (var_name v)
   ^ text ": "
-  ^ text (type_to_string @@ Var.typ v)
+  ^ text (type_to_string types @@ Var.typ v)
 
 let pretty_variable (v : Var.t) =
   let open Containers_pp in
   text (var_name v)
 
-let pretty_variable_typed (v : Var.t) =
+let pretty_variable_typed types (v : Var.t) =
   let open Containers_pp in
-  text (var_name v) ^ text ": " ^ text (type_to_string @@ Var.typ v)
+  text (var_name v) ^ text ": " ^ text (type_to_string types @@ Var.typ v)
 
 let pretty_const (c : Ops.AllOps.const) =
   let open Containers_pp in
@@ -136,7 +146,7 @@ let pretty_unary_expr (op : Ops.AllOps.unary) (ty, arg) (rt : Types.t) =
           @@ Printf.sprintf "Unsupported unary expr: %s"
           @@ Ops.AllOps.to_string op)
 
-let pretty_apply_intrinsic (op : Ops.AllOps.intrin)
+let pretty_apply_intrinsic types (op : Ops.AllOps.intrin)
     (args : (Types.t * Containers_pp.t) list) (t : Types.t) =
   let open Containers_pp in
   match op with
@@ -147,7 +157,7 @@ let pretty_apply_intrinsic (op : Ops.AllOps.intrin)
            ~sep:(newline_or_spaces 1 ^ text "++" ^ newline_or_spaces 1)
            (List.map snd args))
         ")"
-      ^ text ":" ^+ text @@ type_to_string @@ t
+      ^ text ":" ^+ text @@ type_to_string types @@ t
   | `MapUpdate ->
       let args = List.map snd args in
       List.hd args
@@ -214,13 +224,13 @@ and pretty_triggers (triggers : Containers_pp.t list list) =
   |> append_sp
 (* Option.map (Attrib.attrib_pretty Expr.BasilExpr.pretty) attrib |> Option.get_or ~default:(text "MAGIC") *)
 
-and pretty_binding_expr triggers bound in_body =
+and pretty_binding_expr types triggers bound in_body =
   let open Containers_pp in
-  pretty_call_args_no_brackets (List.map pretty_variable_typed bound)
+  pretty_call_args_no_brackets (List.map (pretty_variable_typed types) bound)
   ^+ text "::" ^+ newline_or_spaces 0 ^ pretty_triggers triggers
   ^+ newline_or_spaces 0 ^ snd in_body
 
-and pretty_expr_alg
+and pretty_expr_alg types
     (e : (Types.t * Containers_pp.t) Expr.BasilExpr.abstract_expr) =
   let open Containers_pp in
   match e with
@@ -237,26 +247,27 @@ and pretty_expr_alg
       in
       bracket "("
         (op
-        ^+ pretty_binding_expr
+        ^+ (pretty_binding_expr types)
              (List.map (List.map snd) triggers)
              bound_vars in_body)
         ")"
   | UnaryExpr { op; arg } -> pretty_unary_expr op arg (type_of e)
   | BinaryExpr { op; arg1; arg2 } -> pretty_binary_expr op arg1 arg2 (type_of e)
-  | ApplyIntrin { op; args } -> pretty_apply_intrinsic op args (type_of e)
+  | ApplyIntrin { op; args } -> pretty_apply_intrinsic types op args (type_of e)
   | ApplyFun { func; args } -> pretty_apply_function (snd func) args
   | Let _ -> failwith "removed in prepass"
 
-and pretty_expr e = Expr.BasilExpr.fold_with_type_r pretty_expr_alg e
+and pretty_expr types e =
+  Expr.BasilExpr.fold_with_type_r (pretty_expr_alg types) e
 
-let pretty_function_args (e : Program.e) =
+let pretty_function_args types (e : Program.e) =
   let open Containers_pp in
   match Expr.BasilExpr.unfix2 e with
   | Lambda { bound_vars } ->
-      fill (text "," ^ sp) (List.map pretty_variable_typed bound_vars)
+      fill (text "," ^ sp) (List.map (pretty_variable_typed types) bound_vars)
   | _ -> raise (BoogieException "Unsupported expression as function args")
 
-let pretty_function_body funcname (e : Program.e) =
+let pretty_function_body types funcname (e : Program.e) =
   let open Containers_pp in
   match Expr.BasilExpr.unfix e with
   | Lambda { attrib; op = `Lambda; bound_vars; in_body } ->
@@ -272,7 +283,7 @@ let pretty_function_body funcname (e : Program.e) =
             @@ String.concat "" [ msg; " in "; Expr.BasilExpr.to_string e ]
       in
 
-      (pretty_expr in_body, text @@ type_to_string rt)
+      (pretty_expr types in_body, text @@ type_to_string types rt)
   | _ ->
       raise
         (BoogieException
@@ -280,41 +291,42 @@ let pretty_function_body funcname (e : Program.e) =
               (Var.to_string funcname)
               (Expr.BasilExpr.to_string e)))
 
-let pretty_variant_declaration (variant, decls) =
+let rec pretty_variant_declaration types v =
   let open Containers_pp in
-  let prettyv vs =
-    text variant
+  let { name; selectors } : Bincaml_util.Types_datatype.constructor = v in
+  let pretty_constructor vs =
+    text name
     ^ bracket "("
         (append_l
            ~sep:(text "," ^ sp)
            (List.map
               (fun (fname, ftyp) ->
-                text fname ^ text ":" ^+ text (type_to_string ftyp))
+                text fname ^ text ":"
+                ^+ text (datatype_rpos_to_string types ftyp))
               vs))
         ")"
   in
-  match decls with
-  | [] -> text variant
-  | [ Types.Record vs ] -> prettyv vs
-  | os ->
-      let fields =
-        List.mapi (fun i ft -> (Stdlib.( ^ ) "field" (Int.to_string i), ft)) os
-      in
-      prettyv fields
+  match selectors with [] -> text name | os -> pretty_constructor os
 
-let pretty_type_declaration (binding : string) (typ : Types.t) =
+and pretty_adt_datatype types name cases =
   let open Containers_pp in
-  match typ with
-  | Types.Variant vs ->
-      text "datatype" ^+ text binding
-      ^+ bracket "{" (append_sp (List.map pretty_variant_declaration vs)) "}"
-  | Types.Record _ as vs ->
-      let t = [ (binding, [ vs ]) ] in
-      text "datatype" ^+ text binding
-      ^+ bracket "{" (append_sp (List.map pretty_variant_declaration t)) "}"
-  | _ -> raise (BoogieException "Unsupported type declaration")
+  let cases = List.map (pretty_variant_declaration types) cases in
+  let cases = append_l ~sep:(text "," ^ sp) cases in
+  text "datatype" ^+ text name ^+ bracket "{" cases "}"
 
-let pretty_statement (s : Program.stmt) =
+let pretty_type_declaration types (binding : string) (typ : Types.t) =
+  let open Containers_pp in
+  let dt = Bincaml_util.Types_datatype.get_datatype types typ in
+  let dt = Bincaml_util.Types_datatype.sort_to_adt types dt in
+  match dt with
+  | ADT { name; cases } -> pretty_adt_datatype types name cases
+  | Sort { name; nfields = 0 } -> pretty_adt_datatype types name []
+  | Sort { name; nfields; instantiation } ->
+      failwith "sort should be removed first"
+  | Prim ty ->
+      text "type " ^ text binding ^ text " = " ^ text (type_to_string types ty)
+
+let pretty_statement types (s : Program.stmt) =
   let open Containers_pp in
   let open List.Infix in
   match s with
@@ -331,7 +343,8 @@ let pretty_statement (s : Program.stmt) =
         else text ""
       in
       let rhs =
-        List.map pretty_expr args |> fill (text "," ^ newline_or_spaces 1)
+        List.map (pretty_expr types) args
+        |> fill (text "," ^ newline_or_spaces 1)
       in
       nest 2 @@ text "call" ^+ lhs
       ^ Stmt.Intrinsic.to_pretty name
@@ -344,12 +357,16 @@ let pretty_statement (s : Program.stmt) =
         |> fill (text "," ^ newline_or_spaces 1)
       in
       let rhs =
-        ls >|= compose snd pretty_expr |> fill (text "," ^ newline_or_spaces 1)
+        ls
+        >|= compose snd (pretty_expr types)
+        |> fill (text "," ^ newline_or_spaces 1)
       in
       nest 2 @@ lhs ^+ text ":=" ^+ rhs
   | Instr_Assert { attrib; body } ->
-      text "assert" ^ pretty_attribute_map ".boogie" attrib ^+ pretty_expr body
-  | Instr_Assume { body; branch } -> text "assume" ^+ pretty_expr body
+      text "assert"
+      ^ pretty_attribute_map ".boogie" attrib
+      ^+ pretty_expr types body
+  | Instr_Assume { body; branch } -> text "assume" ^+ pretty_expr types body
   | Instr_Call { lhs; procid; args } ->
       let name = ID.name procid in
       let lhs =
@@ -362,7 +379,7 @@ let pretty_statement (s : Program.stmt) =
       in
       let rhs =
         StringMap.bindings args
-        |> List.map (compose snd pretty_expr)
+        |> List.map (compose snd (pretty_expr types))
         |> fill (text "," ^ newline_or_spaces 1)
       in
       nest 2 @@ text "call" ^+ lhs ^ proc_name name ^ bracket "(" rhs ")"
@@ -393,20 +410,23 @@ let pretty_terminator (p : Program.proc) (i : IDSet.elt)
           text "goto" ^+ fill (text "," ^ sp) succ)
   | _ -> failwith "no procedure graph"
 
-let pretty_block (p : Program.proc) (i : IDSet.elt) (b : Procedure.Edge.block) =
+let pretty_block types (p : Program.proc) (i : IDSet.elt)
+    (b : Procedure.Edge.block) =
   let open Containers_pp in
   let name = block_name (Procedure.Vert.Begin i) in
-  let stmts = Block.stmts_iter b |> Iter.map pretty_statement |> Iter.to_list in
+  let stmts =
+    Block.stmts_iter b |> Iter.map (pretty_statement types) |> Iter.to_list
+  in
   let terminator = [ pretty_terminator p i b ] in
   let body = stmts @ terminator |> join_lines in
   name ^ text ":" ^/ body |> nest 2
 
-let pretty_procedure_header (s : string) (p : Program.proc) =
+let pretty_procedure_header types (s : string) (p : Program.proc) =
   let open Containers_pp in
   let open Containers_pp.Infix in
   let param_list sm =
     StringMap.bindings sm
-    |> List.map (function i, p -> pretty_variable_typed p)
+    |> List.map (function i, p -> pretty_variable_typed types p)
     |> fill (text "," ^ newline_or_spaces 1)
   in
   let in_params = Procedure.formal_in_params p in
@@ -440,29 +460,30 @@ let pretty_expr_attribs e =
     sp ^ pretty_attribute_map ".boogie" attrib
   else text ""
 
-let pretty_ensures (p : Program.proc) =
+let pretty_ensures types (p : Program.proc) =
   let open Containers_pp in
   let spec = Procedure.specification p in
   spec.ensures
-  |> List.map (fun s -> text "ensures" ^ pretty_expr_attribs s ^+ pretty_expr s)
+  |> List.map (fun s ->
+      text "ensures" ^ pretty_expr_attribs s ^+ pretty_expr types s)
 
-let pretty_requires (p : Program.proc) =
+let pretty_requires types (p : Program.proc) =
   let open Containers_pp in
   let spec = Procedure.specification p in
   spec.requires
   |> List.map (fun s ->
-      text "requires" ^ pretty_expr_attribs s ^+ pretty_expr s)
+      text "requires" ^ pretty_expr_attribs s ^+ pretty_expr types s)
 
-let pretty_procedure_spec (p : Program.proc) =
+let pretty_procedure_spec types (p : Program.proc) =
   let open Containers_pp in
   let open Containers_pp.Infix in
-  let header = pretty_procedure_header "procedure" p in
+  let header = pretty_procedure_header types "procedure" p in
   let modifies = pretty_modifies p in
-  let ensures = pretty_ensures p in
-  let requires = pretty_requires p in
+  let ensures = pretty_ensures types p in
+  let requires = pretty_requires types p in
   nest 2 @@ join_lines_end ([ header ] @ modifies @ ensures @ requires)
 
-let pretty_procedure_impl (p : Program.proc) =
+let pretty_procedure_impl types (p : Program.proc) =
   let open Containers_pp in
   let open Containers_pp.Infix in
   let in_params = Procedure.formal_in_params p in
@@ -472,47 +493,47 @@ let pretty_procedure_impl (p : Program.proc) =
     |> List.filter (fun (k, v) ->
         (Option.is_none @@ StringMap.get k in_params)
         && (Option.is_none @@ StringMap.get k out_params))
-    |> List.map (fun (k, v) -> pretty_variable_declaration v)
+    |> List.map (fun (k, v) -> pretty_variable_declaration types v)
     |> join_lines_end
   in
   let blocks =
     Procedure.iter_blocks_topo_fwd p
-    |> Iter.map (fun (i, b) -> pretty_block p i b)
+    |> Iter.map (fun (i, b) -> pretty_block types p i b)
     |> Iter.to_list |> join_lines_end
   in
-  let header = pretty_procedure_header "implementation" p in
+  let header = pretty_procedure_header types "implementation" p in
   let body = local_decls ^/ blocks in
   header ^+ surround ~width:2 (text "{") (newline ^ body) (newline ^ text "}")
 
-let pretty_procedure (p : Program.proc) =
+let pretty_procedure types (p : Program.proc) =
   let open Containers_pp in
   append_nl
-  @@ [ pretty_procedure_spec p ]
+  @@ [ pretty_procedure_spec types p ]
   @
   if negate List.is_empty @@ Procedure.blocks_to_list p then
-    [ pretty_procedure_impl p ]
+    [ pretty_procedure_impl types p ]
   else []
 
-let pretty_declaration (d : Program.declaration) =
+let pretty_declaration types (d : Program.declaration) =
   let open Containers_pp in
   let open Containers_pp.Infix in
   match d with
   | Variable { binding; attrib } ->
-      pretty_variable_declaration binding ^ text ";"
+      pretty_variable_declaration types binding ^ text ";"
   | Function { binding; attrib; definition = Function t } ->
-      let func_body, return_type = pretty_function_body binding t in
+      let func_body, return_type = pretty_function_body types binding t in
       text "function"
       ^+ pretty_attribute_map ".boogie" attrib
       ^+ (function_name @@ binding)
-      ^ bracket "(" (pretty_function_args t) ")"
+      ^ bracket "(" (pretty_function_args types t) ")"
       ^+ text "returns"
       ^+ bracket "(" return_type ")"
       ^+ surround ~width:2 (text "{") (newline ^ func_body) (newline ^ text "}")
   | Function { binding; attrib; definition = Axiom t } ->
-      fill sp [ text "axiom"; bracket "(" (pretty_expr t) ")" ] ^ text ";"
+      fill sp [ text "axiom"; bracket "(" (pretty_expr types t) ")" ] ^ text ";"
   | Function { binding; attrib; definition = Uninterpreted }
     when List.is_empty (fst @@ Types.uncurry (Var.typ binding)) ->
-      pretty_variable_declaration ~const:true binding ^ text ";"
+      pretty_variable_declaration types ~const:true binding ^ text ";"
   | Function { binding; attrib; definition = Uninterpreted } ->
       let param, rt = Types.uncurry (Var.typ binding) in
       text "function"
@@ -521,20 +542,33 @@ let pretty_declaration (d : Program.declaration) =
       ^ bracket "("
           (fill
              (text "," ^ sp)
-             (List.map (fun t -> text @@ type_to_string t) param))
+             (List.map (fun t -> text @@ type_to_string types t) param))
           ")"
-      ^ bracket " returns (" (text (type_to_string rt)) ")"
+      ^ bracket " returns (" (text (type_to_string types rt)) ")"
       ^ text ";"
-  | Type { binding; typ } -> pretty_type_declaration binding typ
-  | Procedure { definition } -> pretty_procedure definition
+  | Type { binding; typ } -> pretty_type_declaration types binding typ
+  | Procedure { definition } -> pretty_procedure types definition
   | Implicit _ -> failwith "cannot generate implicit"
+
+let ltype ctx binding ty =
+  let ctx, _ = Bincaml_util.Types_datatype.decl_datatype ctx binding ty in
+  ctx
 
 let pretty_program (p : Program.t) =
   let open Containers_pp in
+  let types =
+    Program.declarations p
+    |> Iter.fold
+         (fun ctx (_, decl) ->
+           match decl with
+           | Program.Type { binding; typ } -> ltype ctx binding typ
+           | _ -> ctx)
+         (Bincaml_util.Types_datatype.empty_context ())
+  in
   let glob_vars_funs, rest =
     Program.declarations p |> Iter.map snd |> Iter.to_list
     |> List.partition_filter_map (fun d ->
-        let p = pretty_declaration d in
+        let p = pretty_declaration types d in
         match d with
         | Variable _ | Function _ | Type _ -> `Left p
         | Implicit _ -> `Drop

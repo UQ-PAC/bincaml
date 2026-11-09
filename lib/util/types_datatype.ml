@@ -67,11 +67,39 @@ let empty_context ?sanitise () =
 
 let get_adt_maping ctx typ = TMap.find_opt typ ctx.translating
 let get_adt_desc ctx typ = TMap.find typ ctx.adt_for_typ
+let unique_name ctx n = ctx.name_gen.fresh ~name:n () |> ID.name |> ctx.sanitise
+
+(** flatten sorts to adts *)
+let rec sort_to_adt ctx datatype =
+  match datatype with
+  | Sort { name; nfields; instantiation } ->
+      let name = unique_name ctx name in
+      let instantiation = List.map (sort_to_adt ctx) instantiation in
+      let selectors =
+        List.mapi
+          (fun ind ty ->
+            ( unique_name ctx @@ Printf.sprintf "%s_%s_sort_arg%d" name name ind,
+              ty ))
+          instantiation
+      in
+      let cstr : constructor = { name; selectors } in
+      ADT { name; cases = [ cstr ] }
+  | Prim _ -> datatype
+  | ADT { name; cases } ->
+      let cases =
+        cases
+        |> List.map (function { name; selectors } ->
+            {
+              name;
+              selectors = List.map (Pair.map_snd (sort_to_adt ctx)) selectors;
+            })
+      in
+      ADT { name; cases }
 
 (** put a datatype declaration in the context, assuming it has never been
     declared before *)
 let rec desc_datatype ctx binding_name (ty : Types.t) =
-  let name_uniq n = ctx.name_gen.fresh ~name:n () |> ID.name |> ctx.sanitise in
+  let name_uniq n = unique_name ctx n in
   match ty with
   | Types.NewType (args, name) ->
       let name =

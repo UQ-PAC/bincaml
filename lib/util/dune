@@ -15,7 +15,7 @@
   var
   ID
   types
-  type_datatype
+  types_datatype
   bitvec
   zint
   smt
