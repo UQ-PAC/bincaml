@@ -7,14 +7,11 @@ runmake="${project_root}/test/compile/runmake"
 
 for f in *.c; do
   base="$(basename "$f" .c)"
-  cat <<EOF
-(rule
- (targets $base.il)
- (deps $f)
- (enabled_if %{file-available:$runmake})
- (mode promote)
- (action
-  (run $runmake %{targets})))
 
-EOF
+  tail="(enabled_if %{file-available:$runmake}) (action (run $runmake %{targets})))"
+
+  echo "(rule (targets $base.exe) (deps $base.c) $tail"
+  echo "(rule (targets $base.gtirb) (deps $base.exe) $tail"
+  echo "(rule (targets $base.il) (deps $base.gtirb) (mode promote) $tail"
+  echo
 done

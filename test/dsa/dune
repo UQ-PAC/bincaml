@@ -1,11 +1,12 @@
 (include dune.inc)
 
 (rule
- (deps (glob_files *.c))
+ (deps
+  (glob_files *.c))
  (action
-(with-stdout-to
-  dune.inc.new
-  (run %{project_root}/test/compile/makedune %{project_root}))))
+  (with-stdout-to
+   dune.inc.new
+   (run %{project_root}/test/compile/makedune %{project_root}))))
 
 (rule
  (alias runtest)
