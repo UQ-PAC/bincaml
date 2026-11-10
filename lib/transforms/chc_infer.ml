@@ -168,7 +168,7 @@ end
 let encode_expr (enc : Encoder.t) (e : BasilExpr.t) : Sexp.t =
   let sub v = Some (BasilExpr.rvar (Encoder.lookup enc v)) in
   let renamed = BasilExpr.substitute sub e in
-  Expr_smt.SMTLib2.of_bexpr renamed
+  Expr_smt.SMTLib2.sexp_of_bexpr renamed
 
 type block_succs = { blocks : ID.t list; returns : bool }
 (** Successors of a block, separated into block-local jumps and procedure return
@@ -482,7 +482,7 @@ let all_predicates (preds : proc_predicates) : predicate list =
     [requires] is empty, yielding an unconditional entry fact. *)
 let entry_fact_for (proc : Program.proc) (enter : predicate) : clause =
   let requires = (Procedure.specification proc).requires in
-  let premises = List.map Expr_smt.SMTLib2.of_bexpr requires in
+  let premises = List.map Expr_smt.SMTLib2.sexp_of_bexpr requires in
   let args = List.map var_atom enter.params in
   { vars = enter.params; premises; head = Some (apply_predicate enter args) }
 
@@ -496,7 +496,7 @@ let postcondition_queries (proc : Program.proc) (exit : predicate) : clause list
   let exit_app = apply_predicate exit args in
   List.map
     (fun e ->
-      let body = Expr_smt.SMTLib2.of_bexpr e in
+      let body = Expr_smt.SMTLib2.sexp_of_bexpr e in
       {
         vars = exit.params;
         premises = [ exit_app; SmtExpr.bool_not body ];
