@@ -1323,7 +1323,9 @@ module BasilASTLoader = struct
         in
         BasilExpr.field_read ~field:fname (trans_expr record)
     | VariantConstr (typeName, variant, bi, fields, ei) ->
-        let f = BasilExpr.rvar @@ lookup_constructor p_st variant in
+        let f = lookup_constructor p_st variant in
+        print_endline @@ Types.to_string (Var.typ f);
+        let f =  BasilExpr.rvar @@ f in
         BasilExpr.apply_fun ~func:f (List.map trans_expr fields)
     | RecordConstr (bi, fields, ei) ->
         let fields = List.map (trans_field_assign trans_expr) fields in

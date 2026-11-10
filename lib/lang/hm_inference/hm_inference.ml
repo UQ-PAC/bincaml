@@ -12,7 +12,7 @@ open TypeExpr
 *)
 let type_applied (funtype : Types.t) (args : Types.t list) =
   let st = create_state () in
-  let rt = TypeExpr.fix st @@ Var (st.gen.fresh ~name:"ret" ()) in
+  let rt = TypeExpr.Constructors.tvar_fresh st "ret" in
   let args = List.map (Hm_types.ty_of_basil st) args in
 
   let funt = Hm_types.curry_f st args rt in

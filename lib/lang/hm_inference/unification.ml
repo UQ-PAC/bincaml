@@ -29,7 +29,6 @@ let occurs_in a b =
 (** Type unification.*)
 let rec unify st ?(pos = Lexing.dummy_pos) t t' =
   let fix, find = (TypeExpr.fix st, TypeExpr.find st) in
-
   Logs.debug (fun m ->
       m "%s"
         ("unify: " ^ Hm_types.plpos pos ^ " "
@@ -46,6 +45,8 @@ let rec unify st ?(pos = Lexing.dummy_pos) t t' =
   | _, Var x -> unify st ~pos:[%here] t' t
   | TypeConstr (ars, n), TypeConstr (ars', n') when not (String.equal n n') ->
       type_error st t t'
+  | RecordConstr (_, n), RecordConstr (_, n') when not (String.equal n n') ->
+      type_error st t t'
   | TypeConstr (ars, n), TypeConstr (ars', n')
     when List.length ars <> List.length ars' ->
       type_error st t t'
@@ -55,15 +56,17 @@ let rec unify st ?(pos = Lexing.dummy_pos) t t' =
       TypeConstr ([ (Var v as vr) ], "bv") ) ->
       (* prioritise bitvec consts *)
       let v = TypeExpr.merge st (fun _ c -> c) (fix vr) (fix cst) in
-      fix @@ TypeConstr ([ v ], "bv")
+      TypeExpr.Constructors.make_type st [ v ] "bv"
   | TypeConstr (ars, n), TypeConstr (ars', n') ->
       let args =
         List.combine ars ars'
         |> List.map (fun (a, b) -> unify st ~pos:[%here] (fix a) (fix b))
       in
-      TypeExpr.merge st (fun a b -> TypeConstr (args, n)) t t'
+      TypeExpr.merge st
+        (fun a b -> TypeExpr.unfix @@ TypeExpr.Constructors.make_type st args n)
+        t t'
   | RecordConstr _, TypeConstr _ | TypeConstr _, RecordConstr _ ->
-      type_error st t t'
+      type_error ~msg:"typeconstr incompat with record type constr" st t t'
   | RecordConstr (ars, n), RecordConstr (ars', n') ->
       if
         not
@@ -71,19 +74,23 @@ let rec unify st ?(pos = Lexing.dummy_pos) t t' =
           |> List.for_all (Pair.map_same fst %> Fun.uncurry String.equal))
       then type_error st ~msg:"record fields differ in name" t t'
       else
+        let flds = List.map fst ars in
         let args =
           List.combine ars ars'
           |> List.map (Pair.map_same snd)
           |> List.map (fun (a, b) -> unify st ~pos:[%here] (fix a) (fix b))
         in
-        TypeExpr.merge st (fun a b -> TypeConstr (args, n)) t t'
+        let args = List.combine flds args in
+        TypeExpr.merge st
+          (fun a b ->
+            TypeExpr.unfix @@ TypeExpr.Constructors.make_record_type st args n)
+          t t'
 
 (** instantiate typescheme for a single type-annotated variable *)
 let inst_annot_v st ?(no_constraint = false) v =
   let ty =
     match (no_constraint, Var.typ v) with
-    | true, _ | _, Nothing ->
-        TypeExpr.fix st @@ Var (st.gen.fresh ~name:(Var.name v) ())
+    | true, _ | _, Nothing -> TypeExpr.Constructors.tvar_fresh st (Var.name v)
     | _, o -> Hm_types.ty_of_basil st o
   in
   ty

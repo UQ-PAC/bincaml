@@ -17,7 +17,6 @@ module AbsTypingExpr = struct
     | E of (const, Var.t, unary, binary, intrin, TypeExpr.t, t) AbstractExpr.t
   [@@unboxed] [@@deriving eq, ord]
 
-  let top_typ = top_t
   let fix i = E i
   let unfix i = match i with E i -> i
 
@@ -42,7 +41,7 @@ let infer_var st univ ctx id =
 let scheme_of_op st ~visit_constraint (gen : ID.generator)
     (o : [ Ops.AllOps.const | Ops.AllOps.unary | Ops.AllOps.binary ]) =
   let open (val Hm_types.smart_constructors st) in
-  let fv () = TypeExpr.fix st @@ Var (gen.fresh ~name:"a" ()) in
+  let fv () = TypeExpr.Constructors.tvar_fresh st "a" in
   match o with
   | `Extract (hi, lo) -> curry_f [ bvunk (fv ()) ] (bv_type (hi - lo))
   | `EQ -> curry_f [ fv (); fv () ] bool_type
@@ -83,7 +82,7 @@ let scheme_of_op st ~visit_constraint (gen : ID.generator)
       curry_f [ a ] a
   | `MapAccess ->
       let key_ty = fv () and val_ty = fv () in
-      let map_ty = map_type st key_ty val_ty in
+      let map_ty = map_type key_ty val_ty in
       curry_f [ map_ty; key_ty ] val_ty
   | `Load (endian, sz) ->
       let key_ty = fv () and val_ty = bvunk (fv ()) in
@@ -107,15 +106,24 @@ let scheme_of_op st ~visit_constraint (gen : ID.generator)
 (** return the generic type scheme of an intrinsic operation *)
 let scheme_of_intrin st ?(visit_constraint = fun a -> ()) (gen : ID.generator)
     (o : Ops.AllOps.intrin) args =
-  let fv () = TypeExpr.fix st @@ Var (gen.fresh ~name:"a" ()) in
+  let open (val Hm_types.smart_constructors st) in
+  let fv () = TypeExpr.Constructors.tvar_fresh st "a" in
   match o with
   | `BVADD | `BVMUL | `BVOR | `BVXOR | `BVAND ->
       let a = fv () in
-      curry_f st (List.init args (fun _ -> a)) a
+      curry_f (List.init args (fun _ -> a)) a
   | `RecordConstr fnames ->
       let argt = List.map (fun fname -> (fname, fv ())) fnames in
-      let rt = record_type st argt in
-      curry_f st (List.map snd argt) rt
+      let rt = record_type argt in
+      List.iter
+        (fun (fname, fld) ->
+          visit_constraint
+          @@ HasField { record = rt; field_name = fname; field_type = fld })
+        argt;
+      let t = curry_f (List.map snd argt) rt in
+      print_endline "typexpr";
+      print_endline (TypeExpr.to_string t);
+      t
   | `BVConcat ->
       let args = List.init args (fun _ -> fv ()) in
       let rs =
@@ -126,22 +134,21 @@ let scheme_of_intrin st ?(visit_constraint = fun a -> ()) (gen : ID.generator)
             equ)
           args
       in
-      let rs = bvunk st rs in
-      let args = List.map (bvunk st) args in
-      curry_f st args rs
-  | `OR | `AND ->
-      curry_f st (List.init args (fun _ -> bool_type st)) (bool_type st)
+      let rs = bvunk rs in
+      let args = List.map bvunk args in
+      curry_f args rs
+  | `OR | `AND -> curry_f (List.init args (fun _ -> bool_type)) bool_type
   | `MapUpdate ->
       let a = fv () in
       let b = fv () in
-      let m = curry_f st [ a ] b in
-      curry_f st [ m; a; b ] m
+      let m = curry_f [ a ] b in
+      curry_f [ m; a; b ] m
   | `IfThenElse ->
       let br = fv () in
-      curry_f st [ bool_type st; br; br ] br
+      curry_f [ bool_type; br; br ] br
   | `Cases ->
       let a = fv () in
-      curry_f st (List.init args (fun _ -> a)) a
+      curry_f (List.init args (fun _ -> a)) a
 
 let do_infer st ~visit_constraint
     (infer :
@@ -150,6 +157,7 @@ let do_infer st ~visit_constraint
       Program.e ->
       scheme TypeExpr.TCtx.t ->
       AbsTypingExpr.t) univ hr e c : AbsTypingExpr.t =
+  let open (val Hm_types.smart_constructors st) in
   let unify = Unification.unify st
   and curry_f = Hm_types.curry_f st
   and scheme_of_op = scheme_of_op st
@@ -157,7 +165,7 @@ let do_infer st ~visit_constraint
   and gen = st.gen in
 
   let mkv v = TypeExpr.V.of_var univ v in
-  let r = TypeExpr.fix st @@ Var (st.gen.fresh ()) in
+  let r = TypeExpr.Constructors.tvar_fresh st "r" in
   let open Abstract_expr.AbstractExpr in
   let e = Expr.BasilExpr.unfix e in
   let e = set_typ e r in
@@ -175,7 +183,7 @@ let do_infer st ~visit_constraint
       let typ =
         match op with
         | `Lambda -> curry_f (List.map snd tvars) (getty bdty)
-        | `Forall | `Exists -> unify (getty bdty) (bool_type st)
+        | `Forall | `Exists -> unify (getty bdty) bool_type
       in
       ignore @@ unify r (curry_f (List.map snd tvars) (getty bdty));
       let triggers =
@@ -260,7 +268,7 @@ let rec cata alg e = (unfix %> AbstractExpr.map (cata alg) %> alg) e
 let infer_phi st visit_constraint univ ctx (p : Var.t Block.phi list) =
   let infer = infer st visit_constraint in
   let open Block in
-  let r = TypeExpr.fix st @@ Var (st.gen.fresh ()) in
+  let r = TypeExpr.Constructors.tvar_fresh st "r" in
   List.fold_left
     (fun acc { lhs; rhs } ->
       let lhs = infer [%here] ~univ (Expr.BasilExpr.rvar lhs) ctx in
@@ -280,10 +288,12 @@ let ctx_to_string ctx =
       Printf.sprintf "%s %s" (TypeExpr.V.to_string a) (scheme_to_string b))
 
 let fresh_tvar st ?(n = "a") () =
-  TypeExpr.fix st @@ Var (st.gen.fresh ~name:n ())
+  let r = TypeExpr.Constructors.tvar_fresh st n in
+  r
 
 let do_infer_stmt st visit_constraint p univ ctx stmt =
   let open Stmt in
+  let open (val Hm_types.smart_constructors st) in
   let infer_ty h e = infer_expr st visit_constraint ~univ h e ctx
   and infer = infer st visit_constraint
   and unify = unify st in
@@ -293,11 +303,11 @@ let do_infer_stmt st visit_constraint p univ ctx stmt =
   | Instr_IntrinCall _ -> failwith "intrin unsupported"
   | Instr_Assume { body; branch; attrib } ->
       let body = infer_ty [%here] body in
-      ignore @@ unify (bool_type st) (getty body);
+      ignore @@ unify bool_type (getty body);
       Instr_Assume { body; branch; attrib }
   | Instr_Assert { body; attrib } ->
       let body = infer_ty [%here] body in
-      ignore @@ unify (bool_type st) (getty body);
+      ignore @@ unify bool_type (getty body);
       Instr_Assert { body; attrib }
   | Instr_Assign { al = ls; attrib } ->
       let ls = List.map (fun (l, r) -> (l, infer_ty [%here] r)) ls in
@@ -332,7 +342,7 @@ let do_infer_stmt st visit_constraint p univ ctx stmt =
       Instr_Call { lhs; procid; args; attrib }
   | Instr_IndirectCall { target; attrib } ->
       let target = infer_ty [%here] target in
-      ignore @@ unify (getty target) (ptr_typ st);
+      ignore @@ unify (getty target) ptr_typ;
       Instr_IndirectCall { target; attrib }
   | Instr_Load { lhs; rhs; addr = Scalar; attrib } ->
       let lhs' = infer_ty [%here] (Expr.BasilExpr.rvar lhs) in
@@ -341,13 +351,13 @@ let do_infer_stmt st visit_constraint p univ ctx stmt =
       Instr_Load { lhs; rhs; addr = Scalar; attrib }
   | Instr_Load { lhs; rhs; addr = Addr { addr; size; endian }; attrib } ->
       let addr = infer_ty [%here] addr in
-      let _ = unify (ptr_typ st) (getty addr) in
-      let mapt = fun_type st (getty addr) (fresh_tvar st ()) in
+      let _ = unify ptr_typ (getty addr) in
+      let mapt = fun_type (getty addr) (fresh_tvar st ()) in
       let _ = unify (lookup_var_typ st univ ctx rhs) mapt in
       let _ =
         unify
           (infer_ty [%here] (Expr.BasilExpr.rvar lhs) |> getty)
-          (bv_type st size)
+          (bv_type size)
       in
       Instr_Load { lhs; rhs; addr = Addr { addr; size; endian }; attrib }
   | Instr_Store { lhs; rhs; value; addr = Scalar; attrib } ->
@@ -362,12 +372,12 @@ let do_infer_stmt st visit_constraint p univ ctx stmt =
   | Instr_Store { lhs; rhs; value; addr = Addr { addr; size; endian }; attrib }
     ->
       let addr = infer_ty [%here] addr in
-      let _ = unify (ptr_typ st) (getty addr) in
-      let mapt = fun_type st (getty addr) ((fresh_tvar st) ()) in
+      let _ = unify ptr_typ (getty addr) in
+      let mapt = fun_type (getty addr) ((fresh_tvar st) ()) in
       let _ = unify mapt (infer ~univ [%here] (Expr.BasilExpr.rvar lhs) ctx) in
       let _ = unify (lookup_var_typ st univ ctx rhs) mapt in
       let value = infer_ty [%here] value in
-      let _ = unify (getty value) (bv_type st size) in
+      let _ = unify (getty value) (bv_type size) in
       Instr_Store
         { lhs; rhs; value; addr = Addr { addr; size; endian }; attrib }
 

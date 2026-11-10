@@ -7,10 +7,10 @@ open Hm_types
 open Unification
 open Inference
 open Solve_bv
+open TypeExpr.Constructors
 
-let retype_var ?(no_constraint=true) st univ ctx id =
-  lookup_var_typ st ~no_constraint univ ctx id
-  |> TypeExpr.find st |> to_basil
+let retype_var ?(no_constraint = true) st univ ctx id =
+  lookup_var_typ st ~no_constraint univ ctx id |> TypeExpr.find st |> to_basil
   |> fun typ -> Var.copy ~typ id
 
 let elaborate_phi st univ ctx (p : Var.t Block.phi list) =

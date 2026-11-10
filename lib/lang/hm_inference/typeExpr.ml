@@ -51,8 +51,7 @@ end
 
 type t = nt UnionFind.elem Fix.HashCons.cell
 (** Union find and hash-consing type for representing type expressions. *)
-
-and nt = T of t ATyp.expr  (** TODO: what is `nt` mean? *)
+and nt = T of t ATyp.expr [@@unboxed]
 
 let equal = Fix.HashCons.equal
 let compare = Fix.HashCons.compare
@@ -136,3 +135,80 @@ Bincaml_util.Recursionscheme.Recursion (struct
   let unfix = unfix
   let map_expr = ATyp.map_expr
 end)
+
+
+(** Recursion algebra for printing types *)
+let printer_alg = function
+  | ATyp.Var e -> "tvar:" ^ ID.to_string e
+  | TypeConstr ([ l ], e) -> l ^ " " ^ e
+  | TypeConstr ([ a; b ], "->") -> a ^ " -> " ^ b
+  | TypeConstr ([], e) -> e
+  | TypeConstr (ls, e) ->
+      List.to_string ~start:"(" ~stop:")" ~sep:"," Fun.id ls ^ " " ^ e
+  | RecordConstr (ls, e) ->
+      List.to_string ~start:"{" ~stop:"}" ~sep:";"
+        (Pair.to_string ~sep:":" Fun.id Fun.id)
+        ls
+      ^ " " ^ e
+let to_string t = cata printer_alg t
+
+
+module Constructors = struct
+  let fix = fix
+
+
+  (** variables *)
+  let tvar_existing st name = fix st (Var (st.gen.decl_or_get name))
+  let tvar_fresh st name =   fix st (Var (st.gen.fresh ~name ()))
+
+
+  (** Function type, takes two arguments: we always curry. *)
+  let fun_type st a b = fix st (TypeConstr ([ a; b ], "->"))
+
+  (** A type representing a number *)
+  let nat_val_type st i =
+    let num = fix st (ATyp.TypeConstr ([], Int.to_string i)) in
+    fix st (TypeConstr ([ num ], "ℕ"))
+
+  (** A bitvector type parametric in its width *)
+  let bv_type st i = fix st (TypeConstr ([ nat_val_type st i ], "bv"))
+
+  (** Bitvector of arbitrary size *)
+  let bvunk st i = fix st (TypeConstr ([ i ], "bv"))
+
+  (** {2 Primitive types} *)
+
+  let map_type st k v = fix st (TypeConstr ([ k; v ], "map"))
+  let record_type st args = fix st (RecordConstr (args, "<record>"))
+
+  (** represent variants as a product of their cases *)
+  let variant_type st variants =
+    let tuple_type st args = fix st (TypeConstr (args, "variantcase")) in
+    let vs =
+      List.map (fun (vname, args) -> (vname, tuple_type st args)) variants
+    in
+    fix st (RecordConstr (vs, "<variant>"))
+
+  let newtype st args name =
+    assert (not @@ String.equal name "map") ;
+    assert (not @@ String.equal name "<record>") ;
+    assert (not @@ String.equal name "<variant>") ;
+    assert (not @@ String.equal name "<bv>") ;
+    assert (not @@ String.equal name "->") ;
+    assert (not @@ String.equal name "variantcase") ;
+    fix st (TypeConstr (args, name))
+
+  let make_type st args name =
+    fix st (TypeConstr (args, name))
+
+  let make_record_type st args name =
+    fix st (RecordConstr (args, name))
+
+  let int_type st = fix st (TypeConstr ([], "int"))
+  let bool_type st = fix st (TypeConstr ([], "bool"))
+  let unit_t st = fix st (TypeConstr ([], "unit"))
+  let top_t st = fix st (TypeConstr ([], "top"))
+  let nothing_t st = fix st (TypeConstr ([], "nothing"))
+  let ptr_typ_sub st a b = fix st (TypeConstr ([ a; b ], "ptr"))
+  let ptr_typ st = bv_type st 64
+end

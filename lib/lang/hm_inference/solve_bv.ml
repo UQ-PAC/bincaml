@@ -31,7 +31,7 @@ let show_dependent_bv_constraints = function
 (** Deduce the width if two values of the constraint have inferred widths *)
 let unify_bv_constraint st constr : TypeExpr.t option =
   let find = TypeExpr.find st and unify = Unification.unify st in
-  let nat_val_type = nat_val_type st in
+  let open (val Hm_types.smart_constructors st) in
   match constr with
   | Add { a; b; equ } -> (
       match List.map is_nat_val_type [ find a; find b; find equ ] with

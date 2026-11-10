@@ -4,24 +4,24 @@
     v}
     [wl-copy] copies to the clipboard on Wayland. *)
 type raw_token = BasilIR.ParBasilIR.token =
-  | TOK_String of string
-  | TOK_Str of string
+  | TOK_String of (string)
+  | TOK_Str of (string)
   | TOK_ProcIdent of ((int * int) * string)
   | TOK_POINTERTYPE of ((int * int) * string)
   | TOK_OpenParen of ((int * int) * string)
   | TOK_LocalIdent of ((int * int) * string)
   | TOK_IntegerHex of ((int * int) * string)
   | TOK_IntegerDec of ((int * int) * string)
-  | TOK_Integer of int
-  | TOK_Ident of string
+  | TOK_Integer of (int)
+  | TOK_Ident of (string)
   | TOK_INTTYPE of ((int * int) * string)
   | TOK_GlobalIdent of ((int * int) * string)
   | TOK_EndRec of ((int * int) * string)
   | TOK_EndList of ((int * int) * string)
   | TOK_EOF
-  | TOK_Double of float
+  | TOK_Double of (float)
   | TOK_CloseParen of ((int * int) * string)
-  | TOK_Char of char
+  | TOK_Char of (char)
   | TOK_BlockIdent of ((int * int) * string)
   | TOK_BeginRec of ((int * int) * string)
   | TOK_BeginList of ((int * int) * string)
@@ -61,6 +61,7 @@ type raw_token = BasilIR.ParBasilIR.token =
   | KW_old
   | KW_of
   | KW_observable
+  | KW_not
   | KW_nop
   | KW_neq
   | KW_modifies
@@ -98,6 +99,7 @@ type raw_token = BasilIR.ParBasilIR.token =
   | KW_false
   | KW_extract
   | KW_exists
+  | KW_equal
   | KW_eq
   | KW_entry
   | KW_ensures

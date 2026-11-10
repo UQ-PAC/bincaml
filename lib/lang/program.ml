@@ -339,6 +339,7 @@ let decl_typ p binding_name t =
                in
                let args = fields in
                let ty = Types.curry args s in
+               print_endline (Types.to_string ty) ;
                let constructor =
                  Var.create (ID.name variant) ty ~scope:GlobalConst
                in

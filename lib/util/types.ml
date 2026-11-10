@@ -151,6 +151,7 @@ let rec uncurry ?(acc = []) (l : t) : t list * t =
   | l -> (List.rev acc, l)
 
 let curry (args : t list) (v : t) =
+  let args = List.rev args in
   List.fold_left (fun a p -> Function (p, a)) v args
 
 let rec to_string = function
