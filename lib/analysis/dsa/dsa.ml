@@ -23,7 +23,7 @@ module Constraint = struct
     | Call { lhs; args; callee_id } ->
         let lhs =
           List.map
-            (fun (actual, formal) -> (f actual, per_proc_f callee_id formal))
+            (fun (actual, formal) -> (per_proc_f callee_id actual, f formal))
             lhs
         in
         let args =
