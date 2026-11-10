@@ -34,7 +34,8 @@ module Constraint = struct
         Call { lhs; args; callee_id }
 
   let show s = function
-    | Mem { addr; value } -> Printf.sprintf "[|%s|] -> %s" (s addr) (s value)
+    | Mem { addr; value; size } ->
+        Printf.sprintf "[|%s|] -> %s (size: %d)" (s addr) (s value) size
     | Call { lhs; args } ->
         Printf.sprintf "in: %s, out: %s"
           (List.to_string ~sep:", " (fun (a, f) -> s a ^ " <-> " ^ s f) args)
@@ -67,9 +68,16 @@ module Constraint = struct
             in
             Some (Call { lhs; args; callee_id = procid })
         | _ -> None)
+    |> Iter.map (fun x ->
+        Logs.debug (fun m ->
+            m "dsa constraint in %s: %s"
+              (ID.show (Procedure.id p))
+              (show Expr.BasilExpr.to_string x));
+        x)
 end
 
 module DSGraph = Dsgraph
+module Dot = Dot
 
 (** Determine node flags for a node coming from a specified symbolic base. *)
 let flags_of_base b =
@@ -374,10 +382,21 @@ let dsa (p : Program.t) =
           Constraint.gen_constraints p proc
           |> Iter.map (Constraint.map (translate pid) ~per_proc_f:translate)
           |> Iter.persistent
+          |> Iter.map (fun x ->
+              Logs.debug (fun m ->
+                  m "dsa constraint in %s= %s" (ID.show pid)
+                    (Constraint.show Sva.SymAddrSetLattice.show x));
+              x)
+          |> Iter.persistent
         in
         (pid, (constraints, make_local_graph proc sva constraints)))
     |> IDMap.of_list
   in
+  (* IDMap.iter *)
+  (*   (fun k (_, g) -> *)
+  (*     print_endline (ID.show k); *)
+  (*     print_endline (Dot.dot_string g)) *)
+  (*   local_graphs; *)
   let bu_graphs =
     Trace_core.with_span ~__FILE__ ~__LINE__ "bottom up phase" @@ fun _ ->
     bottom_up p local_graphs
@@ -388,95 +407,6 @@ let dsa (p : Program.t) =
   in
   td_graphs
 
-(** Manual dot string construction because ocamlgraph doesn't seem to support
-    record nodes. *)
-let dot_string (graph : DSGraph.t) =
-  let cur_cid = ref 0 in
-  let take_id ids () =
-    let id = !ids in
-    ids := succ !ids;
-    id
-  in
-
-  let nid_map = Hashtbl.create 100 in
-  let node_sbs = Hashtbl.create 100 in
-
-  (* Populate the symbase strings per node *)
-  DSGraph.SBMap.iter
-    (fun sb n ->
-      let s =
-        Hashtbl.get_or node_sbs (ID.index @@ DSGraph.node_id n) ~default:""
-      in
-      Hashtbl.add node_sbs
-        (ID.index @@ DSGraph.node_id n)
-        (s ^ "\\n"
-        ^ (Sva.SymBase.show sb
-          |> String.replace ~sub:"\"" ~by:"\\\""
-          |> String.replace ~sub:"{" ~by:"\\{"
-          |> String.replace ~sub:"}" ~by:"\\}")))
-    (DSGraph.node_map graph);
-
-  let nodes =
-    DSGraph.nodes graph
-    |> List.map DSGraph.(fun n -> (node_id n, snd @@ find_node n))
-    |> IDMap.of_list |> IDMap.to_list |> List.map snd
-  in
-
-  let node_contents =
-    nodes
-    |> List.map (fun node ->
-        let nid = ID.index @@ DSGraph.node_id node in
-        ( nid,
-          DSGraph.flags node,
-          List.map
-            (fun cell ->
-              let cid = take_id cur_cid () in
-              Hashtbl.add nid_map cid nid;
-              (cid, DSGraph.find_cell cell))
-            (DSGraph.cells node) ))
-  in
-  let cells = List.flat_map (fun (_, _, cells) -> cells) node_contents in
-  let pointees = Hashtbl.create 100 in
-  List.iter
-    (fun (cid, cell) ->
-      let ps =
-        List.map
-          (fun c' ->
-            let c' = DSGraph.find_cell c' in
-            (* Cursed O(n) lookup with physical equality *)
-            List.find_map
-              (fun (id, c'') -> Option.return_if (CCEqual.physical c' c'') id)
-              cells
-            |> Option.get_exn_or "pointing to cell that doesn't exist")
-          (DSGraph.pointees cell)
-      in
-      Hashtbl.add pointees cid ps)
-    cells;
-
-  (* Header *)
-  "digraph G {\n  rankdir=\"LR\"\n  node[shape=record]\n"
-  (* Vertices *)
-  ^ List.to_string ~sep:"\n"
-      (fun (nid, flags, cids) ->
-        Printf.sprintf "  \"node%d\"[label=\"node%d %s %s |{%s}\"];" nid nid
-          (NodeFlags.show flags)
-          (Hashtbl.get_or node_sbs nid ~default:"")
-          (List.to_string ~sep:"|"
-             (fun (id, cell) ->
-               Printf.sprintf "<%d>%s" id (Interval.show @@ DSGraph.offsets cell))
-             cids))
-      node_contents
-  ^ "\n"
-  (* Edges *)
-  ^ (Hashtbl.to_iter pointees
-    |> Iter.flat_map (fun (cid, ps) ->
-        let nid = Hashtbl.find nid_map cid in
-        List.to_iter ps |> Iter.map (fun id -> (nid, cid, id)))
-    |> Iter.to_string ~sep:"\n" (fun (nid, cid, id) ->
-        let nid2 = Hashtbl.find nid_map id in
-        Printf.sprintf "  \"node%d\":%d -> \"node%d\":%d" nid cid nid2 id))
-  ^ "\n}"
-
 (** Perform data structure analysis and print the dsgraphs as dot graphs to
     stdout. *)
 let dsa_dots (p : Program.t) =
@@ -484,7 +414,7 @@ let dsa_dots (p : Program.t) =
   List.iter
     (fun (id, graph) ->
       print_endline @@ ID.show id;
-      print_endline @@ dot_string graph)
+      print_endline @@ Dot.dot_string graph)
     (List.map
        (fun (pid, (_, (graph : DSGraph.t))) -> (pid, graph))
        (IDMap.to_list gs));

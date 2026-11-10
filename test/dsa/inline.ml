@@ -433,17 +433,17 @@ let%expect_test "bayat1" =
     |}];
   let dsgraph = Analysis.Dsa.dsa prog in
   let _, g = IDMap.find mainid dsgraph in
-  print_endline @@ Analysis.Dsa.dot_string g;
+  print_endline @@ Analysis.Dsa.Dot.dot_string g;
   [%expect
     {|
     digraph G {
       rankdir="LR"
       node[shape=record]
-      "node0"[label="node0 S \nStack(@main) |{<0>[-48, -41]|<1>[-40, -33]|<2>[-20, -17]|<3>[-8, 3]}"];
-      "node3"[label="node3 UO \nPar(@main_R0_in:bv64)\nLoaded(local_39:bv32) |{<4>Top}"];
-      "node5"[label="node5 G \nGlobal |{<5>[131128, 131143]|<6>[131144, 131151]|<7>[131152, 131159]|<8>[131160, 131167]}"];
-      "node6"[label="node6 U \nPar(@main_R29_in:bv64)\nLoaded(local_53:bv64) |{<9>[0, 7]}"];
-      "node7"[label="node7 U \nPar(@main_R30_in:bv64)\nLoaded(local_56:bv64) |{<10>[0, 7]}"];
+      "node0"[label="node0 S \nStack(@main) |{<0>[-48, -41]:8B|<1>[-40, -33]:8B|<2>[-20, -17]:4B|<3>[-8, 3]:12B}"];
+      "node3"[label="node3 UO \nPar(@main_R0_in:bv64)\nLoaded(local_39:bv32) |{<4>Top:?B}"];
+      "node5"[label="node5 G \nGlobal |{<5>[131128, 131143]:16B|<6>[131144, 131151]:8B|<7>[131152, 131159]:8B|<8>[131160, 131167]:8B}"];
+      "node6"[label="node6 U \nPar(@main_R29_in:bv64)\nLoaded(local_53:bv64) |{<9>[0, 7]:8B}"];
+      "node7"[label="node7 U \nPar(@main_R30_in:bv64)\nLoaded(local_56:bv64) |{<10>[0, 7]:8B}"];
       "node0":2 -> "node3":4
       "node5":7 -> "node5":8
       "node0":0 -> "node6":9
@@ -575,18 +575,18 @@ let%expect_test "bayat2" =
     |}];
   let dsgraph = Analysis.Dsa.dsa prog in
   let _, g = IDMap.find mainid dsgraph in
-  print_endline @@ Analysis.Dsa.dot_string g;
+  print_endline @@ Analysis.Dsa.Dot.dot_string g;
   [%expect
     {|
     digraph G {
       rankdir="LR"
       node[shape=record]
-      "node8"[label="node8 S \nStack(@main) |{<0>[-32, -25]|<1>[-24, -17]|<2>[-4, -1]}"];
-      "node11"[label="node11 UO \nPar(@main_R0_in:bv64)\nLoaded(local_35:bv32) |{<3>Top}"];
-      "node12"[label="node12 G \nGlobal |{<4>[131168, 131175]|<5>[131176, 131183]}"];
-      "node14"[label="node14 U \nLoaded(local_42:bv32) |{<6>[0, 3]}"];
-      "node15"[label="node15 U \nPar(@main_R29_in:bv64)\nLoaded(local_47:bv64) |{<7>[0, 7]}"];
-      "node16"[label="node16 U \nPar(@main_R30_in:bv64)\nLoaded(local_50:bv64) |{<8>[0, 7]}"];
+      "node8"[label="node8 S \nStack(@main) |{<0>[-32, -25]:8B|<1>[-24, -17]:8B|<2>[-4, -1]:4B}"];
+      "node11"[label="node11 UO \nPar(@main_R0_in:bv64)\nLoaded(local_35:bv32) |{<3>Top:?B}"];
+      "node12"[label="node12 G \nGlobal |{<4>[131168, 131175]:8B|<5>[131176, 131183]:8B}"];
+      "node14"[label="node14 U \nLoaded(local_42:bv32) |{<6>[0, 3]:4B}"];
+      "node15"[label="node15 U \nPar(@main_R29_in:bv64)\nLoaded(local_47:bv64) |{<7>[0, 7]:8B}"];
+      "node16"[label="node16 U \nPar(@main_R30_in:bv64)\nLoaded(local_50:bv64) |{<8>[0, 7]:8B}"];
       "node8":2 -> "node11":3
       "node8":0 -> "node15":7
       "node12":5 -> "node12":4
