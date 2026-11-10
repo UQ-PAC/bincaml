@@ -25,13 +25,7 @@ let () =
       let prog = Lang.Program.set_entry_proc mainid prog in
 
       let prog =
-        Lang.Program.declarations prog
-        |> Iter.fold
-             (fun prog (id, decl) ->
-               if not (List.mem (Bincaml_util.ID.name id) !keep_procs) then
-                 Lang.Program.remove_decl prog decl
-               else prog)
-             prog
+        Bincaml.Passes.PassManager.(run_transform prog chop_unreachable)
       in
       let prog =
         Bincaml.Passes.PassManager.(run_transform prog aslp_semantics)
