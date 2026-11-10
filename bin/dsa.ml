@@ -16,6 +16,7 @@ let () =
     anon_fun usage_msg;
 
   Logs.set_reporter (Logs.format_reporter ());
+  Logs.(set_level (Some Debug));
 
   match !input_files with
   | [ filename ] ->
@@ -25,14 +26,20 @@ let () =
       let prog = Lang.Program.set_entry_proc mainid prog in
 
       let prog =
-        Bincaml.Passes.PassManager.(run_transform prog chop_unreachable)
+        Lang.Program.declarations prog
+        |> Iter.fold
+             (fun prog (id, decl) ->
+               if not (List.mem (Bincaml_util.ID.name id) !keep_procs) then
+                 Lang.Program.remove_decl prog decl
+               else prog)
+             prog
       in
       let prog =
         Bincaml.Passes.PassManager.(run_transform prog aslp_semantics)
       in
       let prog = Bincaml.Passes.PassManager.(run_transform prog sparams) in
       let prog = Bincaml.Passes.PassManager.(run_transform prog sssa) in
-      Logs.(set_level (Some Debug));
+      (* let prog = Bincaml.Passes.PassManager.(run_transform prog simp) in *)
       if !dump_il then Lang.Program.pretty_to_chan stdout prog
       else begin
         let dsgraph = Analysis.Dsa.dsa prog in
