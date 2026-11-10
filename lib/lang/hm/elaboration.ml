@@ -9,9 +9,9 @@ open Inference
 open Solve_bv
 open TypeExpr.Constructors
 
-let retype_var ?(no_constraint = true) st univ ctx id =
-  lookup_var_typ st ~no_constraint univ ctx id |> TypeExpr.find st |> to_basil
-  |> fun typ -> Var.copy ~typ id
+let retype_var st univ ctx id =
+  lookup_var_typ st univ ctx id |> TypeExpr.find st |> to_basil |> fun typ ->
+  Var.copy ~typ id
 
 let elaborate_phi st univ ctx (p : Var.t Block.phi list) =
   let open Block in
@@ -57,20 +57,18 @@ let elaborate_stmt st univ ctx stmt =
 let elaborate_block st p univ ctx (b : ('a, 'b) Block.t) =
   Block.map ~phi:(elaborate_phi st univ ctx) (elaborate_stmt st univ ctx) b
 
-let assume_proc_decl st ctx ?(no_constraint = false) (p : Program.proc) =
+let assume_proc_decl st ctx (p : Program.proc) =
   let globs = Var.Decls.values (Procedure.local_decls p) in
   let formals_in = Procedure.formal_in_params p |> StringMap.values in
   let formals_out = Procedure.formal_out_params p |> StringMap.values in
   let univ = TypeExpr.V.proc_univ @@ Procedure.id p in
   let ctx =
-    Iter.fold
-      (decl_var_typ st ~no_constraint univ)
-      ctx
+    Iter.fold (decl_var_typ st univ) ctx
       (Iter.append globs @@ Iter.append formals_in formals_out)
   in
   ctx
 
-let infer_proc st vc prog ctx ?(no_constraint = false) (p : Program.proc) =
+let infer_proc st vc prog ctx (p : Program.proc) =
   let spec = Procedure.specification p in
   let univ = TypeExpr.V.proc_univ @@ Procedure.id p in
   let ibool_list b =
@@ -108,7 +106,7 @@ let infer_proc st vc prog ctx ?(no_constraint = false) (p : Program.proc) =
     }
   in
 
-  let ctx = assume_proc_decl st ctx ~no_constraint p in
+  let ctx = assume_proc_decl st ctx p in
   let bvlocks =
     Procedure.iter_blocks_topo_fwd p
     |> Iter.map (fun (i, b) -> (i, infer_block st vc prog univ ctx b))
@@ -164,6 +162,19 @@ let infer_decl st visit_constraint prog scheme =
         let ty = ty_of_basil st typ in
         let v = ty_of_basil st (Types.Variable binding) in
         let _ = unify st ty v in
+        (match typ with
+        | Types.Record fields ->
+            List.iter
+              (fun (fname, fld) ->
+                visit_constraint
+                @@ HasField
+                     {
+                       record = v;
+                       field_name = fname;
+                       field_type = ty_of_basil st fld;
+                     })
+              fields
+        | _ -> ());
         let nty scheme =
           Type { binding; typ = to_basil (TypeExpr.find st ty) }
         in
@@ -267,7 +278,7 @@ let infer_program st prog =
   let scheme, new_decls =
     decls |> List.fold_map (infer_decl st visit_constraint prog) scheme
   in
-  let _ = solve_constraints st ~max_iters:50 !constraints in
+  let _ = solve_constraints st ~max_iters:500 !constraints in
   (* TODO: implicit decls; constructors need to be added after the types they
     construct, probably simples to do implicits immediately after the thing they
     relate to. Maybe they should just appear this way in the declaration

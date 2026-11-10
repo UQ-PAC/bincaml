@@ -121,8 +121,6 @@ let scheme_of_intrin st ?(visit_constraint = fun a -> ()) (gen : ID.generator)
           @@ HasField { record = rt; field_name = fname; field_type = fld })
         argt;
       let t = curry_f (List.map snd argt) rt in
-      print_endline "typexpr";
-      print_endline (TypeExpr.to_string t);
       t
   | `BVConcat ->
       let args = List.init args (fun _ -> fv ()) in

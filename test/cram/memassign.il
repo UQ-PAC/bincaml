@@ -26,7 +26,6 @@ let $three = let func (a:bv64) : bv64 = bvadd(a, 1:bv64) in func($mul_2(2:bv64, 
 
 let $test (a:bv64) : bv64 = if (eq(a, 1:bv64)) then (10:bv64) else (11:bv64) ;
 
-prog entry @main_4196164;
 
 type finite_array = {
      data: bv8[bv64]; /* data for array */
@@ -44,6 +43,7 @@ let $array_equal (a: finite_array), (b:finite_array) : bool  = booland(eq(a.len,
 let $memory_equal (data:(bv8[bv64])), (a:finite_array) : bool =
    (forall (ind:bv64) :: eq(eq(bvule(0:bv64, ind) , bvult(ind, a.len)), eq($access_array(a, ind), get(data, bvadd(a.offset, ind)))));
 
+prog entry @main_4196164;
 proc @main_4196164
   (R0_in:bv64, R10_in:bv64, R11_in:bv64, R12_in:bv64, R13_in:bv64, R14_in:bv64, R15_in:bv64, R16_in:bv64, R17_in:bv64, R18_in:bv64, R1_in:bv64, R29_in:bv64, R2_in:bv64, R30_in:bv64, R31_in:bv64, R3_in:bv64, R4_in:bv64, R5_in:bv64, R6_in:bv64, R7_in:bv64, R8_in:bv64, R9_in:bv64, _PC_in:bv64)
     -> (R0_out:bv64, R1_out:bv64)

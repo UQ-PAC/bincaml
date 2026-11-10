@@ -201,7 +201,7 @@ let locally_elaborate_expr (e : Expr.BasilExpr.t) =
   (* TODO: need mode where we absorb take the existing annotations and try to
   extend , rather than expecting everythign declared in context. *)
   let i = Inference.infer_expr st visit_constraint ~univ [%here] e ctx in
-  let _ = Solve_bv.solve_constraints st ~max_iters:100 !constraints in
+  let _ = Solve_bv.solve_constraints st ~max_iters:10000 !constraints in
   let e = Elaboration.elaborate_expr st ~univ [%here] i ctx in
   e
 

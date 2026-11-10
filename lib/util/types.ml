@@ -184,9 +184,10 @@ let rec to_string = function
       let fsort name variants =
         name ^ match variants with [] -> "" | o -> " of " ^ pcase o
       in
-      List.to_string ~sep:" | " ~start:"" ~stop:""
-        (function variant, fields -> fsort variant fields)
-        variants
+      "|"
+      ^ List.to_string ~sep:" | " ~start:"" ~stop:""
+          (function variant, fields -> fsort variant fields)
+          variants
 
 let to_string_decl name typ = "type " ^ name ^ " = " ^ to_string typ
 let to_string_rexp ty = to_string ty

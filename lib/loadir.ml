@@ -257,7 +257,9 @@ module BasilASTLoader = struct
         let arg_types = List.map Var.typ bound in
         let func_type = Types.curry arg_types (trans_type typ) in
         let bvar =
-          Var.create (unsafe_unsigil (`Global glident)) ~scope:GlobalConst func_type
+          Var.create
+            (unsafe_unsigil (`Global glident))
+            ~scope:GlobalConst func_type
         in
         let fundef : Program.declaration =
           Function
@@ -1324,8 +1326,7 @@ module BasilASTLoader = struct
         BasilExpr.field_read ~field:fname (trans_expr record)
     | VariantConstr (typeName, variant, bi, fields, ei) ->
         let f = lookup_constructor p_st variant in
-        print_endline @@ Types.to_string (Var.typ f);
-        let f =  BasilExpr.rvar @@ f in
+        let f = BasilExpr.rvar @@ f in
         BasilExpr.apply_fun ~func:f (List.map trans_expr fields)
     | RecordConstr (bi, fields, ei) ->
         let fields = List.map (trans_field_assign trans_expr) fields in

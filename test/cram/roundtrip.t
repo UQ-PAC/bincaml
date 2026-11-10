@@ -1,6 +1,7 @@
 
   $ bincaml script roundtrip.sexp
   (load-il ../../examples/irreducible_loop_1.il)
+  (log-level debug)
   (run-transforms hindley-milner-elaborate)
   (dump-il before.il)
   (load-il before.il)

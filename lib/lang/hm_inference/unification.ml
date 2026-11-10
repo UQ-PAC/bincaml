@@ -96,7 +96,7 @@ let inst_annot_v st ?(no_constraint = false) v =
   ty
 
 (** lookup var and add unify with its type annotation *)
-let lookup_var_typ st univ ?(no_constraint = false) c v =
+let lookup_var_typ st univ c v =
   let vt = inst_annot_v st v in
   let a =
     let v = TypeExpr.V.of_var univ v in
@@ -117,13 +117,13 @@ let decl_type st ctx name vt =
     ctx
 
 (** declare var with type in type scheme *)
-let shadow_var_typ st univ ?(no_constraint = false) c v =
+let shadow_var_typ st univ  c v =
   let vvar = TypeExpr.V.of_var univ v in
   let vt = inst_annot_v st v in
   TypeExpr.TCtx.update vvar (function _ -> Some (Hm_types.Forall ([], vt))) c
 
 (** declare var with type in type scheme *)
-let decl_var_typ st univ ?(no_constraint = false) c v =
+let decl_var_typ st univ  c v =
   let vvar = TypeExpr.V.of_var univ v in
   let vt = inst_annot_v st v in
   TypeExpr.TCtx.update vvar
