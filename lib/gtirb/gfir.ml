@@ -109,6 +109,10 @@ type temp_proc = {
   blocks : UUIDSet.t;  (** UUIDs of blocks internal to this procedure *)
   code_blocks : Gtirb.block UUIDMap.t;  (** block definitions *)
   cfg : G.t;  (** intraprocedural control-flow graph *)
+  is_stub : bool;
+      (** Whether this procedure is a stub (that is, no body should be emitted).
+          Note that even if this is [true], other fields may need to be
+          populated to allow resolving of calls to this procedure. *)
 }
 (** Gfir procedure; basic blocks containing sequences of opcodes or statemetns
 *)
@@ -171,7 +175,8 @@ let make_temp_proc prog all_blocks func_blocks func_entry_blocks proxy_blocks
         (UUIDSet.empty, UUIDMap.empty)
   in
   let id = Lang.Program.declare_name ("@" ^ name) prog in
-  let proc = { uuid; name; id; entries; blocks; code_blocks; cfg = G.empty } in
+  let cfg = G.empty and is_stub = false in
+  let proc = { uuid; name; id; entries; blocks; code_blocks; cfg; is_stub } in
   make_proc_cfg block_is_member_of proxy_blocks gtirb_cfg proc
 
 (** Load a protobuf gtirb module into a set of temp_procs, use [prog] to
