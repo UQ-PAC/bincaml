@@ -439,7 +439,7 @@ let%expect_test "bayat1" =
     digraph G {
       rankdir="LR"
       node[shape=record]
-      "node0"[label="node0 S \nStack(@main) |{<0>[-48, -41]:8B|<1>[-40, -33]:8B|<2>[-20, -17]:4B|<3>[-8, 3]:12B}"];
+      "node0"[label="node0 S \nStack(@main) |{<0>[-48, -41]:8B|<1>[-40, -33]:8B|<2>[-20, -13]:8B|<3>[-8, 3]:12B}"];
       "node3"[label="node3 UO \nPar(@main_R0_in:bv64)\nLoaded(local_39:bv32) |{<4>Top:?B}"];
       "node5"[label="node5 G \nGlobal |{<5>[131128, 131143]:16B|<6>[131144, 131151]:8B|<7>[131152, 131159]:8B|<8>[131160, 131167]:8B}"];
       "node6"[label="node6 U \nPar(@main_R29_in:bv64)\nLoaded(local_53:bv64) |{<9>[0, 7]:8B}"];
@@ -581,7 +581,7 @@ let%expect_test "bayat2" =
     digraph G {
       rankdir="LR"
       node[shape=record]
-      "node8"[label="node8 S \nStack(@main) |{<0>[-32, -25]:8B|<1>[-24, -17]:8B|<2>[-4, -1]:4B}"];
+      "node8"[label="node8 S \nStack(@main) |{<0>[-32, -25]:8B|<1>[-24, -17]:8B|<2>[-4, 3]:8B}"];
       "node11"[label="node11 UO \nPar(@main_R0_in:bv64)\nLoaded(local_35:bv32) |{<3>Top:?B}"];
       "node12"[label="node12 G \nGlobal |{<4>[131168, 131175]:8B|<5>[131176, 131183]:8B}"];
       "node14"[label="node14 U \nLoaded(local_42:bv32) |{<6>[0, 3]:4B}"];
