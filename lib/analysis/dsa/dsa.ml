@@ -364,7 +364,10 @@ let top_down prog graphs =
 let dsa (p : Program.t) =
   let sva_r =
     Trace_core.with_span ~__FILE__ ~__LINE__ "sva" @@ fun _ ->
-    Sva.sva p |> IDMap.of_list
+    let sva_results = Sva.sva p |> IDMap.of_list in
+    IDMap.iter (fun k v ->
+        Logs.debug (fun m -> m "%s sva: %s" (ID.show k) (Sva.StateAbstraction.show v))) sva_results;
+    sva_results
   in
   let translate pid e =
     Sva.(
