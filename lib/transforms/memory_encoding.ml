@@ -11,7 +11,7 @@ module Globals = struct
   let mem_encoding_typ = Types.Variable mem_encoding_typ_name
 
   let mem_encoding =
-    Var.create "$mem_encoding" ~scope:Var.GlobalVar mem_encoding_typ
+    Var.create "$mem_encoding" ~scope:Var.GlobalVarShared mem_encoding_typ
 end
 
 module Calls = struct
