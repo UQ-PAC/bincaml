@@ -26,10 +26,16 @@ end
 
 module FixProp = Fix.Fix.ForOrderedType (ID) (RWSets)
 
+(** {:https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#id49}
+
+    TODO: move this to its own module *)
 let caller_saved_names =
-  Iter.int_range ~start:0 ~stop:18
-  |> Iter.map (Printf.sprintf "$R%d")
-  |> Iter.to_array
+  let gpregs =
+    Iter.int_range ~start:0 ~stop:18 |> Iter.map (Printf.sprintf "$R%d")
+  and flags =
+    Iter.of_array [| "$PSTATE_N"; "$PSTATE_Z"; "$PSTATE_C"; "$PSTATE_V" |]
+  in
+  Iter.append gpregs flags |> Iter.to_array
 
 let variable_is_caller_saved v =
   Var.equal_scope (Var.scope v) GlobalVarShared
