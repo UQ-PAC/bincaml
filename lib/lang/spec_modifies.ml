@@ -31,7 +31,9 @@ let caller_saved_names =
   |> Iter.map (Printf.sprintf "$R%d")
   |> Iter.to_array
 
-let variable_is_caller_saved v = Array.mem (Var.name v) caller_saved_names
+let variable_is_caller_saved v =
+  Var.(equal_scope (scope v)) GlobalVarShared
+  || Array.mem (Var.name v) caller_saved_names
 
 let solve (prog : Program.t) =
   let local_rw (p : ID.t) (valuations : FixProp.valuation) =
