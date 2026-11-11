@@ -3,6 +3,8 @@ open Option
 module UUIDMap = Load_auxdata.UUIDMap
 module UUIDSet = Load_auxdata.UUIDSet
 module Gtirb_proto' = Gtirb_proto'
+module Gtirb = Gtirb
+module Gtirb_graph = Gtirb_graph
 
 module Gfir = Gfir
 (** Intermediate representation used by the frontend *)
