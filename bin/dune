@@ -22,8 +22,3 @@
   trace.core
   trace-tef
   terminal_size))
-
-(executable
- (name dsa)
- (libraries bincaml.transforms bincaml bincaml.util)
- (modules dsa))
