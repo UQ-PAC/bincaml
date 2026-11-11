@@ -32,7 +32,7 @@ module FixProp = Fix.Fix.ForOrderedType (ID) (RWSets)
 let callee_saved_names =
   let gpregs =
     Iter.int_range ~start:19 ~stop:31 |> Iter.map (Printf.sprintf "$R%d")
-  and special_regs = Iter.of_array [| "SP"; "LR"; "FP" |] in
+  and special_regs = Iter.of_array [| "$SP"; "$LR"; "$FP" |] in
   Iter.append gpregs special_regs |> Iter.to_array
 
 let variable_is_callee_saved v = Array.mem (Var.name v) callee_saved_names
