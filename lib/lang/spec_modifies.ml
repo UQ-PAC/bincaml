@@ -32,7 +32,7 @@ let caller_saved_names =
   |> Iter.to_array
 
 let variable_is_caller_saved v =
-  Var.(equal_scope (scope v)) GlobalVarShared
+  Var.equal_scope (Var.scope v) GlobalVarShared
   || Array.mem (Var.name v) caller_saved_names
 
 let solve (prog : Program.t) =
