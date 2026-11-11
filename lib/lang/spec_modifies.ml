@@ -26,6 +26,17 @@ end
 
 module FixProp = Fix.Fix.ForOrderedType (ID) (RWSets)
 
+(** {:https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#id49}
+
+    TODO: move this to its own module *)
+let callee_saved_names =
+  let gpregs =
+    Iter.int_range ~start:19 ~stop:31 |> Iter.map (Printf.sprintf "$R%d")
+  and special_regs = Iter.of_array [| "SP"; "LR"; "FP" |] in
+  Iter.append gpregs special_regs |> Iter.to_array
+
+let variable_is_callee_saved v = Array.mem (Var.name v) callee_saved_names
+
 let solve (prog : Program.t) =
   let local_rw (p : ID.t) (valuations : FixProp.valuation) =
     let p = Program.proc prog p in
@@ -51,8 +62,11 @@ let solve (prog : Program.t) =
             (VarSet.empty, VarSet.empty)
             p
       | None ->
-          let globs = Program.global_vars prog |> VarSet.of_iter in
-          (globs, globs)
+          let all_globals = Program.global_vars prog |> VarSet.of_iter in
+          let written =
+            all_globals |> VarSet.filter (not % variable_is_callee_saved)
+          in
+          (all_globals, written)
     in
     (read, written)
   in
