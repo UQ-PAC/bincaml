@@ -107,7 +107,7 @@
        $PC:bv64 := $R30;
        goto (%_fini_code_3);
      ];
-     block %_fini_code_3 [ assert false; goto (%ret_1); ];
+     block %_fini_code_3 [ assert boolor(true); goto (%ret_1); ];
      block %ret_1 [ return; ]
   ];
   proc @_init()  -> () {  }
@@ -188,7 +188,7 @@
        $PC:bv64 := $R30;
        goto (%_init_code_3);
      ];
-     block %_init_code_3 [ assert false; goto (%ret_1); ];
+     block %_init_code_3 [ assert boolor(true); goto (%ret_1); ];
      block %ret_1 [ return; ]
   ];
   proc @__do_global_dtors_aux()  -> () {  }
@@ -308,7 +308,7 @@
        $PC:bv64 := $R30;
        goto (%__do_global_dtors_aux_code_5);
      ];
-     block %__do_global_dtors_aux_code_5 [ assert false; goto (%ret_2); ];
+     block %__do_global_dtors_aux_code_5 [ assert boolor(true); goto (%ret_2); ];
      block %ret_2 [ return; ];
      block %__do_global_dtors_aux_code_3 { .address = 4196196;
          .gtirb_block = "lwyID0MJQb6vgyjzPFtz8Q";
@@ -478,7 +478,7 @@
        $PC:bv64 := $R30;
        goto (%register_tm_clones_code_5);
      ];
-     block %register_tm_clones_code_5 [ assert false; goto (%ret); ];
+     block %register_tm_clones_code_5 [ assert boolor(true); goto (%ret); ];
      block %ret [ return; ];
      block %register_tm_clones_code_3 { .address = 4196148;
          .gtirb_block = "tXIOhSQ+R1WA/9VL5+6KQQ";
@@ -793,7 +793,7 @@
        $PC:bv64 := $R30;
        goto (%Sqrt_code_8);
      ];
-     block %Sqrt_code_8 [ assert boolor(eq(0x400820:bv64, $PC)); goto (%ret_3); ];
+     block %Sqrt_code_8 [ assert boolor(true); goto (%ret_3); ];
      block %ret_3 [ return; ];
      block %Sqrt_code_4 { .address = 4196256;
          .gtirb_block = "rCSSdLZcRB2TKAu9h+WCqg";
@@ -1144,7 +1144,7 @@
        $PC:bv64 := $R30;
        goto (%_dl_relocate_static_pie_code_1);
      ];
-     block %_dl_relocate_static_pie_code_1 [ assert false; goto (%ret); ];
+     block %_dl_relocate_static_pie_code_1 [ assert boolor(true); goto (%ret); ];
      block %ret [ return; ]
   ];
   proc @call_weak_fn()  -> () {  }
@@ -1234,10 +1234,7 @@
        $PC:bv64 := $R30;
        goto (%call_weak_fn_code_5);
      ];
-     block %call_weak_fn_code_5 [
-       assert boolor(eq(0x400610:bv64, $PC));
-       goto (%ret_3);
-     ];
+     block %call_weak_fn_code_5 [ assert boolor(true); goto (%ret_3); ];
      block %ret_3 [ return; ]
   ];
   proc @main()  -> () {  }
@@ -1334,7 +1331,7 @@
        $PC:bv64 := $R30;
        goto (%main_code_3);
      ];
-     block %main_code_3 [ assert false; goto (%ret_1); ];
+     block %main_code_3 [ assert boolor(true); goto (%ret_1); ];
      block %ret_1 [ return; ]
   ];
   proc @.L_400650()  -> () {  }
@@ -1595,10 +1592,7 @@
        $PC:bv64 := $R30;
        goto (%deregister_tm_clones_code_7);
      ];
-     block %deregister_tm_clones_code_7 [
-       assert boolor(eq(0x400768:bv64, $PC));
-       goto (%ret_5);
-     ];
+     block %deregister_tm_clones_code_7 [ assert boolor(true); goto (%ret_5); ];
      block %ret_5 [ return; ]
   ];
   proc @FUN_400620()  -> () {  }
