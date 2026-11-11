@@ -12,9 +12,7 @@ Run on basic irreducible loop example
   (load-il after.il)
   bincaml: [WARNING] global undeclared ZF_10. assuming mutable unshared
   bincaml: [WARNING] global undeclared VF_5. assuming mutable unshared
-  bincaml: [WARNING] global undeclared R31_4. assuming mutable unshared
-  bincaml: [WARNING] global undeclared R30_4. assuming mutable unshared
-  bincaml: [WARNING] global undeclared R29_4. assuming mutable unshared
+  bincaml: [WARNING] global undeclared R30_3. assuming mutable unshared
   bincaml: [WARNING] global undeclared R1_3. assuming mutable unshared
   bincaml: [WARNING] global undeclared R0_14. assuming mutable unshared
   bincaml: [WARNING] global undeclared NF_5. assuming mutable unshared
@@ -160,8 +158,8 @@ Run on basic irreducible loop example
      block %main_basil_return_1 [ return; ]
   ];
   proc @puts_1584()  -> () { .address = 1584; .name = "puts" }
-    modifies $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
-      $VF:bv1, $ZF:bv1, $mem:(bv64->bv8), $stack:(bv64->bv8)
+    modifies $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $VF:bv1, $ZF:bv1,
+      $mem:(bv64->bv8), $stack:(bv64->bv8)
     captures $CF:bv1, $NF:bv1, $R0:bv64, $R1:bv64, $R29:bv64, $R30:bv64, $R31:bv64,
       $VF:bv1, $ZF:bv1, $mem:(bv64->bv8), $stack:(bv64->bv8)
   ;
@@ -331,9 +329,7 @@ Run on basic irreducible loop example
      block %main_5 { .address = 1940 } (
        var ZF_11:bv1 := phi(%main_25 -> ZF_3:bv1, %main_7 -> ZF_10:bv1),
        var VF_7:bv1 := phi(%main_25 -> VF_2:bv1, %main_7 -> VF_5:bv1),
-       var R31_7:bv64 := phi(%main_25 -> R31_2:bv64, %main_7 -> R31_4:bv64),
-       var R30_8:bv64 := phi(%main_25 -> R30_1:bv64, %main_7 -> R30_4:bv64),
-       var R29_7:bv64 := phi(%main_25 -> R29_2:bv64, %main_7 -> R29_4:bv64),
+       var R30_6:bv64 := phi(%main_25 -> R30_1:bv64, %main_7 -> R30_3:bv64),
        var R1_5:bv64 := phi(%main_25 -> R1_1:bv64, %main_7 -> R1_3:bv64),
        var R0_19:bv64 := phi(%main_25 -> R0_7:bv64, %main_7 -> R0_14:bv64),
        var NF_7:bv1 := phi(%main_25 -> NF_2:bv1, %main_7 -> NF_5:bv1),
@@ -341,12 +337,11 @@ Run on basic irreducible loop example
      ) [
        var R0_20:bv64 := 0x0:bv64 { .label = "%00000416" };
        var R0_21:bv64 := bvadd(R0_20:bv64, 0x820:bv64) { .label = "%0000041c" };
-       var R30_9:bv64 := 0x7a0:bv64 { .label = "%00000421" };
+       var R30_7:bv64 := 0x7a0:bv64 { .label = "%00000421" };
        (var CF_8:bv1=CF_out, var NF_8:bv1=NF_out, var R0_22:bv64=R0_out,
-          var R1_6:bv64=R1_out, var R29_8:bv64=R29_out, var R30_10:bv64=R30_out,
-          var R31_8:bv64=R31_out, var VF_8:bv1=VF_out, var ZF_12:bv1=ZF_out) := call @puts_1584(CF_in=CF_7:bv1,
-          NF_in=NF_7:bv1, R0_in=R0_21:bv64, R1_in=R1_5:bv64, R29_in=R29_7:bv64,
-          R30_in=R30_9:bv64, R31_in=R31_7:bv64, VF_in=VF_7:bv1, ZF_in=ZF_11:bv1) { .label = "%00000423" };
+          var R1_6:bv64=R1_out, var VF_8:bv1=VF_out, var ZF_12:bv1=ZF_out) := call @puts_1584(CF_in=CF_7:bv1,
+          NF_in=NF_7:bv1, R0_in=R0_21:bv64, R1_in=R1_5:bv64, R29_in=R29_2:bv64,
+          R30_in=R30_7:bv64, R31_in=R31_2:bv64, VF_in=VF_7:bv1, ZF_in=ZF_11:bv1) { .label = "%00000423" };
        goto (%main_3);
      ];
      block %main_3 { .address = 1952 } [
@@ -363,9 +358,7 @@ Run on basic irreducible loop example
      block %main_19 { .address = 1988 } (
        var ZF_5:bv1 := phi(%main_21 -> ZF_4:bv1, %main_3 -> ZF_12:bv1),
        var VF_3:bv1 := phi(%main_21 -> VF_2:bv1, %main_3 -> VF_8:bv1),
-       var R31_3:bv64 := phi(%main_21 -> R31_2:bv64, %main_3 -> R31_8:bv64),
-       var R30_2:bv64 := phi(%main_21 -> R30_1:bv64, %main_3 -> R30_10:bv64),
-       var R29_3:bv64 := phi(%main_21 -> R29_2:bv64, %main_3 -> R29_8:bv64),
+       var R30_2:bv64 := phi(%main_21 -> R30_1:bv64, %main_3 -> R30_7:bv64),
        var R1_2:bv64 := phi(%main_21 -> R1_1:bv64, %main_3 -> R1_7:bv64),
        var R0_8:bv64 := phi(%main_21 -> R0_7:bv64, %main_3 -> R0_27:bv64),
        var NF_3:bv1 := phi(%main_21 -> NF_2:bv1, %main_3 -> NF_8:bv1),
@@ -375,10 +368,9 @@ Run on basic irreducible loop example
        var R0_10:bv64 := bvadd(R0_9:bv64, 0x820:bv64) { .label = "%000003d6" };
        var R30_3:bv64 := 0x7d0:bv64 { .label = "%000003db" };
        (var CF_4:bv1=CF_out, var NF_4:bv1=NF_out, var R0_11:bv64=R0_out,
-          var R1_3:bv64=R1_out, var R29_4:bv64=R29_out, var R30_4:bv64=R30_out,
-          var R31_4:bv64=R31_out, var VF_4:bv1=VF_out, var ZF_6:bv1=ZF_out) := call @puts_1584(CF_in=CF_3:bv1,
-          NF_in=NF_3:bv1, R0_in=R0_10:bv64, R1_in=R1_2:bv64, R29_in=R29_3:bv64,
-          R30_in=R30_3:bv64, R31_in=R31_3:bv64, VF_in=VF_3:bv1, ZF_in=ZF_5:bv1) { .label = "%000003de" };
+          var R1_3:bv64=R1_out, var VF_4:bv1=VF_out, var ZF_6:bv1=ZF_out) := call @puts_1584(CF_in=CF_3:bv1,
+          NF_in=NF_3:bv1, R0_in=R0_10:bv64, R1_in=R1_2:bv64, R29_in=R29_2:bv64,
+          R30_in=R30_3:bv64, R31_in=R31_2:bv64, VF_in=VF_3:bv1, ZF_in=ZF_5:bv1) { .label = "%000003de" };
        goto (%main_17);
      ];
      block %main_17 { .address = 2000 } [
@@ -406,30 +398,29 @@ Run on basic irreducible loop example
        guard eq(bvnot(booltobv1(eq(ZF_8:bv1, 0x1:bv1))), 0x0:bv1);
        var R0_15:bv64 := 0x0:bv64 { .label = "%00000459" };
        var R0_16:bv64 := bvadd(R0_15:bv64, 0x828:bv64) { .label = "%0000045f" };
-       var R30_5:bv64 := 0x7f4:bv64 { .label = "%00000464" };
+       var R30_4:bv64 := 0x7f4:bv64 { .label = "%00000464" };
        (var CF_6:bv1=CF_out, var NF_6:bv1=NF_out, var R0_17:bv64=R0_out,
-          var R1_4:bv64=R1_out, var R29_5:bv64=R29_out, var R30_6:bv64=R30_out,
-          var R31_5:bv64=R31_out, var VF_6:bv1=VF_out, var ZF_9:bv1=ZF_out) := call @puts_1584(CF_in=CF_5:bv1,
-          NF_in=NF_5:bv1, R0_in=R0_16:bv64, R1_in=R1_3:bv64, R29_in=R29_4:bv64,
-          R30_in=R30_5:bv64, R31_in=R31_4:bv64, VF_in=VF_5:bv1, ZF_in=ZF_8:bv1) { .label = "%00000466" };
+          var R1_4:bv64=R1_out, var VF_6:bv1=VF_out, var ZF_9:bv1=ZF_out) := call @puts_1584(CF_in=CF_5:bv1,
+          NF_in=NF_5:bv1, R0_in=R0_16:bv64, R1_in=R1_3:bv64, R29_in=R29_2:bv64,
+          R30_in=R30_4:bv64, R31_in=R31_2:bv64, VF_in=VF_5:bv1, ZF_in=ZF_8:bv1) { .label = "%00000466" };
        goto (%main_13);
      ];
      block %main_13 { .address = 2020 } [ goto (%main_11); ];
      block %main_11 { .address = 2036 } [
        var R0_18:bv64 := 0x0:bv64 { .label = "%0000046b" };
-       var load21_1:bv64 := load le $stack:(bv64->bv8) R31_5:bv64 64 { .label = "%00000472$0" };
-       var R29_6:bv64 := load21_1:bv64 { .label = "%00000472$1" };
-       var load22_1:bv64 := load le $stack:(bv64->bv8) bvadd(R31_5:bv64, 0x8:bv64) 64 { .label = "%00000477$0" };
-       var R30_7:bv64 := load22_1:bv64 { .label = "%00000477$1" };
-       var R31_6:bv64 := bvadd(R31_5:bv64, 0x20:bv64) { .label = "%0000047b" };
+       var load21_1:bv64 := load le $stack:(bv64->bv8) R31_2:bv64 64 { .label = "%00000472$0" };
+       var R29_3:bv64 := load21_1:bv64 { .label = "%00000472$1" };
+       var load22_1:bv64 := load le $stack:(bv64->bv8) bvadd(R31_2:bv64, 0x8:bv64) 64 { .label = "%00000477$0" };
+       var R30_5:bv64 := load22_1:bv64 { .label = "%00000477$1" };
+       var R31_3:bv64 := bvadd(R31_2:bv64, 0x20:bv64) { .label = "%0000047b" };
        goto (%main_basil_return_1);
      ];
      block %main_basil_return_1 [ goto (%returns); ];
      block %returns [
        (var CF_out_1:bv1 := CF_6:bv1, var NF_out_1:bv1 := NF_6:bv1,
         var R0_out_1:bv64 := R0_18:bv64, var R1_out_1:bv64 := R1_4:bv64,
-        var R29_out_1:bv64 := R29_6:bv64, var R30_out_1:bv64 := R30_7:bv64,
-        var R31_out_1:bv64 := R31_6:bv64, var VF_out_1:bv1 := VF_6:bv1,
+        var R29_out_1:bv64 := R29_3:bv64, var R30_out_1:bv64 := R30_5:bv64,
+        var R31_out_1:bv64 := R31_3:bv64, var VF_out_1:bv1 := VF_6:bv1,
         var ZF_out_1:bv1 := ZF_9:bv1);
        goto (%Return);
      ];
@@ -444,8 +435,7 @@ Run on basic irreducible loop example
   ];
   proc @puts_1584(CF_in:bv1, NF_in:bv1, R0_in:bv64, R1_in:bv64, R29_in:bv64,
      R30_in:bv64, R31_in:bv64, VF_in:bv1, ZF_in:bv1)
-     -> (CF_out:bv1, NF_out:bv1, R0_out:bv64, R1_out:bv64, R29_out:bv64,
-     R30_out:bv64, R31_out:bv64, VF_out:bv1, ZF_out:bv1) { .address = 1584;
+     -> (CF_out:bv1, NF_out:bv1, R0_out:bv64, R1_out:bv64, VF_out:bv1, ZF_out:bv1) { .address = 1584;
       .name = "puts" }
     modifies $mem:(bv64->bv8), $stack:(bv64->bv8)
     captures $mem:(bv64->bv8), $stack:(bv64->bv8)
