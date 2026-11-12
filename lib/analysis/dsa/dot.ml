@@ -5,41 +5,55 @@ end
 
 open Bincaml_util.Common
 
+(** {1 Helper functions} *)
+
+let sanitise =
+  String.map (function
+    | '-' -> 'm'
+    | c when CCChar.is_letter_ascii c || CCChar.is_digit_ascii c -> c
+    | _ -> '_')
+
+let quote = Printf.sprintf {|%S|}
+let escape = String.escaped
+
 (** {1 Ocamlgraph-compatible representation of DSGraph} *)
 
 module Dsgraph_ocamlgraph = struct
-  type t = {
-    proc_id : ID.t option;
-    graph : DSGraph.t;
+  type extra = {
+    prefix : string option;
     sym_bases_in_nodes : Sva.SymBase.t list IDMap.t;
   }
 
+  type t = DSGraph.t * extra
+
   let of_dsgraph ?proc_id graph =
-    { proc_id; graph; sym_bases_in_nodes = DSGraph.sym_bases_in_nodes graph }
+    let prefix = Option.map ID.show proc_id
+    and sym_bases_in_nodes = DSGraph.sym_bases_in_nodes graph in
+    (graph, { prefix; sym_bases_in_nodes })
 
   module V = struct
-    type t = DSGraph.cell
+    type t = DSGraph.cell * extra
   end
 
   module E = struct
-    type t = DSGraph.cell * DSGraph.cell
+    type t = DSGraph.cell * DSGraph.cell * extra
 
-    let src = fst
-    let dst = snd
+    let src (a, _, ex) = (a, ex)
+    let dst (_, a, ex) = (a, ex)
   end
 
-  let iter_vertex k { graph } =
-    DSGraph.distinct_nodes graph
-    |> List.to_iter
+  let iter_vertex k (gr, extra) =
+    DSGraph.distinct_nodes gr |> List.to_iter
     |> Iter.flat_map_l DSGraph.cells
+    |> Iter.map (fun v -> (v, extra))
     |> Iter.iter k
 
-  let iter_edges_e k gr =
-    Fun.flip iter_vertex gr
-    |> Iter.flat_map (fun src ->
+  let iter_edges_e k (gr, extra) =
+    Fun.flip iter_vertex (gr, extra)
+    |> Iter.flat_map (fun (src, extra) ->
         match !src with
         | DSGraph.Cell { pointees } ->
-            pointees |> List.to_iter |> Iter.map (fun dst -> (src, dst))
+            pointees |> List.to_iter |> Iter.map (fun dst -> (src, dst, extra))
         | _ -> failwith "non-terminal cell")
     |> Iter.iter k
 end
@@ -62,66 +76,63 @@ let show_node (node : DSGraph.node) =
     (ID.index (DSGraph.node_id node))
     (NodeFlags.show (DSGraph.flags node))
 
-let show_sym_bases =
-  CCCache.with_cache (CCCache.lru ~eq:CCEqual.physical 1000)
-  @@ fun (bases : Sva.SymBase.t list) ->
-  List.to_iter bases |> Iter.map Sva.SymBase.show |> Iter.intersperse ", "
-  |> Iter.concat_str
+let show_sym_bases (bases : Sva.SymBase.t list) =
+  List.to_iter bases |> Iter.map Sva.SymBase.show
 
 (** {1 Ocamlgraph Dot instantiation} *)
-
-module type Dot_sig = sig
-  open Graph.Graphviz
-
-  type t
-
-  module V : sig
-    type t
-  end
-
-  module E : sig
-    type t
-  end
-
-  val iter_vertex : (V.t -> unit) -> t -> unit
-  val iter_edges_e : (E.t -> unit) -> t -> unit
-  val graph_attributes : t -> DotAttributes.graph list
-  val default_vertex_attributes : t -> DotAttributes.vertex list
-  val vertex_name : V.t -> string
-  val vertex_attributes : V.t -> DotAttributes.vertex list
-  val get_subgraph : V.t -> DotAttributes.subgraph option
-  val default_edge_attributes : t -> DotAttributes.edge list
-  val edge_attributes : E.t -> DotAttributes.edge list
-end
-
-module Automatic_vertex_ids
-    (X : Dot_sig)
-    (Compare : sig
-      val equal_vertex : X.V.t -> X.V.t -> bool
-      val hash_vertex : X.V.t -> int
-      val equal_edge : X.E.t -> X.E.t -> bool
-      val hash_edge : X.E.t -> int
-    end) =
-struct
-
-  open Compare
-
-  let vertex_name =
-let n = int
-    CCCache.with_cache (CCCache.unbounded ~eq:equal_vertex ~hash:hash_vertex 100) @@
-    fun v ->
-
-
-
-end
 
 module Dsgraph_ocamlgraph_dot = struct
   include Dsgraph_ocamlgraph
 
-  let graph_attributes g = []
+  let graph_attributes g = [ `Rankdir `LeftToRight ]
   let default_vertex_attributes g = []
-  let vertex_name = show_cell_interval
-  let vertex_attributes _ = []
+
+  let vertex_indices cell =
+    let cell = DSGraph.find_cell cell in
+    let parent_node = DSGraph.node_of cell in
+    let node_index = ID.index (DSGraph.node_id parent_node)
+    and cell_index =
+      DSGraph.cells parent_node |> List.map DSGraph.find_cell
+      |> List.find_index (CCEqual.physical cell)
+      |> Option.get_exn_or "cell not in its own parent?!"
+    in
+    (node_index, cell_index)
+
+  (** Vertex "name" must be unique in a particular DOT file. *)
+  let vertex_name (cell, _) =
+    let node, cell = vertex_indices cell in
+    Printf.sprintf "node%d:%d" node cell
+
+  let vertex_attributes (cell, { sym_bases_in_nodes }) =
+    let parent_node = DSGraph.node_of cell in
+    let parent_str = show_node parent_node in
+
+    let sym_base_strs =
+      IDMap.find_opt (DSGraph.node_id parent_node) sym_bases_in_nodes
+      |> Option.map_or ~default:Iter.empty show_sym_bases
+      |> Iter.intersperse "\\n"
+    in
+
+    let cell_strs =
+      DSGraph.cells parent_node |> Iter.of_list
+      |> Iter.map show_cell_interval
+      |> Iter.zip_i
+      |> Iter.map (fun (i, s) -> [ "<"; string_of_int i; ">"; s ])
+      |> Iter.intersperse [ "|" ] |> Iter.flat_map_l Fun.id
+    in
+
+    let parts =
+      Iter.append_l
+        [
+          Iter.doubleton parent_str "\\n";
+          sym_base_strs;
+          Iter.doubleton "|" "{";
+          cell_strs;
+          Iter.singleton "}";
+        ]
+    in
+    [ `Label (Iter.concat_str parts); `Shape `Record ]
+
   let get_subgraph _ = None
   let default_edge_attributes _ = []
   let edge_attributes _ = []
