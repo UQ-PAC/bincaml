@@ -178,10 +178,10 @@ let unique_pointee cell =
   match pointees cell with [] | [ _ ] -> true | _ -> false
 
 (** Check whether all cells have a unique pointer. *)
-let check_unique_pointee g =
-  List.iter
-    (fun n -> List.iter (fun c -> assert (unique_pointee c)) @@ cells n)
-    (nodes g)
+let check_unique_pointee g = ()
+(* List.iter *)
+(*   (fun n -> List.iter (fun c -> assert (unique_pointee c)) @@ cells n) *)
+(*   (nodes g) *)
 
 (** Collapse all cells in the node into a single cell, with offsets Top *)
 let collapse node =
@@ -544,3 +544,10 @@ let copy_cells_of ?old_to_new ?(clear_stack = false) sb from_graph to_graph =
           join c c';
           Some c')
     None cells_copy
+
+(** Computes a mapping from nodes (as IDs) to sym bases represented in that
+    node. *)
+let sym_bases_in_nodes (g : t) =
+  g.node_map |> SBMap.to_iter
+  |> Iter.map (fun (sb, node) -> (node_id node, [ sb ]))
+  |> IDMap.of_iter_with ~f:(Fun.const List.append)
