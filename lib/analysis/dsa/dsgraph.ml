@@ -127,6 +127,12 @@ let node_id (n : node) =
   | Node r -> r.id
   | _ -> failwith "find_node returned non terminal"
 
+(** Gets the list of union-find parent nodes. *)
+let distinct_nodes (g : t) =
+  nodes g
+  |> List.map (fun n -> (node_id n, snd @@ find_node n))
+  |> IDMap.of_list |> IDMap.to_list |> List.map snd
+
 (** Set the cells of this node *)
 let set_cells cells (n : node) =
   find_node n |> snd

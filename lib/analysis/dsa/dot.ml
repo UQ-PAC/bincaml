@@ -5,6 +5,17 @@ end
 
 open Bincaml_util.Common
 
+module Dsgraph_ocamlgraph = struct
+  type t = DSGraph.t
+
+  module V = struct
+    type t =
+
+    end
+
+  end
+
+
 (** Manual dot string construction because ocamlgraph doesn't seem to support
     record nodes. *)
 let dot_string (graph : DSGraph.t) =
