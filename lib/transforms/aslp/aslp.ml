@@ -197,7 +197,6 @@ let apply_stmt_addresses_from_block (block : _ Block.t) =
   in
 
   (match StringMap.find_opt ".address" block.attrib with
-    | Some (`CamlInt x) -> Some (Bitvec.of_int ~size:64 x)
     | Some (`Integer x) -> Some (Bitvec.create ~size:64 x)
     | Some (`Bitvector x) -> Some x
     | _ -> None)

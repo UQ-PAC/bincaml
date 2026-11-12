@@ -23,7 +23,6 @@ let rec to_attrib k l : Attrib.t option =
   if String.equal k Attrib.triggers_key then None
   else
     match l with
-    | `CamlInt i -> Some (`CamlInt i)
     | `Bool i -> Some (`Bool i)
     | `Integer i -> Some (`Integer i)
     | `String i -> Some (`String i)

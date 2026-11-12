@@ -7,10 +7,62 @@ type t =
   | `Assoc of t StringMap.t
   | `Bool of bool
   | `Integer of Z.t
-  | `CamlInt of int
   | `Bitvector of Bitvec.t
   | `List of t list ]
 [@@deriving eq, ord]
+
+let rec to_sexp (p : t) : Containers.Sexp.t =
+  match p with
+  | `String n -> `Atom (Printf.sprintf "\"%S\"" n)
+  | `Assoc n ->
+      StringMap.to_list n
+      |> List.map (Pair.map (fun k -> `Atom k) to_sexp)
+      |> List.map (fun (k, v) -> `List [ k; v ])
+      |> fun l -> `List l
+  | `Bool true -> `Atom "true"
+  | `Bool false -> `Atom "false"
+  | `Integer i -> `Atom (Z.to_string i)
+  | `Bitvector i -> `Atom (Bitvec.to_string i)
+  | `List ls -> `List (List.map to_sexp ls)
+
+let rec of_sexp (p : Containers.Sexp.t) : t =
+  let seq o f = match o with None -> f | Some v -> Some v in
+  let otry f = try Some (f ()) with e -> None in
+
+  let ( <|> ) = seq in
+  match p with
+  | `List vs ->
+      let assoc =
+        List.fold_left
+          (function
+            | None -> fun _ -> None
+            | Some acc -> (
+                function
+                | `List [ `Atom n; v ] when String.starts_with ~prefix:"." n ->
+                    Some (StringMap.add n (of_sexp v) acc)
+                | _ -> None))
+          (Some StringMap.empty) vs
+      in
+      let assoc =
+        Option.map
+          (fun o -> if StringMap.is_empty o then `List [] else `Assoc o)
+          assoc
+      in
+      Option.get_or ~default:(`List (List.map of_sexp vs)) assoc
+  | `Atom v ->
+      let p =
+        None
+        <|> (match v with
+          | "true" -> Some (`Bool true)
+          | "false" -> Some (`Bool false)
+          | _ -> None)
+        <|> otry (fun () ->
+            let n = Z.of_string v in
+            `Integer n)
+        <|> otry (fun () -> `Bitvector (Bitvec.of_string v))
+        <|> Some (`String (Scanf.unescaped v))
+      in
+      Option.get_exn_or ("failed to parse: " ^ v) p
 
 let is_internal_key = String.starts_with ~prefix:"__"
 let location_key = "__text_range"
@@ -20,7 +72,6 @@ let rec attrib_pretty ?(show_internal = false) (e : t) : Containers_pp.t =
   let open Containers_pp in
   match e with
   | `String s -> text_quoted s
-  | `CamlInt s -> int s
   | `Bool b -> bool b
   | `Bitvector bv -> text @@ Bitvec.to_string bv
   | `Integer bv -> text @@ Z.to_string bv
@@ -57,28 +108,33 @@ let to_attrib_map : t -> attrib_map = function
 type loc = int * int
 (** a text token range; beginchar, endchar*)
 
+let int_val = Z.of_int %> fun c -> `Integer c
+
 let attr_of_loc l =
   let s, e = l in
-  StringMap.singleton location_key (`List [ `CamlInt s; `CamlInt e ])
+  StringMap.singleton location_key (`List [ int_val s; int_val e ])
 
 let join_range (a, b) (c, d) =
   (List.fold_left min a [ b; c; d ], List.fold_left max a [ b; c; d ])
 
+let join_range_z (a, b) (c, d) =
+  (List.fold_left Z.min a [ b; c; d ], List.fold_left Z.max a [ b; c; d ])
+
 let loc_of_attr l =
   match l with
-  | `List [ `CamlInt s; `CamlInt e ] -> (s, e)
+  | `List [ `Integer s; `Integer e ] -> (Z.to_int s, Z.to_int e)
   | _ -> failwith "bad structure"
 
 let join_map_locs (a : attrib_map) (b : attrib_map) =
   StringMap.merge
     (fun k l r ->
       match (l, r) with
-      | ( Some (`List [ `CamlInt a; `CamlInt b ]),
-          Some (`List [ `CamlInt c; `CamlInt d ]) )
+      | ( Some (`List [ `Integer a; `Integer b ]),
+          Some (`List [ `Integer c; `Integer d ]) )
         when String.equal k location_key ->
           Some
-            (let a, b = join_range (a, b) (c, d) in
-             `List [ `CamlInt a; `CamlInt b ])
+            (let a, b = join_range_z (a, b) (c, d) in
+             `List [ `Integer a; `Integer b ])
       | _, Some a -> Some a
       | Some a, None -> Some a
       | None, None -> None)
@@ -124,7 +180,4 @@ let find_loc_opt (e : t option) =
   find_opt location_key e |> Option.map loc_of_attr
 
 let find_int_map k (m : attrib_map) =
-  match StringMap.get k m with
-  | Some (`CamlInt n) -> Some (Z.of_int n)
-  | Some (`Integer n) -> Some n
-  | _ -> None
+  match StringMap.get k m with Some (`Integer n) -> Some n | _ -> None
