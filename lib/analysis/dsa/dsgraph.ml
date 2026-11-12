@@ -178,10 +178,10 @@ let unique_pointee cell =
   match pointees cell with [] | [ _ ] -> true | _ -> false
 
 (** Check whether all cells have a unique pointer. *)
-let check_unique_pointee g = ()
-(* List.iter *)
-(*   (fun n -> List.iter (fun c -> assert (unique_pointee c)) @@ cells n) *)
-(*   (nodes g) *)
+let check_unique_pointee g =
+  List.iter
+    (fun n -> List.iter (fun c -> assert (unique_pointee c)) @@ cells n)
+    (nodes g)
 
 (** Collapse all cells in the node into a single cell, with offsets Top *)
 let collapse node =
