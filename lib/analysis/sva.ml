@@ -241,7 +241,11 @@ module Domain = struct
           Iter.singleton
             ( var,
               SymAddrSetLattice.singleton
-                (SymBase.Heap { name = ID.name procid; proc_id = procid })
+                (SymBase.Heap
+                   {
+                     name = ID.name procid;
+                     proc_id = SymBase.placeholder_proc_id;
+                   })
               @@ IntervalDomain.init @@ Bitvec.zero ~size )
       | Stmt.Instr_Call { lhs; args; procid } ->
           Iter.map (fun param ->
