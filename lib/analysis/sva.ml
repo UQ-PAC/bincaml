@@ -18,13 +18,17 @@ module SymBase = struct
     (* Known *)
     | Stack of string
     (* TODO disambiguate distinct heap symbols from calling malloc multiple times *)
-    | Heap of { name : string }
+    | Heap of { name : string; proc_id : ID.t option }
     | GlobSym
     | Constant
     (* Unknown *)
-    | Par of { name : string; param : Var.t; proc_id : ID.t option }
-    | Ret of { name : string; param : Var.t; proc_id : ID.t option }
-    (* Variables are identifiers of load instructions per proc because of ssa form *)
+    | Par of { name : string; param : Var.t; proc_id : ID.t }
+    | Ret of { name : string; param : Var.t; proc_id : ID.t }
+        (** Variables are identifiers of load instructions per proc because of
+            ssa form.
+
+            [proc_id] is only optional becaose of an implementation detail. It
+            should always set after calling {!sva}. *)
     | Loaded of { var : Var.t; proc_id : ID.t option }
   [@@deriving ord, eq]
 
@@ -171,7 +175,7 @@ let try_make_local proc_id (param : Var.t) =
           when String.starts_with ~prefix:"R31" s
                || String.starts_with ~prefix:"SP" s ->
             SymBase.Stack proc_name
-        | _ -> Par { name = proc_name; param; proc_id = Some proc_id }
+        | _ -> Par { name = proc_name; param; proc_id }
       and interval = IntervalDomain.init (Bitvec.zero ~size) in
       Some (param, sym, interval)
 
@@ -224,7 +228,7 @@ module Domain = struct
           Iter.singleton
             ( var,
               SymAddrSetLattice.singleton
-                (SymBase.Heap { name = ID.name procid })
+                (SymBase.Heap { name = ID.name procid; proc_id = None })
               @@ IntervalDomain.init @@ Bitvec.zero ~size )
       | Stmt.Instr_Call { lhs; args; procid } ->
           Iter.map (fun param ->
@@ -236,7 +240,7 @@ module Domain = struct
               in
               ( param,
                 SymAddrSetLattice.singleton
-                  (Ret { name = ID.name procid; param; proc_id = Some procid })
+                  (Ret { name = ID.name procid; param; proc_id = procid })
                 @@ IntervalDomain.init @@ Bitvec.zero ~size ))
           @@ StringMap.values lhs
       | Stmt.Instr_Assert _ | Stmt.Instr_Assume _ -> Iter.empty
@@ -308,10 +312,12 @@ let sva (prog : Program.t) =
           (fun _ domain ->
             SymAddrSetLattice.to_list domain
             |> snd
-            |> List.map (fun (base, i) ->
-                match base with
-                | SymBase.Loaded r when Option.is_none r.proc_id ->
-                    (SymBase.Loaded { r with proc_id = Some id }, i)
-                | _ -> (base, i))
+            |> List.map
+                 (Pair.map_fst (function
+                   | SymBase.Loaded ({ proc_id = None } as r) ->
+                       SymBase.Loaded { r with proc_id = Some id }
+                   | SymBase.Heap ({ proc_id = None } as r) ->
+                       SymBase.Heap { r with proc_id = Some id }
+                   | base -> base))
             |> List.map try_make_global' |> SymAddrSetLattice.of_list_bot)
           b ))
