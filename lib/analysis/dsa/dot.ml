@@ -86,9 +86,9 @@ let show_sym_bases (bases : Sva.SymBase.t list) =
 module Dsgraph_ocamlgraph_dot = struct
   include Dsgraph_ocamlgraph
 
-  (** Returns the [(node_idx, cell_idx)] of the given vertex. The cell index is
-      used to reference the field number in the DOT graph. *)
-  let vertex_indices cell =
+  (** Returns the [(node_idx, cell_idx)] of the given DSA cell. The cell index
+      is used to reference the field number in the DOT graph. *)
+  let dsgraph_cell_indices cell =
     let cell = DSGraph.find_cell cell in
     let parent_node = DSGraph.node_of cell in
     let node_index = ID.index (DSGraph.node_id parent_node)
