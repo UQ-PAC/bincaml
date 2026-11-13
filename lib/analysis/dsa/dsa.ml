@@ -68,12 +68,6 @@ module Constraint = struct
             in
             Some (Call { lhs; args; callee_id = procid })
         | _ -> None)
-    |> Iter.map (fun x ->
-        Logs.debug (fun m ->
-            m "dsa constraint in %s: %s"
-              (ID.show (Procedure.id p))
-              (show Expr.BasilExpr.to_string x));
-        x)
 end
 
 module DSGraph = Dsgraph
@@ -327,7 +321,8 @@ let top_down prog graphs =
         Iter.iter
           Constraint.(
             function
-            | Call { lhs; args; callee_id } -> f caller_graph lhs args callee_id
+            | Call { lhs; args; callee_id } ->
+                f pid caller_graph lhs args callee_id
             | _ -> ())
           constraints)
       scc
@@ -347,7 +342,10 @@ let top_down prog graphs =
       in
       (* Resolve calls *)
       iter_calls
-        (fun caller_graph lhs args callee_id ->
+        (fun caller_id caller_graph lhs args callee_id ->
+          Logs.debug (fun m ->
+              m "resolving call. caller %s. callee %s." (ID.show caller_id)
+                (ID.show callee_id));
           if not @@ IDSet.mem callee_id scc then
             let old_to_new = Hashtbl.create 100 in
             let _, callee_graph = IDMap.find callee_id graphs in
@@ -364,6 +362,7 @@ let top_down prog graphs =
 
 (** Perform data structure analysis and return the graphs for each procedure. *)
 let dsa (p : Program.t) =
+  Logs.debug (fun m -> m "Starting pre-local phase...");
   let sva_r =
     Trace_core.with_span ~__FILE__ ~__LINE__ "sva" @@ fun _ ->
     Sva.sva p |> IDMap.of_list
@@ -375,6 +374,7 @@ let dsa (p : Program.t) =
       |> List.map (try_make_global p)
       |> SymAddrSetLattice.of_list_bot)
   in
+  Logs.debug (fun m -> m "Starting local phase...");
   let local_graphs =
     Trace_core.with_span ~__FILE__ ~__LINE__ "local phase" @@ fun _ ->
     IDMap.to_list sva_r
@@ -383,12 +383,6 @@ let dsa (p : Program.t) =
         let constraints =
           Constraint.gen_constraints p proc
           |> Iter.map (Constraint.map (translate pid) ~per_proc_f:translate)
-          |> Iter.persistent
-          |> Iter.map (fun x ->
-              Logs.debug (fun m ->
-                  m "dsa constraint in %s= %s" (ID.show pid)
-                    (Constraint.show Sva.SymAddrSetLattice.show x));
-              x)
           |> Iter.persistent
         in
         (pid, (constraints, make_local_graph proc sva constraints)))
@@ -399,10 +393,12 @@ let dsa (p : Program.t) =
   (*     print_endline (ID.show k); *)
   (*     print_endline (Dot.dot_string g)) *)
   (*   local_graphs; *)
+  Logs.debug (fun m -> m "Starting BU phase...");
   let bu_graphs =
     Trace_core.with_span ~__FILE__ ~__LINE__ "bottom up phase" @@ fun _ ->
     bottom_up p local_graphs
   in
+  Logs.debug (fun m -> m "Starting TD phase...");
   let td_graphs =
     Trace_core.with_span ~__FILE__ ~__LINE__ "top down phase" @@ fun _ ->
     top_down p bu_graphs
