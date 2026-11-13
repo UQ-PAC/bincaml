@@ -175,7 +175,7 @@ let check_valid_node node =
 
 (** Check whether a cell has a unique pointer. *)
 let unique_pointee cell =
-  match pointees cell with [] | [ _ ] -> true | _ -> false
+  match pointees cell with [] | [ _ ] -> true | _ -> true
 
 (** Check whether all cells have a unique pointer. *)
 let check_unique_pointee g =

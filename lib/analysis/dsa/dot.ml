@@ -23,6 +23,8 @@ module Dsgraph_ocamlgraph = struct
     prefix : string option;
     sym_bases_in_nodes : Sva.SymBase.t list IDMap.t;
   }
+  (** Extra information which is passed alongside each vertex and edge to use
+      when generating DOT attributes. *)
 
   type t = DSGraph.t * extra
 
@@ -48,8 +50,8 @@ module Dsgraph_ocamlgraph = struct
     |> Iter.map (fun v -> (v, extra))
     |> Iter.iter k
 
-  let iter_edges_e k (gr, extra) =
-    Fun.flip iter_vertex (gr, extra)
+  let iter_edges_e k gr =
+    Fun.flip iter_vertex gr
     |> Iter.flat_map (fun (src, extra) ->
         match !src with
         | DSGraph.Cell { pointees } ->
@@ -84,9 +86,8 @@ let show_sym_bases (bases : Sva.SymBase.t list) =
 module Dsgraph_ocamlgraph_dot = struct
   include Dsgraph_ocamlgraph
 
-  let graph_attributes g = [ `Rankdir `LeftToRight ]
-  let default_vertex_attributes g = []
-
+  (** Returns the [(node_idx, cell_idx)] of the given vertex. The cell index is
+      used to reference the field number in the DOT graph. *)
   let vertex_indices cell =
     let cell = DSGraph.find_cell cell in
     let parent_node = DSGraph.node_of cell in
@@ -98,7 +99,23 @@ module Dsgraph_ocamlgraph_dot = struct
     in
     (node_index, cell_index)
 
-  (** Vertex "name" must be unique in a particular DOT file. *)
+  (** When using record nodes, by default, the Dot emitter will repeat the node
+      declaration for each field in the record, and the entire field list is
+      repeated at each declaration.
+
+      To avoid that repetition, this is a {b hack} that filters the
+      {!Dsgraph_ocamlgraph.iter_vertex} to only return the first cell of each
+      record node. *)
+  let iter_vertex k gr =
+    Fun.flip iter_vertex gr
+    |> Iter.filter (fun (v, _) -> 0 = snd (vertex_indices v))
+    |> Iter.iter k
+
+  let graph_attributes g = [ `Rankdir `LeftToRight ]
+  let default_vertex_attributes g = []
+
+  (** Vertex "name" must be unique in a particular DOT file. Our graph's
+      "vertices" are cells, so this includes the record field number. *)
   let vertex_name (cell, _) =
     let node, cell = vertex_indices cell in
     Printf.sprintf "node%d:%d" node cell
@@ -143,6 +160,7 @@ include Graph.Graphviz.Dot (Dsgraph_ocamlgraph_dot)
 let dot_string g =
   let b = Buffer.create 10 in
   let fmt = Format.formatter_of_buffer b in
+  Format.pp_set_margin fmt Format.pp_infinity;
   fprint_graph fmt (Dsgraph_ocamlgraph.of_dsgraph g);
   Format.pp_print_flush fmt ();
   Buffer.to_bytes b |> Bytes.unsafe_to_string
