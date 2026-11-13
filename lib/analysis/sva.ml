@@ -18,14 +18,18 @@ module SymBase = struct
     (* Known *)
     | Stack of string
     (* TODO disambiguate distinct heap symbols from calling malloc multiple times *)
-    | Heap of { name : string }
+    | Heap of { name : string; proc_id : ID.t }
     | GlobSym
     | Constant
     (* Unknown *)
-    | Par of { name : string; param : Var.t; proc_id : ID.t option }
-    | Ret of { name : string; param : Var.t; proc_id : ID.t option }
-    (* Variables are identifiers of load instructions per proc because of ssa form *)
-    | Loaded of { var : Var.t; proc_id : ID.t option }
+    | Par of { name : string; param : Var.t; proc_id : ID.t }
+    | Ret of { name : string; param : Var.t; proc_id : ID.t }
+        (** Variables are identifiers of load instructions per proc because of
+            ssa form.
+
+            [proc_id] is only optional becaose of an implementation detail. It
+            should always set after calling {!sva}. *)
+    | Loaded of { var : Var.t; proc_id : ID.t }
   [@@deriving ord, eq]
 
   let show = function
@@ -46,6 +50,19 @@ module SymBase = struct
   let to_int = Hashtbl.hash
   let pretty a = Containers_pp.text @@ show a
   let is_stack = function Stack _ -> true | _ -> false
+
+  (** Temporary ID to use as [proc_id] inside {!t} until the real ID can be
+      inserted.
+
+      This is needed because in some places in the {!Domain}, we need to
+      construct a {!t} without having the knowledge of which procedure it's in.
+  *)
+  let placeholder_proc_id =
+    ID.fresh ~name:"BINCAML_PLACEHOLDER_PROCEDURE_ID" (ID.make_gen ()) ()
+
+  let is_placeholder_proc_id id =
+    String.equal (ID.name id) (ID.name placeholder_proc_id)
+    && ID.index id = ID.index placeholder_proc_id
 end
 
 module IntervalDomain = struct
@@ -171,7 +188,7 @@ let try_make_local proc_id (param : Var.t) =
           when String.starts_with ~prefix:"R31" s
                || String.starts_with ~prefix:"SP" s ->
             SymBase.Stack proc_name
-        | _ -> Par { name = proc_name; param; proc_id = Some proc_id }
+        | _ -> Par { name = proc_name; param; proc_id }
       and interval = IntervalDomain.init (Bitvec.zero ~size) in
       Some (param, sym, interval)
 
@@ -200,7 +217,7 @@ module Domain = struct
           | Addr { size } ->
               ( lhs,
                 SymAddrSetLattice.singleton
-                  (Loaded { var = lhs; proc_id = None })
+                  (Loaded { var = lhs; proc_id = SymBase.placeholder_proc_id })
                 @@ IntervalDomain.init @@ Bitvec.zero ~size ))
       | Stmt.Instr_Store { lhs; addr; rhs } -> (
           match addr with
@@ -224,7 +241,11 @@ module Domain = struct
           Iter.singleton
             ( var,
               SymAddrSetLattice.singleton
-                (SymBase.Heap { name = ID.name procid })
+                (SymBase.Heap
+                   {
+                     name = ID.name procid;
+                     proc_id = SymBase.placeholder_proc_id;
+                   })
               @@ IntervalDomain.init @@ Bitvec.zero ~size )
       | Stmt.Instr_Call { lhs; args; procid } ->
           Iter.map (fun param ->
@@ -236,7 +257,7 @@ module Domain = struct
               in
               ( param,
                 SymAddrSetLattice.singleton
-                  (Ret { name = ID.name procid; param; proc_id = Some procid })
+                  (Ret { name = ID.name procid; param; proc_id = procid })
                 @@ IntervalDomain.init @@ Bitvec.zero ~size ))
           @@ StringMap.values lhs
       | Stmt.Instr_Assert _ | Stmt.Instr_Assume _ -> Iter.empty
@@ -295,23 +316,25 @@ let try_make_global (prog : Program.t) =
 let sva (prog : Program.t) =
   let try_make_global' = try_make_global prog in
 
-  let results =
-    Program.procs prog
-    |> Iter.fold
-         (fun acc (id, v) -> (id, DFGAnalysis.flow_insensitive v) :: acc)
-         []
-  in
-  results
-  |> List.map (fun (id, b) ->
-      ( id,
-        StateAbstraction.mapi
-          (fun _ domain ->
+  Program.procs prog
+  |> Iter.map (Pair.map_snd DFGAnalysis.flow_insensitive)
+  |> Iter.map (fun (id, sva_result) ->
+      (* fixup [proc_id] fields and translate global addresses to Global. *)
+      let sva_result =
+        sva_result
+        |> StateAbstraction.mapi (fun _ domain ->
             SymAddrSetLattice.to_list domain
             |> snd
-            |> List.map (fun (base, i) ->
-                match base with
-                | SymBase.Loaded r when Option.is_none r.proc_id ->
-                    (SymBase.Loaded { r with proc_id = Some id }, i)
-                | _ -> (base, i))
+            |> List.map
+                 (Pair.map_fst (function
+                   | SymBase.Loaded ({ proc_id } as r)
+                     when SymBase.is_placeholder_proc_id proc_id ->
+                       SymBase.Loaded { r with proc_id = id }
+                   | SymBase.Heap ({ proc_id } as r)
+                     when SymBase.is_placeholder_proc_id proc_id ->
+                       SymBase.Heap { r with proc_id = id }
+                   | base -> base))
             |> List.map try_make_global' |> SymAddrSetLattice.of_list_bot)
-          b ))
+      in
+      (id, sva_result))
+  |> List.of_iter
