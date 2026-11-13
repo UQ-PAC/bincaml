@@ -1,6 +1,11 @@
 open Lang
 open Common
 open Wrapped_intervals
+
+module Logs =
+  (val Logs.src_log
+         (Logs.Src.create ~doc:("data structure analysis: " ^ __FILE__) "dsa"))
+
 module Interval = Interval
 module FormalDSGraph = Formal
 
@@ -344,7 +349,7 @@ let top_down prog graphs =
       iter_calls
         (fun caller_id caller_graph lhs args callee_id ->
           Logs.debug (fun m ->
-              m "resolving call. caller %s. callee %s." (ID.show caller_id)
+              m "TD: resolving call. caller %s. callee %s." (ID.show caller_id)
                 (ID.show callee_id));
           if not @@ IDSet.mem callee_id scc then
             let old_to_new = Hashtbl.create 100 in
