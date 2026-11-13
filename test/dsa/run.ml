@@ -20,7 +20,11 @@ let () =
 
   match !input_files with
   | [ filename ] ->
-      let prog = (Loader.Loadir.ast_of_fname filename).prog in
+      let prog =
+        if String.ends_with ~suffix:".gtirb" filename then
+          Gtirb_frontend.load_gtirb_prog filename |> Result.get_ok'
+        else (Loader.Loadir.ast_of_fname filename).prog
+      in
       let proc = Lang.Program.get_proc_by_name (List.hd !keep_procs) prog in
       let mainid = Lang.Procedure.id proc in
       let prog = Lang.Program.set_entry_proc mainid prog in
