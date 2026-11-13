@@ -168,7 +168,6 @@ let resolve_callee old_to_new caller_graph callee_graph actual formal =
      let open DSGraph in
      (* Only do the joining if a caller cell actually exists *)
      let* caller_cell = cell_of (symbolic_values actual) caller_graph in
-     unify_node_of caller_cell;
      let* callee_cell_copy =
        copy_cells_of ~old_to_new ~clear_stack:true (symbolic_values formal)
          callee_graph caller_graph
@@ -183,6 +182,10 @@ let resolve_callee old_to_new caller_graph callee_graph actual formal =
 (** Copy and merge the actual cells from the callee graph with the formal cell
     of the caller graph. *)
 let resolve_caller old_to_new caller_graph callee_graph actual formal =
+  Logs.debug (fun m ->
+      m "resolve_callee. actual: %s. formal: %s."
+        (Sva.SymAddrSetLattice.show actual)
+        (Sva.SymAddrSetLattice.show formal));
   ignore
     (let open Option.Infix in
      let open DSGraph in
