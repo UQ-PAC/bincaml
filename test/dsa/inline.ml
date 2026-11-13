@@ -437,20 +437,22 @@ let%expect_test "bayat1" =
   [%expect
     {|
     digraph G {
-      rankdir="LR"
-      node[shape=record]
-      "node0"[label="node0 S \nStack(@main) |{<0>[-48, -41]:8B|<1>[-40, -33]:8B|<2>[-20, -13]:8B|<3>[-8, 3]:12B}"];
-      "node3"[label="node3 UO \nPar(@main_R0_in:bv64)\nLoaded(local_39:bv32) |{<4>Top:?B}"];
-      "node5"[label="node5 G \nGlobal |{<5>[131128, 131143]:16B|<6>[131144, 131151]:8B|<7>[131152, 131159]:8B|<8>[131160, 131167]:8B}"];
-      "node6"[label="node6 U \nPar(@main_R29_in:bv64)\nLoaded(local_53:bv64) |{<9>[0, 7]:8B}"];
-      "node7"[label="node7 U \nPar(@main_R30_in:bv64)\nLoaded(local_56:bv64) |{<10>[0, 7]:8B}"];
-      "node0":2 -> "node3":4
-      "node5":7 -> "node5":8
-      "node0":0 -> "node6":9
-      "node5":5 -> "node0":3
-      "node5":6 -> "node5":5
-      "node0":1 -> "node7":10
-    }
+      rankdir=LR;
+      node0:0 [shape=record, label="node0 S\nStack(@main)|{<0>[-48, -41]:8B|<1>[-40, -33]:8B|<2>[-20, -13]:8B|<3>[-8, 3]:12B}", ];
+      node3:0 [shape=record, label="node3 UO\nLoaded(local_39:bv32)\nPar(@main_R0_in:bv64)|{<0>Top:?B}", ];
+      node5:0 [shape=record, label="node5 G\nGlobal|{<0>[131128, 131143]:16B|<1>[131144, 131151]:8B|<2>[131152, 131159]:8B|<3>[131160, 131167]:8B}", ];
+      node6:0 [shape=record, label="node6 U\nLoaded(local_53:bv64)\nPar(@main_R29_in:bv64)|{<0>[0, 7]:8B}", ];
+      node7:0 [shape=record, label="node7 U\nLoaded(local_56:bv64)\nPar(@main_R30_in:bv64)|{<0>[0, 7]:8B}", ];
+
+
+      node0:0 -> node6:0;
+      node0:1 -> node7:0;
+      node0:2 -> node3:0;
+      node5:0 -> node0:3;
+      node5:1 -> node5:0;
+      node5:2 -> node5:3;
+
+      }
     |}]
 
 let%expect_test "bayat2" =
@@ -579,18 +581,20 @@ let%expect_test "bayat2" =
   [%expect
     {|
     digraph G {
-      rankdir="LR"
-      node[shape=record]
-      "node8"[label="node8 S \nStack(@main) |{<0>[-32, -25]:8B|<1>[-24, -17]:8B|<2>[-4, 3]:8B}"];
-      "node11"[label="node11 UO \nPar(@main_R0_in:bv64)\nLoaded(local_35:bv32) |{<3>Top:?B}"];
-      "node12"[label="node12 G \nGlobal |{<4>[131168, 131175]:8B|<5>[131176, 131183]:8B}"];
-      "node14"[label="node14 U \nLoaded(local_42:bv32) |{<6>[0, 3]:4B}"];
-      "node15"[label="node15 U \nPar(@main_R29_in:bv64)\nLoaded(local_47:bv64) |{<7>[0, 7]:8B}"];
-      "node16"[label="node16 U \nPar(@main_R30_in:bv64)\nLoaded(local_50:bv64) |{<8>[0, 7]:8B}"];
-      "node8":2 -> "node11":3
-      "node8":0 -> "node15":7
-      "node12":5 -> "node12":4
-      "node11":3 -> "node14":6
-      "node8":1 -> "node16":8
-    }
+      rankdir=LR;
+      node8:0 [shape=record, label="node8 S\nStack(@main)|{<0>[-32, -25]:8B|<1>[-24, -17]:8B|<2>[-4, 3]:8B}", ];
+      node11:0 [shape=record, label="node11 UO\nLoaded(local_35:bv32)\nPar(@main_R0_in:bv64)|{<0>Top:?B}", ];
+      node12:0 [shape=record, label="node12 G\nGlobal|{<0>[131168, 131175]:8B|<1>[131176, 131183]:8B}", ];
+      node14:0 [shape=record, label="node14 U\nLoaded(local_42:bv32)|{<0>[0, 3]:4B}", ];
+      node15:0 [shape=record, label="node15 U\nLoaded(local_47:bv64)\nPar(@main_R29_in:bv64)|{<0>[0, 7]:8B}", ];
+      node16:0 [shape=record, label="node16 U\nLoaded(local_50:bv64)\nPar(@main_R30_in:bv64)|{<0>[0, 7]:8B}", ];
+
+
+      node8:0 -> node15:0;
+      node8:1 -> node16:0;
+      node8:2 -> node11:0;
+      node11:0 -> node14:0;
+      node12:1 -> node12:0;
+
+      }
     |}]
