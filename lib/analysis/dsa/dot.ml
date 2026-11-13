@@ -108,7 +108,7 @@ module Dsgraph_ocamlgraph_dot = struct
       record node. *)
   let iter_vertex k gr =
     Fun.flip iter_vertex gr
-    |> Iter.filter (fun (v, _) -> 0 = snd (vertex_indices v))
+    |> Iter.filter (fun (v, _) -> 0 = snd (dsgraph_cell_indices v))
     |> Iter.iter k
 
   let graph_attributes g = [ `Rankdir `LeftToRight ]
@@ -117,7 +117,7 @@ module Dsgraph_ocamlgraph_dot = struct
   (** Vertex "name" must be unique in a particular DOT file. Our graph's
       "vertices" are cells, so this includes the record field number. *)
   let vertex_name (cell, _) =
-    let node, cell = vertex_indices cell in
+    let node, cell = dsgraph_cell_indices cell in
     Printf.sprintf "node%d:%d" node cell
 
   let vertex_attributes (cell, { sym_bases_in_nodes }) =
