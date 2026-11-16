@@ -195,7 +195,7 @@ let replace_call_edges procids g =
       let* caller_uuid, callee_uuid =
         match old_edge with
         | ( Gfir.Vert.Internal caller_uuid,
-            Some { type' = Type_Call | Type_Syscall },
+            _,
             (Gfir.Vert.External callee_uuid | Internal callee_uuid) ) ->
             Some (caller_uuid, callee_uuid)
         | _ -> None
