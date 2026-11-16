@@ -280,7 +280,7 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   let succ_addr uuid =
     let verts =
       Iter.from_iter (fun f -> Gfir.G.iter_vertex f p.cfg)
-      |> Iter.filter (fun x -> UUID.equal (Vert.originating_uuid x) uuid)
+      |> Iter.filter (fun x -> UUID.equal (Vert.uuid x) uuid)
     in
     try
       Gfir.(
@@ -303,9 +303,8 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   let proc, blocks =
     Iter.from_iter (fun f -> Gfir.G.iter_vertex f p.cfg)
     |> Iter.filter_map (fun vert ->
-        (* Address lookup uses original UUID, but blockmap should use the fresh UUID. *)
         let address =
-          UUIDMap.find_opt (Gfir.Vert.originating_uuid vert) all_blocks
+          UUIDMap.find_opt (Gfir.Vert.uuid vert) all_blocks
           |> Option.flat_map Gtirb.address
         in
         match vert with
