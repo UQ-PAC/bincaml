@@ -185,12 +185,13 @@ let replace_call_edges procids g =
             procids callee_uuid
             |> Option.map_or ~default:g (fun id ->
                 let (args as lhs as attrib) = StringMap.empty in
-                let fresh_uuid =
-                  UUID.(of_string (show caller_uuid ^ "-" ^ show callee_uuid))
-                and stmts =
+                let stmts =
                   [ Lang.Stmt.Instr_Call { procid = id; args; lhs; attrib } ]
                 in
-                let vert = Gfir.Vert.Stmts { uuid = fresh_uuid; stmts } in
+                let vert =
+                  Gfir.Vert.Stmts
+                    { uuid = callee_uuid; pred_uuid = Some caller_uuid; stmts }
+                in
                 let g = Gfir.G.remove_edge_e g e in
                 Gfir.G.add_edge_e g (Internal caller_uuid, label, vert))
       | o -> Fun.id)

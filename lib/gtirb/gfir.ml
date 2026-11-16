@@ -38,7 +38,11 @@ module Vert = struct
     | Internal of UUID.t  (** vertex in this procedure *)
     | External of UUID.t  (** vertex in another procedure *)
     | Proxy of UUID.t  (** vertex in another procedure *)
-    | Stmts of { uuid : UUID.t; stmts : Lang.Program.stmt list }
+    | Stmts of {
+        uuid : UUID.t;
+        pred_uuid : UUID.t option;
+        stmts : Lang.Program.stmt list;
+      }
   [@@deriving eq, ord, show { with_path = false }]
 
   let uuid = function
