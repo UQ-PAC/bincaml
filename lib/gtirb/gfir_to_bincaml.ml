@@ -100,9 +100,14 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
         in
         let es =
           G.succ_e temp_proc.cfg e
-          |> List.map (fun (_, l, t) ->
+          |> List.map (function _, l, t ->
+              let uuid =
+                match t with
+                | Gfir.Vert.Stmts { originating_uuid } -> originating_uuid
+                | x -> Vert.uuid x
+              in
               let addr =
-                address_of_uuid all_blocks (Vert.uuid t)
+                address_of_uuid all_blocks uuid
                 |> Option.map (fun x -> (".address", `CamlInt x))
                 |> Option.to_list
               in
@@ -195,7 +200,10 @@ let replace_call_edges procids g =
                       (show caller_uuid ^ "\000\000\000\000\000"
                      ^ show callee_uuid))
                 in
-                let vert = Gfir.Vert.Stmts { uuid; stmts } in
+                let vert =
+                  Gfir.Vert.Stmts
+                    { uuid; stmts; originating_uuid = callee_uuid }
+                in
                 let g = Gfir.G.remove_edge_e g e in
                 Gfir.G.add_edge_e g (Internal caller_uuid, label, vert))
       | o -> Fun.id)
