@@ -24,6 +24,11 @@ module Edge = struct
         (".type", `String (show_edge_type type'));
       ]
 
+  let type' (_, label, tgt) =
+    match label with
+    | Some { type' } -> type'
+    | _ -> failwith "gfir edges should be annotated"
+
   let default = None
 end
 
