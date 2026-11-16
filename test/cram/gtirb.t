@@ -111,8 +111,10 @@
      block %ret_1 [ return; ]
   ];
   proc @_init()  -> () {  }
-    modifies $PC:bv64, $R0:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
-    captures $PC:bv64, $R0:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
+    modifies $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64, $R29:bv64, $R30:bv64,
+      $SP:bv64, $mem:(bv64->bv8)
+    captures $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64, $R29:bv64, $R30:bv64,
+      $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400600:bv64, $PC))
   
   [
@@ -554,15 +556,16 @@
      block %register_tm_clones_ext [ assert false; unreachable; ]
   ];
   proc @frame_dummy()  -> () {  }
-    modifies $PC:bv64
-    captures $PC:bv64
+    modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64
+    captures $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64, $R30:bv64,
+      $mem:(bv64->bv8)
     requires boolor(eq(0x400780:bv64, $PC))
   
   [
      block %frame_dummy_code { .address = 4196224;
          .gtirb_block = "6JJvkaLhTaWXaEL0+yxKxg";
          .succ = [ { .address = 4196112; .conditional = "false"; .direct = "true";
-                 .target = "external:rIlbG4jGSTydaFqMhxCKWw"; .type = "Type_Branch" } ] } [
+                 .target = "stmts:rIlbG4jGSTydaFqMhxCKWw"; .type = "Type_Branch" } ] } [
        assume eq(0x400780:bv64, $PC);
        goto (%block);
      ];
@@ -573,10 +576,11 @@
      ];
      block %frame_dummy_code_1 [
        assert boolor(eq(0x400710:bv64, $PC));
-       goto (%frame_dummy_ext);
+       goto (%frame_dummy_ext_1);
      ];
-     block %frame_dummy_ext [
+     block %frame_dummy_ext_1 [
        assume eq(0x400710:bv64, $PC);
+       call @register_tm_clones();
        assert false;
        unreachable;
      ]
@@ -1093,9 +1097,9 @@
      ];
      block %_start_code_3 [
        assert boolor(eq(0x400640:bv64, $PC));
-       goto (%_start_ext_4);
+       goto (%_start_ext_5);
      ];
-     block %_start_ext_4 [
+     block %_start_ext_5 [
        assume eq(0x400640:bv64, $PC);
        call @FUN_400640();
        assert boolor(eq(0x4006b0:bv64, $PC));
@@ -1116,9 +1120,9 @@
      ];
      block %_start_code_4 [
        assert boolor(eq(0x400660:bv64, $PC));
-       goto (%_start_ext_3);
+       goto (%_start_ext_4);
      ];
-     block %_start_ext_3 [
+     block %_start_ext_4 [
        assume eq(0x400660:bv64, $PC);
        call @FUN_400660();
        assert false;
@@ -1149,8 +1153,8 @@
      block %ret [ return; ]
   ];
   proc @call_weak_fn()  -> () {  }
-    modifies $PC:bv64, $R0:bv64
-    captures $PC:bv64, $R0:bv64, $R30:bv64, $mem:(bv64->bv8)
+    modifies $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64
+    captures $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64, $R30:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x4006c4:bv64, $PC))
   
   [
@@ -1202,7 +1206,7 @@
      block %call_weak_fn_code_1 { .address = 4196048;
          .gtirb_block = "fxMAJl44TWOTA8IHVD8V7Q";
          .succ = [ { .address = 4195920; .conditional = "false"; .direct = "true";
-                 .target = "external:i2bc6yURTw+Pq2nxe63pQA"; .type = "Type_Branch" } ] } [
+                 .target = "stmts:i2bc6yURTw+Pq2nxe63pQA"; .type = "Type_Branch" } ] } [
        assume eq(0x4006d0:bv64, $PC);
        goto (%block_6);
      ];
@@ -1213,10 +1217,11 @@
      ];
      block %call_weak_fn_code_4 [
        assert boolor(eq(0x400650:bv64, $PC));
-       goto (%call_weak_fn_ext);
+       goto (%call_weak_fn_ext_2);
      ];
-     block %call_weak_fn_ext [
+     block %call_weak_fn_ext_2 [
        assume eq(0x400650:bv64, $PC);
+       call @.L_400650();
        assert false;
        unreachable;
      ];
