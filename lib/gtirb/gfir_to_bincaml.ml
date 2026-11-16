@@ -175,36 +175,40 @@ let reorder_fallthrough (g : Gfir.G.t) =
   in
   Gfir.G.fold_vertex reorder_fallthrough_succs g g
 
+let make_call_vertex ~caller_uuid ~callee_uuid procid =
+  let stmt =
+    let empty = StringMap.empty in
+    Lang.Stmt.Instr_Call { procid; args = empty; lhs = empty; attrib = empty }
+  and uuid =
+    (* HACK: makes a unique name, but double-encodes the base64... *)
+    UUID.(
+      of_string (show caller_uuid ^ "\000\000\000\000\000" ^ show callee_uuid))
+  in
+  Gfir.Vert.Stmts { uuid; stmts = [ stmt ]; originating_uuid = callee_uuid }
+
 (** Replace all external edges with a defined procedure with stmt edges
     containing a call to that procedure. *)
 let replace_call_edges procids g =
-  Gfir.G.fold_edges_e
-    (function
-      | ( (Internal caller_uuid as src),
-          (Some { type' = Type_Call | Type_Syscall } as label),
-          (External callee_uuid | Internal callee_uuid) ) as old_edge -> (
-          match procids callee_uuid with
-          | None -> Fun.id
-          | Some callee_id ->
-              fun g ->
-                let stmt =
-                  let (args as lhs as attrib) = StringMap.empty in
-                  Lang.Stmt.Instr_Call { procid = callee_id; args; lhs; attrib }
-                and uuid =
-                  (* HACK: makes a unique name, but double-encodes the base64... *)
-                  UUID.(
-                    of_string
-                      (show caller_uuid ^ "\000\000\000\000\000"
-                     ^ show callee_uuid))
-                in
-                let vert =
-                  Gfir.Vert.Stmts
-                    { uuid; stmts = [ stmt ]; originating_uuid = callee_uuid }
-                in
-                let g = Gfir.G.remove_edge_e g old_edge in
-                Gfir.G.add_edge_e g (src, label, vert))
-      | _ -> Fun.id)
-    g g
+  Fun.flip Gfir.G.iter_edges_e g
+  |> Iter.filter_map (fun old_edge ->
+      let open Option.Infix in
+      let* caller_uuid, callee_uuid =
+        match old_edge with
+        | ( Gfir.Vert.Internal caller_uuid,
+            Some { type' = Type_Call | Type_Syscall },
+            (Gfir.Vert.External callee_uuid | Internal callee_uuid) ) ->
+            Some (caller_uuid, callee_uuid)
+        | _ -> None
+      in
+      let+ callee_id = procids callee_uuid in
+      let new_vert = make_call_vertex ~caller_uuid ~callee_uuid callee_id in
+      (old_edge, new_vert))
+  |> Iter.fold
+       (fun g (old_edge, new_vert) ->
+         let src, label, _ = old_edge in
+         let g = Gfir.G.remove_edge_e g old_edge in
+         Gfir.G.add_edge_e g (src, label, new_vert))
+       g
 
 (** Add the given CFG edge to the IR procedure. We naively translate all edges
     as jumps, on the assumption that
