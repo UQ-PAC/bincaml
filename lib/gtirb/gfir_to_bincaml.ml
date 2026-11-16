@@ -177,26 +177,25 @@ let reorder_fallthrough (g : Gfir.G.t) =
 
 (** Replace all external edges with a defined procedure with stmt edges
     containing a call to that procedure. *)
-let replace_call_edges procids =
-  Gfir.G.map_vertex (function
-    | External uuid as default ->
-        let id = procids uuid in
-        let m =
-          id
-          |> Option.map (fun id ->
-              let stmt =
-                Lang.Stmt.Instr_Call
-                  {
-                    procid = id;
-                    args = StringMap.empty;
-                    lhs = StringMap.empty;
-                    attrib = StringMap.empty;
-                  }
-              in
-              Gfir.Vert.Stmts { uuid; stmts = [ stmt ] })
-        in
-        Option.get_or ~default m
-    | o -> o)
+let replace_call_edges procids g =
+  Gfir.G.fold_edges_e
+    (function
+      | (Internal caller_uuid, label, External callee_uuid) as e ->
+          fun g ->
+            procids callee_uuid
+            |> Option.map_or ~default:g (fun id ->
+                let (args as lhs as attrib) = StringMap.empty in
+                let stmts =
+                  [ Lang.Stmt.Instr_Call { procid = id; args; lhs; attrib } ]
+                in
+                let vert =
+                  Gfir.Vert.Stmts
+                    { uuid = callee_uuid; pred_uuid = Some caller_uuid; stmts }
+                in
+                let g = Gfir.G.remove_edge_e g e in
+                Gfir.G.add_edge_e g (Internal caller_uuid, label, vert))
+      | o -> Fun.id)
+    g g
 
 (** Add the given CFG edge to the IR procedure. We naively translate all edges
     as jumps, on the assumption that
