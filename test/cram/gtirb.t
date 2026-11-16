@@ -111,10 +111,8 @@
      block %ret_1 [ return; ]
   ];
   proc @_init()  -> () {  }
-    modifies $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64, $R29:bv64, $R30:bv64,
-      $SP:bv64, $mem:(bv64->bv8)
-    captures $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64, $R29:bv64, $R30:bv64,
-      $SP:bv64, $mem:(bv64->bv8)
+    modifies $PC:bv64, $R0:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
+    captures $PC:bv64, $R0:bv64, $R29:bv64, $R30:bv64, $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400600:bv64, $PC))
   
   [
@@ -154,6 +152,7 @@
        goto (%_init_ext_2);
      ];
      block %_init_ext_2 [
+       assume eq(0x4006c4:bv64, $PC);
        call @call_weak_fn();
        assert boolor(eq(0x400610:bv64, $PC));
        goto (%_init_code_1);
@@ -327,6 +326,7 @@
        goto (%__do_global_dtors_aux_ext_2);
      ];
      block %__do_global_dtors_aux_ext_2 [
+       assume eq(0x4006e0:bv64, $PC);
        call @deregister_tm_clones();
        assert boolor(eq(0x400768:bv64, $PC));
        goto (%__do_global_dtors_aux_code_2);
@@ -554,16 +554,15 @@
      block %register_tm_clones_ext [ assert false; unreachable; ]
   ];
   proc @frame_dummy()  -> () {  }
-    modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64
-    captures $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64, $R30:bv64,
-      $mem:(bv64->bv8)
+    modifies $PC:bv64
+    captures $PC:bv64
     requires boolor(eq(0x400780:bv64, $PC))
   
   [
      block %frame_dummy_code { .address = 4196224;
          .gtirb_block = "6JJvkaLhTaWXaEL0+yxKxg";
          .succ = [ { .address = 4196112; .conditional = "false"; .direct = "true";
-                 .target = "stmts:rIlbG4jGSTydaFqMhxCKWw"; .type = "Type_Branch" } ] } [
+                 .target = "external:rIlbG4jGSTydaFqMhxCKWw"; .type = "Type_Branch" } ] } [
        assume eq(0x400780:bv64, $PC);
        goto (%block);
      ];
@@ -574,10 +573,10 @@
      ];
      block %frame_dummy_code_1 [
        assert boolor(eq(0x400710:bv64, $PC));
-       goto (%frame_dummy_ext_1);
+       goto (%frame_dummy_ext);
      ];
-     block %frame_dummy_ext_1 [
-       call @register_tm_clones();
+     block %frame_dummy_ext [
+       assume eq(0x400710:bv64, $PC);
        assert false;
        unreachable;
      ]
@@ -1094,9 +1093,10 @@
      ];
      block %_start_code_3 [
        assert boolor(eq(0x400640:bv64, $PC));
-       goto (%_start_ext_5);
+       goto (%_start_ext_4);
      ];
-     block %_start_ext_5 [
+     block %_start_ext_4 [
+       assume eq(0x400640:bv64, $PC);
        call @FUN_400640();
        assert boolor(eq(0x4006b0:bv64, $PC));
        goto (%_start_code_1);
@@ -1116,9 +1116,14 @@
      ];
      block %_start_code_4 [
        assert boolor(eq(0x400660:bv64, $PC));
-       goto (%_start_ext_4);
+       goto (%_start_ext_3);
      ];
-     block %_start_ext_4 [ call @FUN_400660(); assert false; unreachable; ]
+     block %_start_ext_3 [
+       assume eq(0x400660:bv64, $PC);
+       call @FUN_400660();
+       assert false;
+       unreachable;
+     ]
   ];
   proc @_dl_relocate_static_pie()  -> () {  }
     modifies $PC:bv64
@@ -1144,8 +1149,8 @@
      block %ret [ return; ]
   ];
   proc @call_weak_fn()  -> () {  }
-    modifies $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64
-    captures $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64, $R30:bv64, $mem:(bv64->bv8)
+    modifies $PC:bv64, $R0:bv64
+    captures $PC:bv64, $R0:bv64, $R30:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x4006c4:bv64, $PC))
   
   [
@@ -1197,7 +1202,7 @@
      block %call_weak_fn_code_1 { .address = 4196048;
          .gtirb_block = "fxMAJl44TWOTA8IHVD8V7Q";
          .succ = [ { .address = 4195920; .conditional = "false"; .direct = "true";
-                 .target = "stmts:i2bc6yURTw+Pq2nxe63pQA"; .type = "Type_Branch" } ] } [
+                 .target = "external:i2bc6yURTw+Pq2nxe63pQA"; .type = "Type_Branch" } ] } [
        assume eq(0x4006d0:bv64, $PC);
        goto (%block_6);
      ];
@@ -1208,9 +1213,13 @@
      ];
      block %call_weak_fn_code_4 [
        assert boolor(eq(0x400650:bv64, $PC));
-       goto (%call_weak_fn_ext_2);
+       goto (%call_weak_fn_ext);
      ];
-     block %call_weak_fn_ext_2 [ call @.L_400650(); assert false; unreachable; ];
+     block %call_weak_fn_ext [
+       assume eq(0x400650:bv64, $PC);
+       assert false;
+       unreachable;
+     ];
      block %call_weak_fn_code_2 { .address = 4196052;
          .gtirb_block = "yQ1z8A+IRoSs4MRYTbbghg";
          .succ = [ { .address = 4195856; .conditional = "false"; .direct = "true";
@@ -1291,6 +1300,7 @@
        goto (%main_ext_2);
      ];
      block %main_ext_2 [
+       assume eq(0x400784:bv64, $PC);
        call @Sqrt();
        assert boolor(eq(0x400820:bv64, $PC));
        goto (%main_code_1);
