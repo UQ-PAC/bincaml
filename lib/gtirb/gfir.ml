@@ -41,6 +41,8 @@ module Vert = struct
     | Stmts of {
         uuid : UUID.t;
         originating_uuid : UUID.t;
+            (** Originating UUID from GTIRB. Used to resolve address
+                information, for example. *)
         stmts : Lang.Program.stmt list;
       }
   [@@deriving eq, ord, show { with_path = false }]
@@ -50,6 +52,10 @@ module Vert = struct
     | Proxy u -> u
     | External u -> u
     | Stmts { uuid } -> uuid
+
+  let originating_uuid = function
+    | Stmts { originating_uuid } -> originating_uuid
+    | other -> uuid other
 
   let to_attrib = function
     | Internal uuid -> `String ("internal:" ^ UUID.show uuid)

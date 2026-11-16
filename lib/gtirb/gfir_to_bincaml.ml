@@ -101,13 +101,8 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
         let es =
           G.succ_e temp_proc.cfg e
           |> List.map (function _, l, t ->
-              let uuid =
-                match t with
-                | Gfir.Vert.Stmts { originating_uuid } -> originating_uuid
-                | x -> Vert.uuid x
-              in
               let addr =
-                address_of_uuid all_blocks uuid
+                address_of_uuid all_blocks (Vert.originating_uuid t)
                 |> Option.map (fun x -> (".address", `CamlInt x))
                 |> Option.to_list
               in
@@ -285,13 +280,14 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   let succ_addr uuid =
     let verts =
       Iter.from_iter (fun f -> Gfir.G.iter_vertex f p.cfg)
-      |> Iter.filter (fun x -> UUID.equal (Vert.uuid x) uuid)
+      |> Iter.filter (fun x -> UUID.equal (Vert.originating_uuid x) uuid)
     in
     try
       Gfir.(
         verts
         |> Iter.flat_map (fun v -> G.succ p.cfg v |> List.to_iter)
-        |> Iter.filter_map (fun v -> UUIDMap.find_opt (Vert.uuid v) all_blocks)
+        |> Iter.filter_map (fun v ->
+            UUIDMap.find_opt (Vert.originating_uuid v) all_blocks)
         |> Iter.filter_map Gtirb.address)
     with Invalid_argument _ -> Iter.empty
   in
@@ -306,14 +302,17 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   in
   let proc, blocks =
     Iter.from_iter (fun f -> Gfir.G.iter_vertex f p.cfg)
-    |> Iter.filter_map (function
-      | Gfir.Vert.External uuid | Gfir.Vert.Proxy uuid -> Some (uuid, [])
-      | Gfir.Vert.Stmts { uuid; stmts } -> Some (uuid, stmts)
-      | _ -> None)
-    |> Iter.map (fun (uuid, stmts) ->
-        ( uuid,
-          UUIDMap.find_opt uuid all_blocks |> Option.flat_map Gtirb.address,
-          stmts ))
+    |> Iter.filter_map (fun vert ->
+        (* Address lookup uses original UUID, but blockmap should use the fresh UUID. *)
+        let address =
+          UUIDMap.find_opt (Gfir.Vert.originating_uuid vert) all_blocks
+          |> Option.flat_map Gtirb.address
+        in
+        match vert with
+        | Gfir.Vert.External uuid | Gfir.Vert.Proxy uuid ->
+            Some (uuid, address, [])
+        | Gfir.Vert.Stmts { uuid; stmts } -> Some (uuid, address, stmts)
+        | _ -> None)
     |> Iter.fold
          (add_new_simple_block ~name_suffix:"_ext" succ_addr)
          (proc, blocks)
