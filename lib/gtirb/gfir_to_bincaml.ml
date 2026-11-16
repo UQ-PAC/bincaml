@@ -180,7 +180,9 @@ let reorder_fallthrough (g : Gfir.G.t) =
 let replace_call_edges procids g =
   Gfir.G.fold_edges_e
     (function
-      | (Internal caller_uuid, label, External callee_uuid) as e ->
+      | ( Internal caller_uuid,
+          label,
+          (External callee_uuid | Internal callee_uuid) ) as e ->
           fun g ->
             procids callee_uuid
             |> Option.map_or ~default:g (fun id ->
