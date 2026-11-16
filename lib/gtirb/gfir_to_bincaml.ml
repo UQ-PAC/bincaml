@@ -141,79 +141,62 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
       | Proxy uuid -> add_proxy_block ~attrib succ_addr (proc, blockmap) uuid)
   | Data _ | Proxy _ -> (proc, blockmap)
 
-let fresh_call_vertex caller_id callee_id =
-  let args, lhs, attrib = StringMap.(empty, empty, empty) in
-  let call_stmt =
-    Lang.Stmt.Instr_Call { procid = callee_id; args; lhs; attrib }
+(** For each successor set containing a fallthrough edge, remove fallthrough
+    edge and add it as a successor of all other edges. *)
+let reorder_fallthrough (g : Gfir.G.t) =
+  let reorder_fallthrough_succs v g =
+    let ft, nft =
+      Gfir.G.succ_e g v
+      |> List.partition
+           Gfir.Edge.(
+             function
+             | _, Some { type' = Type_Fallthrough; conditional = false }, v ->
+                 true
+             | _ -> false)
+    in
+    let is_call_edge = function
+      | Gfir.Edge.(_, Some { type' = Type_Call }, _) -> true
+      | Gfir.Edge.(_, Some { type' = Type_Syscall }, _) -> true
+      | _ -> false
+    in
+    (* check if these successors have no successors, this transform is made
+         safe by the assertions *)
+    match (ft, nft) with
+    | [], _ -> g
+    | [ ((_, _, fallthru_tgt) as fe) ], os ->
+        if not @@ List.exists is_call_edge os then g
+        else begin
+          let g = Gfir.G.remove_edge_e g fe in
+          List.fold_left
+            (fun g (_, _, s) -> Gfir.G.add_edge g s fallthru_tgt)
+            g nft
+        end
+    | _ -> failwith "odd: multiple fallthru edges"
   in
-  (* HACK: this uuid is probably bad. *)
-  let uuid = UUID.of_string (UUID.show caller_id ^ ID.show callee_id) in
-  Gfir.Vert.Stmts { uuid; stmts = [ call_stmt ] }
-
-let replace_one_vert_call_edges procids g caller_id =
-  let vert = Gfir.Vert.Internal caller_id in
-
-  let calls_and_fallthrough, others =
-    Gfir.G.succ_e g vert
-    |> List.partition
-         ( Gfir.Edge.type' %> function
-           | Type_Call | Type_Syscall | Type_Fallthrough -> true
-           | Type_Branch | Type_Return | Type_Sysret -> false )
-  in
-
-  let calls, fallthroughs =
-    calls_and_fallthrough
-    |> List.partition
-         ( Gfir.Edge.type' %> function
-           | Type_Call | Type_Syscall -> true
-           | _ -> false )
-  in
-
-  match (calls, others) with
-  | _ :: _, _ :: _ ->
-      failwith
-        "gfir vertex has both call-related and call-unrelated successors. \
-         unsupported."
-  | [], _ -> g
-  | calls, [] ->
-      let direct_calls =
-        calls
-        |> List.filter_map (function
-          | (_, _, Gfir.Vert.External callee_uuid) as e ->
-              procids callee_uuid |> Option.map (Pair.make e)
-          | _ -> None)
-      in
-
-      (* Replace direct call vertices with **fresh** call blocks. *)
-      let g =
-        direct_calls
-        |> List.fold_left
-             (fun g (((_, label, _) as e), callee_id) ->
-               let g = Gfir.G.remove_edge_e g e in
-               Gfir.G.add_edge_e g
-                 (vert, label, fresh_call_vertex caller_id callee_id))
-             g
-      in
-
-      (* Remove old fallthrough edges, then connect all fallthroughs to each call. *)
-      let g = fallthroughs |> List.fold_left Gfir.G.remove_edge_e g in
-      (* At this point, [src] will only be call vertices. *)
-      Gfir.G.fold_succ
-        (fun src g ->
-          fallthroughs
-          |> List.fold_left
-               (fun g (_, label, tgt) -> Gfir.G.add_edge_e g (src, label, tgt))
-               g)
-        g vert g
+  Gfir.G.fold_vertex reorder_fallthrough_succs g g
 
 (** Replace all external edges with a defined procedure with stmt edges
     containing a call to that procedure. *)
-let replace_call_edges procids g =
-  Gfir.G.fold_vertex
-    (function
-      | Internal uuid -> fun g -> replace_one_vert_call_edges procids g uuid
-      | _ -> Fun.id)
-    g g
+let replace_call_edges procids =
+  Gfir.G.map_vertex (function
+    | External uuid as default ->
+        let id = procids uuid in
+        let m =
+          id
+          |> Option.map (fun id ->
+              let stmt =
+                Lang.Stmt.Instr_Call
+                  {
+                    procid = id;
+                    args = StringMap.empty;
+                    lhs = StringMap.empty;
+                    attrib = StringMap.empty;
+                  }
+              in
+              Gfir.Vert.Stmts { uuid; stmts = [ stmt ] })
+        in
+        Option.get_or ~default m
+    | o -> o)
 
 (** Add the given CFG edge to the IR procedure. We naively translate all edges
     as jumps, on the assumption that
@@ -267,6 +250,7 @@ let transform_cfg_calls procs =
       in
       let cfg = p.cfg in
       let cfg = replace_call_edges calls cfg in
+      let cfg = reorder_fallthrough cfg in
       { p with cfg })
     procs
 
