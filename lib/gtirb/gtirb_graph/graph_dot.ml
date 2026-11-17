@@ -2,11 +2,19 @@
 
 let escape = Printf.sprintf {|%S|}
 
+let pp_to_string pp x =
+  let b = Buffer.create 10 in
+  let fmt = Format.formatter_of_buffer b in
+  Format.pp_set_margin fmt Format.pp_infinity;
+  pp fmt x;
+  Format.pp_print_flush fmt ();
+  Buffer.to_bytes b |> Bytes.unsafe_to_string
+
 include Graph.Graphviz.Dot (struct
   include Graph_internal
 
   let edge_attributes (_, edge, _) =
-    [ `Label (String.escaped (Graph_types.show_relation edge)) ]
+    [ `Label (String.escaped (pp_to_string Graph_types.pp_relation edge)) ]
 
   let default_edge_attributes _ = []
   let get_subgraph _ = None
