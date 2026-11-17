@@ -5,12 +5,9 @@ Should correctly elaborate nested let expressions with shadowing
   $ cat << EOF | bincaml script -
   > (load-il "test.il")
   > (run-transforms "hindley-milner-elaborate")
-  > (dump-il)
   > EOF
   (load-il test.il)
   (run-transforms hindley-milner-elaborate)
-  (dump-il)
-  let $f (x:bv64) : bool = (let x  : bool =(true) in (x:bool));
 
 Should identify type errors in cases options:
 
@@ -18,7 +15,6 @@ Should identify type errors in cases options:
   $ cat << EOF | bincaml script -
   > (load-il "test_cases.il")
   > (run-transforms "hindley-milner-elaborate")
-  > (dump-il)
   > EOF
   (load-il test_cases.il)
   (run-transforms hindley-milner-elaborate)
@@ -39,7 +35,6 @@ Should produce errors
   $ cat << EOF | bincaml script -
   > (load-il "test.il")
   > (run-transforms "hindley-milner-elaborate")
-  > (dump-il)
   > EOF
   (load-il test.il)
   (run-transforms hindley-milner-elaborate)
@@ -83,3 +78,31 @@ Should identify type errors in cases options:
   [123]
 
 
+typefail example
+
+  $ cat << EOF | bincaml script -
+  > (load-il "incorrect_types.il")
+  > (run-transforms "hindley-milner-elaborate")
+  warning: here-document at line 1 delimited by end-of-file (wanted `EOF')
+  (load-il incorrect_types.il)
+  bincaml: [WARNING] type conflict: int, <bitvector at construction of zero_extend(32, 2)
+  bincaml: [WARNING] type conflict: int, <bitvector at construction of zero_extend(32, 2)
+  bincaml: [WARNING] type conflict: int, <bitvector at construction of sign_extend(32, 2)
+  bincaml: [WARNING] type conflict: int, <bitvector at construction of sign_extend(32, 2)
+  (run-transforms hindley-milner-elaborate)
+  bincaml: Type error: 32 ℕ bv <> int
+           
+           Related context:
+           infer expression
+           19 |     $NF: bool := eq(1, 0x1:bv32) { .label = "%00000408" };
+                                   ^^^^^^^^^^^^^
+           
+           statement
+           19 |     $NF: bool := eq(1, 0x1:bv32) { .label = "%00000408" };
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           
+           procedure
+           15 | proc @main_1876 () -> ()
+                     ^^^^^^^^^^
+           
+  [123]

@@ -73,6 +73,7 @@ let assume_proc_decl st ctx ?(no_constraint = false) (p : Program.proc) =
 let infer_proc st vc prog ctx ?(no_constraint = false) (p : Program.proc) =
   let spec = Procedure.specification p in
   let univ = TypeExpr.V.proc_univ @@ Procedure.id p in
+  add_err_ctx (loc_attr ~msg:"procedure" (Procedure.attrib p)) @@ fun () ->
   let ibool_list b =
     List.map
       (fun a ->
@@ -239,6 +240,7 @@ let infer_decl st visit_constraint prog scheme =
             in
             (scheme, `Decl (decl_id, new_fundef)))
     | Variable { binding; attrib; classification } ->
+        add_err_ctx (loc_attr ~msg:"decl" attrib) @@ fun () ->
         let scheme = decl_var_typ st global_universe scheme binding in
         let binding s = retype_var st global_universe s binding in
         let classification =
