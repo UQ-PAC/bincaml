@@ -313,10 +313,10 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
       |> Iter.of_list
       |> Iter.map (function
         (* fallthrough edges are inserted as unlabelled. *)
-        | _, None, tgt -> (Edge.Type_Fallthrough, tgt)
-        | _, Some edge, tgt -> (edge.Edge.type', tgt))
+        | _, None, tgt -> (Type_Fallthrough, tgt)
+        | _, Some edge, tgt -> (edge.type', tgt))
       |> Iter.filter_map (function
-        | Edge.Type_Return, _ -> Some `True
+        | Type_Return, _ -> Some `True
         | (Type_Branch | Type_Fallthrough | Type_Call), tgt ->
             let open Option in
             let* tgt =
