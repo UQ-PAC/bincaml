@@ -24,6 +24,10 @@ Should identify type errors in cases options:
   (run-transforms hindley-milner-elaborate)
   bincaml: Type error: bool <> 64 ℕ bv
            
+           Related context:
+           declaration
+           1 | let $f (x:bv64) : bv64 = if eq(x, 0:bv64) then 1:bv64 else true;
+                   ^^
            
   [123]
 
@@ -50,6 +54,10 @@ Should produce errors
            1 | let $f (x:bv64) : bool = booland(true, bvult(x, 1:bv32));
                                                ^^^^^^^^^^^^^^^^^^^^^^^^
            
+           declaration
+           1 | let $f (x:bv64) : bool = booland(true, bvult(x, 1:bv32));
+                   ^^
+           
   [123]
 
 
@@ -67,6 +75,10 @@ Should identify type errors in cases options:
   let $f (x:bv64) : bv64 = (true);(run-transforms hindley-milner-elaborate)
   bincaml: Type error: 64 ℕ bv <> bool
            
+           Related context:
+           declaration
+           1 | let $f (x:bv64) : bv64 = (true);
+                   ^^
            
   [123]
 

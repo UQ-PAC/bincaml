@@ -30,7 +30,7 @@ let rec unify st ?(pos = Lexing.dummy_pos) t t' =
 
   Logs.debug (fun m ->
       m "%s"
-        ("unify: " ^ Hm_types.plpos pos ^ " "
+        ("unify@" ^ Hm_types.plpos pos ^ " "
         ^ Hm_types.type_to_string (find t)
         ^ " with "
         ^ Hm_types.type_to_string (find t')));

@@ -77,7 +77,7 @@ let infer_proc st vc prog ctx ?(no_constraint = false) (p : Program.proc) =
     List.map
       (fun a ->
         let a = infer_expr st vc ~univ [%here] a ctx in
-        let _ = unify st (bool_type st) (getty a) in
+        let _ = unify ~pos:[%here] st (bool_type st) (getty a) in
         a)
       b
   in
@@ -187,11 +187,13 @@ let infer_decl st visit_constraint prog scheme =
         (* elaboration of var binding *)
         let scheme = decl_var_typ st global_universe scheme binding in
         let binding' s = retype_var st global_universe s binding in
+        Logs.debug (fun m ->
+            m "%s" (Attrib.to_string ~show_internal:true (`Assoc attrib)));
         match definition with
         | Axiom b ->
-            add_err_ctx (loc_e b) @@ fun () ->
+            add_err_ctx (loc_attr ~msg:"declaration" attrib) @@ fun () ->
             let b = infer_expr ~univ:global_universe [%here] b scheme in
-            let _ = unify st (getty b) (bool_type st) in
+            let _ = unify ~pos:[%here] st (getty b) (bool_type st) in
             let new_axiom scheme =
               Function
                 {
@@ -216,15 +218,16 @@ let infer_decl st visit_constraint prog scheme =
               |> TypeExpr.find st
             in
             let e =
+              add_err_ctx (loc_attr ~msg:"declaration" attrib) @@ fun () ->
               let e =
                 infer_expr ~univ:global_universe [%here] definition scheme
               in
               let et = AbsTypingExpr.unfix e |> AbstractExpr.get_typ in
-              add_err_ctx (loc_e definition) @@ fun () ->
-              let _ = unify st initial_binding_type et in
+              let _ = unify ~pos:[%here] st initial_binding_type et in
               e
             in
             let new_fundef scheme =
+              add_err_ctx (loc_attr ~msg:"declaration" attrib) @@ fun () ->
               Function
                 {
                   binding = binding' scheme;

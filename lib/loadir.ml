@@ -189,15 +189,14 @@ module BasilASTLoader = struct
   and trans_typedecl t =
     match t with
     | TypeAssign_Sum (localIdent, typeT) ->
-        let n = unsafe_unsigil (`Type localIdent) in
+        let n = ident_name (`Type localIdent) in
         ( n,
           Types.mk_adt n
             (typeT
             |> List.map (function
-              | SortType variant ->
-                  (unsafe_unsigil (`TypeConstructor variant), [])
+              | SortType variant -> (ident_name (`TypeConstructor variant), [])
               | VariantCase (variant, _, fields, _) ->
-                  ( unsafe_unsigil (`TypeConstructor variant),
+                  ( ident_name (`TypeConstructor variant),
                     List.map trans_recordfield fields ))) )
 
   (** First pass; process like forward declaration: only add the information
@@ -205,7 +204,7 @@ module BasilASTLoader = struct
   and trans_declaration prog (x : decl) : load_st =
     match x with
     | Decl_Type sort ->
-        let name = unsafe_unsigil (`Type sort) in
+        let name = ident_name (`Type sort) in
         let typ = Types.mk_sort name in
         map_prog (fun prog -> Program.decl_typ prog typ) prog
     | Decl_RecType types ->
@@ -221,17 +220,18 @@ module BasilASTLoader = struct
           (fun p ->
             Program.decl_global p ~classification
               (Var.create
-                 (unsafe_unsigil (`Global bident))
+                 (ident_name (`Global bident))
                  ~scope (trans_type type')))
           prog
     | Decl_Var (modifiers, bident, type', spec) ->
         let classification = trans_varspec prog spec in
+        let attrib = ident_pos (`Global bident) |> Attrib.attr_of_loc in
         let scope = var_modifiers_shared modifiers in
         map_prog
           (fun p ->
-            Program.decl_global p ~classification
+            Program.decl_global ~attrib p ~classification
               (Var.create
-                 (unsafe_unsigil (`Global bident))
+                 (ident_name (`Global bident))
                  ~scope (trans_type type')))
           prog
     | Decl_ProgEmpty (ProcIdent (_, id), attr) -> prog
@@ -242,7 +242,7 @@ module BasilASTLoader = struct
           (fun p ->
             Program.decl_global p
               (Var.create
-                 (unsafe_unsigil (`Global glident))
+                 (ident_name (`Global glident))
                  ~scope:GlobalConst ftype))
           prog
     | Decl_FunNoType (glident, _, _) -> prog
@@ -251,7 +251,7 @@ module BasilASTLoader = struct
         let arg_types = List.map Var.typ bound in
         let rtype = Types.curry arg_types (trans_type typ) in
         let bvar =
-          Var.create (unsafe_unsigil (`Global glident)) ~scope:GlobalConst rtype
+          Var.create (ident_name (`Global glident)) ~scope:GlobalConst rtype
         in
         let fundef : Program.declaration =
           Function
@@ -264,9 +264,8 @@ module BasilASTLoader = struct
         map_prog (fun prog -> Program.add_decl prog fundef) prog
     | Decl_Axiom (name, _, _) ->
         let bvar =
-          Var.create (unsafe_unsigil (`Global name)) ~scope:GlobalConst Boolean
+          Var.create (ident_name (`Global name)) ~scope:GlobalConst Boolean
         in
-
         let fundef : Program.declaration =
           Function
             {
@@ -293,6 +292,7 @@ module BasilASTLoader = struct
         let formal_out_params_order = List.map param_to_formal out_params in
         let formal_out_params = StringMap.of_list formal_out_params_order in
         let _, attrib = trans_attrib_set prog ~binds:formal_in_params attrib in
+        let attrib = Attrib.join_map_locs attrib (Attrib.attr_of_loc id_pos) in
         Hashtbl.add prog.params_order id
           (formal_in_params_order, formal_out_params_order);
         let is_stub = Stdlib.(definition = ProcDef_Empty) in
@@ -353,9 +353,11 @@ module BasilASTLoader = struct
                      msg = Printf.sprintf "no type defined";
                    }))
     in
+    let attrib_pos = ident_pos (`Global glident) |> Attrib.attr_of_loc in
     let _, attrib = trans_attrib_set ~binds:StringMap.empty prog attrList in
+    let attrib = Attrib.join_map_locs attrib attrib_pos in
     let binding =
-      Var.create (unsafe_unsigil (`Global glident)) ~scope:GlobalConst rtype
+      Var.create (ident_name (`Global glident)) ~scope:GlobalConst rtype
     in
 
     let fundef : Program.declaration =
@@ -376,7 +378,7 @@ module BasilASTLoader = struct
         let _, attrib = trans_attrib_set ~binds:StringMap.empty prog attr in
         let body = trans_expr prog body in
         let bvar =
-          Var.create (unsafe_unsigil (`Global name)) ~scope:GlobalConst Boolean
+          Var.create (ident_name (`Global name)) ~scope:GlobalConst Boolean
         in
 
         let fundef : Program.declaration =
@@ -501,7 +503,7 @@ module BasilASTLoader = struct
   and trans_recordfield field =
     match field with
     | RecordField1 (id, ty) ->
-        Types.mk_field (unsafe_unsigil (`Type id)) (trans_type ty)
+        Types.mk_field (ident_name (`Type id)) (trans_type ty)
 
   and transRECORDTYPE (fields : field list) =
     Types.Struct
@@ -522,7 +524,7 @@ module BasilASTLoader = struct
     | TypeMapType maptype -> transMapType maptype
     | TypeBVType (BVType1 bvtype) -> transBVTYPE bvtype
     | TypeParen (_, typeT, _) -> trans_type typeT
-    | TypeVarType name -> Types.Variable (unsafe_unsigil (`Type name))
+    | TypeVarType name -> Types.Variable (ident_name (`Type name))
     | TypeRecordType (RecordType1 (_, fields, _)) -> transRECORDTYPE fields
     | TypePointerType (PointerType1 (_, l, u, _)) -> transPOINTERTYPE l u
 
@@ -556,7 +558,7 @@ module BasilASTLoader = struct
         with e ->
           let v =
             Var.create ~scope:LocalVar
-              (unsafe_unsigil (`Local localVar))
+              (ident_name (`Local localVar))
               (trans_type ty)
           in
           Logs.warn (fun m ->
@@ -569,7 +571,7 @@ module BasilASTLoader = struct
         with e ->
           let v =
             Var.create ~scope:GlobalVar
-              (unsafe_unsigil (`Global globalVar))
+              (ident_name (`Global globalVar))
               (trans_type ty)
           in
           Logs.warn (fun m ->
@@ -583,7 +585,7 @@ module BasilASTLoader = struct
     List.map
       (function
         | AttrKeyValue1 (bident, attr) ->
-            (unsafe_unsigil (`Attr bident), trans_attr ~binds p_st attr))
+            (ident_name (`Attr bident), trans_attr ~binds p_st attr))
       kv
     |> StringMap.of_list
 
@@ -748,11 +750,11 @@ module BasilASTLoader = struct
           (p_st, locs, `Stmt (Instr_Assign { al = List.rev assigns; attrib }))
       | Stmt_DirectCall
           (calllvars, bident, OpenParen (l, _), exprs, CloseParen (r, _))
-        when Option.is_some
-             @@ Intrinsic.of_string (unsafe_unsigil (`Proc bident)) ->
+        when Option.is_some @@ Intrinsic.of_string (ident_name (`Proc bident))
+        ->
           let p_st, lhs = trans_intrin_lhs p_st calllvars in
           let name =
-            Intrinsic.of_string (unsafe_unsigil (`Proc bident))
+            Intrinsic.of_string (ident_name (`Proc bident))
             |> Option.get_exn_or "unreachable"
           in
           let args =
@@ -764,7 +766,7 @@ module BasilASTLoader = struct
           (p_st, locs, `Call (Instr_IntrinCall { lhs; name; args; attrib }))
       | Stmt_DirectCall
           (calllvars, bident, OpenParen (l, _), exprs, CloseParen (r, _)) ->
-          let n = unsafe_unsigil (`Proc bident) in
+          let n = ident_name (`Proc bident) in
           let bloc = loc_ident (`Proc bident) in
           let procid =
             try Procedure.id @@ Program.get_proc_by_name n p_st.prog
@@ -829,7 +831,7 @@ module BasilASTLoader = struct
     | CallParams_Named nl ->
         nl
         |> List.map (function NamedCallArg1 (li, e) ->
-            (unsafe_unsigil (`Local li), trans_expr e))
+            (ident_name (`Local li), trans_expr e))
         |> StringMap.of_list
 
   and trans_intrin_lhs prog (x : lVars) : load_st * Var.t list =
@@ -882,7 +884,7 @@ module BasilASTLoader = struct
             match v with
             | NamedCallReturn1 (lVar, ident) ->
                 let p_st, v = trans_lvar prog lVar in
-                (p_st, (unsafe_unsigil (`Local ident), v) :: ls)
+                (p_st, (ident_name (`Local ident), v) :: ls)
           in
           let p_st, lvars = lvars |> List.fold_left f (prog, []) in
           (Attrib.attr_of_loc (Attrib.join_range l r), StringMap.of_list lvars)
@@ -898,7 +900,7 @@ module BasilASTLoader = struct
     lvs
     |> List.map (function
       | LocalTyped (i, t) ->
-          Var.create ~scope (unsafe_unsigil (`Local i)) (trans_type t)
+          Var.create ~scope (ident_name (`Local i)) (trans_type t)
       | LocalUntyped i -> lookup_local_decl ~binds:bound i p_st)
 
   and unpac_lambdaparen ?(bound = StringMap.empty) p_st lvs : Var.t list =
@@ -941,12 +943,12 @@ module BasilASTLoader = struct
     | LVar_Local (LocalTyped (bident, type')) ->
         assign_var prog
           (Var.create ~scope:LocalVar
-             (unsafe_unsigil (`Local bident))
+             (ident_name (`Local bident))
              (trans_type type'))
     | LVar_LocalConst (LocalTyped (bident, type')) ->
         assign_var prog
           (Var.create ~scope:LocalConst
-             (unsafe_unsigil (`Local bident))
+             (ident_name (`Local bident))
              (trans_type type'))
     | LVar_LocalConst (LocalUntyped _) -> failwith "type annotation needed"
     | LVar_Global (GlobalTyped (bident, type')) ->
@@ -955,7 +957,7 @@ module BasilASTLoader = struct
           with e ->
             let v =
               Var.create ~scope:GlobalVar
-                (unsafe_unsigil (`Global bident))
+                (ident_name (`Global bident))
                 (trans_type type')
             in
             Logs.warn (fun m ->
@@ -1003,7 +1005,7 @@ module BasilASTLoader = struct
               List.map
                 (function
                   | PhiExpr1 (blockIdent, var) ->
-                      ( find_block_ident (unsafe_unsigil (`Block blockIdent)),
+                      ( find_block_ident (ident_name (`Block blockIdent)),
                         trans_var prog var ))
                 phexprs
             in
@@ -1096,7 +1098,7 @@ module BasilASTLoader = struct
     | `Block (BlockIdent (pos, g)) -> pos
 
   and lookup_local_decl ?(binds = StringMap.empty) ident p_st =
-    let vn = unsafe_unsigil (`Local ident) in
+    let vn = ident_name (`Local ident) in
     let token_char_offset_range = Some (loc_ident (`Local ident)) in
     try
       match StringMap.find_opt vn binds with
@@ -1119,7 +1121,7 @@ module BasilASTLoader = struct
         raise (LoadError { token_char_offset_range; msg; input = None })
 
   and lookup_constructor p_st ident =
-    let vn = unsafe_unsigil (`Local ident) in
+    let vn = ident_name (`Local ident) in
     match Program.get_implicit_decl_by_name vn p_st.prog with
     | Program.(Some (VariantCase { constructor })) -> constructor
     | _ ->
@@ -1128,7 +1130,7 @@ module BasilASTLoader = struct
         raise (LoadError { token_char_offset_range; msg; input = None })
 
   and lookup_type p_st ident =
-    let vn = unsafe_unsigil (`Local ident) in
+    let vn = ident_name (`Local ident) in
     let token_char_offset_range = Some (loc_ident (`Local ident)) in
     let fail () =
       let msg = "Unable to find type declaration for:" ^ vn in
@@ -1143,7 +1145,7 @@ module BasilASTLoader = struct
     | _ -> fail ()
 
   and lookup_global_decl ident p_st =
-    let vn = unsafe_unsigil (`Global ident) in
+    let vn = ident_name (`Global ident) in
     let token_char_offset_range = Some (loc_ident (`Global ident)) in
     match Program.get_decl_by_name vn p_st.prog with
     | Some (Variable { binding }) -> binding
@@ -1183,22 +1185,27 @@ module BasilASTLoader = struct
                  fields),
             trans_type typ )
 
-  and unsafe_unsigil g : string =
+  and ident_name_pos g =
     match g with
     | `Type (LocalIdent (pos, g)) ->
-        if String.take 1 g |> String.for_all Char.is_lowercase_ascii then g
+        if String.take 1 g |> String.for_all Char.is_lowercase_ascii then
+          (pos, g)
         else failwith ("Invalid type name: " ^ g ^ " must start with lowercase.")
     | `TypeConstructor (LocalIdent (pos, g)) ->
-        if String.take 1 g |> String.for_all Char.is_uppercase_ascii then g
+        if String.take 1 g |> String.for_all Char.is_uppercase_ascii then
+          (pos, g)
         else
           failwith
             ("Invalid type constuctor name: " ^ g
            ^ " must start with lowercase.")
-    | `Global (GlobalIdent (pos, g)) -> g
-    | `Local (LocalIdent (pos, g)) -> g
-    | `Proc (ProcIdent (pos, g)) -> g
-    | `Block (BlockIdent (pos, g)) -> g
-    | `Attr (BIdent (pos, g)) -> g
+    | `Global (GlobalIdent (pos, g)) -> (pos, g)
+    | `Local (LocalIdent (pos, g)) -> (pos, g)
+    | `Proc (ProcIdent (pos, g)) -> (pos, g)
+    | `Block (BlockIdent (pos, g)) -> (pos, g)
+    | `Attr (BIdent (pos, g)) -> (pos, g)
+
+  and ident_name g : string = snd (ident_name_pos g)
+  and ident_pos g = fst (ident_name_pos g)
 
   and trans_cases p_st c =
     let cases =
@@ -1227,8 +1234,7 @@ module BasilASTLoader = struct
     BasilExpr.applyintrin ~op:`Cases cases
 
   and trans_field_assign trans_expr (f : fieldAssign) =
-    match f with
-    | FieldAssign1 (k, v) -> (unsafe_unsigil (`Local k), trans_expr v)
+    match f with FieldAssign1 (k, v) -> (ident_name (`Local k), trans_expr v)
 
   and trans_expr ?(binds = StringMap.empty) (p_st : load_st)
       (x : BasilIR.AbsBasilIR.expr) : BasilExpr.t =
@@ -1272,7 +1278,7 @@ module BasilASTLoader = struct
           with e ->
             let v =
               Var.create ~scope:GlobalVar
-                (unsafe_unsigil (`Global g))
+                (ident_name (`Global g))
                 (trans_type type')
             in
             Logs.warn (fun m ->
@@ -1288,7 +1294,7 @@ module BasilASTLoader = struct
         with Not_found | LoadError _ ->
           let v =
             Var.create ~scope:LocalVar
-              (unsafe_unsigil (`Local g))
+              (ident_name (`Local g))
               (trans_type type')
           in
           (*print_endline @@ "warn: local use before def: " ^ Var.to_string v;*)
@@ -1342,12 +1348,12 @@ module BasilASTLoader = struct
           ~lo_incl:(transIntVal intval |> Z.to_int)
           (trans_expr expr)
     | Expr_FieldSet (record, fname, value) ->
-        let fname = unsafe_unsigil (`Local fname) in
+        let fname = ident_name (`Local fname) in
         BasilExpr.field_store ~field:fname (trans_expr record)
           (trans_expr value)
     | Expr_Field (record, fname) ->
         let fname =
-          String.chop_prefix ~pre:"." @@ unsafe_unsigil (`Attr fname)
+          String.chop_prefix ~pre:"." @@ ident_name (`Attr fname)
           |> Option.get_exn_or "safe by parser"
         in
         BasilExpr.field_read ~field:fname (trans_expr record)
@@ -1388,7 +1394,7 @@ module BasilASTLoader = struct
         BasilExpr.lambda ~attrib ~bound (trans_expr ~nbinds:bound e)
     | Expr_Let (id, param, rt, body, in_expr) ->
         (* construct lambda with let syntax *)
-        let id = unsafe_unsigil (`Local id) in
+        let id = ident_name (`Local id) in
         let bound = unpac_lambdaparen ~bound:StringMap.empty p_st param in
         let funct = Types.curry (List.map Var.typ bound) (trans_type rt) in
         let funvar = Var.create id funct ~scope:LocalConst in

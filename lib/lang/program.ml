@@ -46,7 +46,11 @@ open struct
   let pretty_fragment_attrib_map : Attrib.attrib_map -> Containers_pp.t =
    fun map ->
     pretty_fragment_attrib
-      (if StringMap.is_empty map then None else Some (`Assoc map))
+      (if
+         StringMap.is_empty
+           (StringMap.filter (fun k _ -> not @@ Attrib.is_internal_key k) map)
+       then None
+       else Some (`Assoc map))
 end
 
 let pretty_declaration ?(pretty_lambda = true) d =

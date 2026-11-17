@@ -134,9 +134,12 @@ let add_err_ctx loc f =
   | None -> f ()
   | Some loc -> Errors.update_error (Errors.add_error_context ~ctx_info:loc) f
 
+let loc_attr ~msg e =
+  Attrib.get_location e |> Option.map (fun l -> Errors.location_loc ~msg l)
+
 let loc_e e =
-  Expr.BasilExpr.unfix e |> Expr.AbstractExpr.get_attrib |> Attrib.get_location
-  |> Option.map (fun l -> Errors.location_loc ~msg:"infer expression" l)
+  Expr.BasilExpr.unfix e |> Expr.AbstractExpr.get_attrib
+  |> loc_attr ~msg:"infer expression"
 
 let do_infer st ~visit_constraint
     (infer :
