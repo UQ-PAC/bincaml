@@ -10,6 +10,7 @@ let sanitise =
 let quote = Printf.sprintf {|%S|}
 let escape = String.escaped
 
+(** Module parameter type of {!Graph.Graphviz.Dot}. *)
 module type DotSig = sig
   open Graph.Graphviz
 
@@ -37,7 +38,9 @@ module type DotSig = sig
   val edge_attributes : E.t -> DotAttributes.edge list
 end
 
-module Dot_defaults = struct
+(** Default implementations for some {!Graph.Graphviz.Dot} parameter functions,
+    returning empty for various DOT attributes. *)
+module DotDefaults = struct
   let graph_attributes = []
   let default_vertex_attributes _ = []
   let default_edge_attributes _ = []
@@ -81,7 +84,7 @@ end
 include Graph.Graphviz.Dot (struct
   include DotGraphWithSelf (struct
     include Graph_internal
-    include Dot_defaults
+    include DotDefaults
 
     let edge_attributes (_, edge, _) =
       [ `Label (escape (Graph_types.show_relation edge)) ]
