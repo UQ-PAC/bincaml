@@ -737,7 +737,9 @@ module.exports = ({
         // IntrinOp_bvmul. IntrinOp ::= "bvmul" ;
         "bvmul",
         // IntrinOp_update. IntrinOp ::= "update" ;
-        "update"
+        "update",
+        // IntrinOp_ite. IntrinOp ::= "ite" ;
+        "ite"
       ),
     PointerBinOp: $ =>
       // PointerBinOp_ptradd. PointerBinOp ::= "ptradd" ;

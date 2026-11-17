@@ -127,6 +127,12 @@ let node_id (n : node) =
   | Node r -> r.id
   | _ -> failwith "find_node returned non terminal"
 
+(** Gets the list of union-find parent nodes. *)
+let distinct_nodes (g : t) =
+  nodes g
+  |> List.map (fun n -> (node_id n, snd @@ find_node n))
+  |> IDMap.of_list |> IDMap.to_list |> List.map snd
+
 (** Set the cells of this node *)
 let set_cells cells (n : node) =
   find_node n |> snd
@@ -538,3 +544,10 @@ let copy_cells_of ?old_to_new ?(clear_stack = false) sb from_graph to_graph =
           join c c';
           Some c')
     None cells_copy
+
+(** Computes a mapping from nodes (as IDs) to sym bases represented in that
+    node. *)
+let sym_bases_in_nodes (g : t) =
+  g.node_map |> SBMap.to_iter
+  |> Iter.map (fun (sb, node) -> (node_id node, [ sb ]))
+  |> IDMap.of_iter_with ~f:(Fun.const List.append)

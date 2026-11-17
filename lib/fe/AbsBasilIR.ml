@@ -317,6 +317,7 @@ and intrinOp =
  | IntrinOp_bvconcat
  | IntrinOp_bvmul
  | IntrinOp_update
+ | IntrinOp_ite
 
 and pointerBinOp =
    PointerBinOp_ptradd

@@ -73,6 +73,7 @@ type raw_token = BasilIR.ParBasilIR.token =
   | KW_load
   | KW_let
   | KW_le
+  | KW_ite
   | KW_invariant
   | KW_intsub
   | KW_intneg

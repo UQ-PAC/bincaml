@@ -102,7 +102,7 @@ jobs:
         if: "!cancelled()"
       - run: dune runtest --force
         if: "!cancelled()"
-      - run: 'dune clean ; opam pin add --with-test --with-doc .'
+      - run: 'dune clean ; opam pin remove . ; opam pin add --with-test --with-doc .'
         if: "!cancelled()"
 
   docs-build:

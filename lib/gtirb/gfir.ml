@@ -1,11 +1,6 @@
 open Bincaml_util.Common
-open Gtirb_proto
 open Ocaml_protoc_plugin
-open IR.Gtirb.Proto
-open ByteInterval.Gtirb.Proto
-open Module.Gtirb.Proto
-open Section.Gtirb.Proto
-open CFG.Gtirb.Proto
+open Gtirb_proto'
 open Load_auxdata
 module UUIDMap = UUIDMap
 module UUIDSet = UUIDSet
@@ -19,22 +14,6 @@ open Conf
 
 (** edges just copied directly from gtirb protobuf CFG *)
 module Edge = struct
-  type edge_type = EdgeType.t =
-    | Type_Branch
-    | Type_Call
-    | Type_Fallthrough
-    | Type_Return
-    | Type_Syscall
-    | Type_Sysret
-  [@@deriving eq, ord, show { with_path = false }]
-
-  type edge_label = EdgeLabel.t = {
-    conditional : bool;
-    direct : bool;
-    type' : edge_type;
-  }
-  [@@deriving eq, ord, show { with_path = false }]
-
   type t = edge_label option [@@deriving eq, ord, show { with_path = false }]
 
   let to_attrib { conditional; direct; type' } =
@@ -59,7 +38,13 @@ module Vert = struct
     | Internal of UUID.t  (** vertex in this procedure *)
     | External of UUID.t  (** vertex in another procedure *)
     | Proxy of UUID.t  (** vertex in another procedure *)
-    | Stmts of { uuid : UUID.t; stmts : Lang.Program.stmt list }
+    | Stmts of {
+        uuid : UUID.t;
+        originating_uuid : UUID.t;
+            (** Originating UUID from GTIRB. Used to resolve address
+                information, for example. *)
+        stmts : Lang.Program.stmt list;
+      }
   [@@deriving eq, ord, show { with_path = false }]
 
   let uuid = function
@@ -68,11 +53,16 @@ module Vert = struct
     | External u -> u
     | Stmts { uuid } -> uuid
 
+  let originating_uuid = function
+    | Stmts { originating_uuid } -> originating_uuid
+    | other -> uuid other
+
   let to_attrib = function
     | Internal uuid -> `String ("internal:" ^ UUID.show uuid)
     | External uuid -> `String ("external:" ^ UUID.show uuid)
     | Proxy uuid -> `String ("proxy:" ^ UUID.show uuid)
-    | Stmts { uuid } -> `String ("stmts:" ^ UUID.show uuid)
+    | Stmts { originating_uuid } ->
+        `String ("stmts:" ^ UUID.show originating_uuid)
 
   let hash = Hash.poly
 end
@@ -130,6 +120,10 @@ type temp_proc = {
   blocks : UUIDSet.t;  (** UUIDs of blocks internal to this procedure *)
   code_blocks : Gtirb.block UUIDMap.t;  (** block definitions *)
   cfg : G.t;  (** intraprocedural control-flow graph *)
+  is_stub : bool;
+      (** Whether this procedure is a stub (that is, no body should be emitted).
+          Note that even if this is [true], other fields may need to be
+          populated to allow resolving of calls to this procedure. *)
 }
 (** Gfir procedure; basic blocks containing sequences of opcodes or statemetns
 *)
@@ -153,7 +147,7 @@ let make_proc_cfg block_member_of block_proxy (gtirb_cfg : CFG.t)
   in
   let module E = Edge in
   let edges =
-    Gtirb_proto.CFG.Gtirb.Proto.Edge.(
+    Gtirb_proto'.Edge.(
       gtirb_cfg.edges
       |> List.filter (fun { source_uuid; _ } ->
           let uuid = UUID.of_bytes source_uuid in
@@ -192,7 +186,8 @@ let make_temp_proc prog all_blocks func_blocks func_entry_blocks proxy_blocks
         (UUIDSet.empty, UUIDMap.empty)
   in
   let id = Lang.Program.declare_name ("@" ^ name) prog in
-  let proc = { uuid; name; id; entries; blocks; code_blocks; cfg = G.empty } in
+  let cfg = G.empty and is_stub = false in
+  let proc = { uuid; name; id; entries; blocks; code_blocks; cfg; is_stub } in
   make_proc_cfg block_is_member_of proxy_blocks gtirb_cfg proc
 
 (** Load a protobuf gtirb module into a set of temp_procs, use [prog] to
@@ -202,7 +197,7 @@ let gtirb_to_gfir prog (gtirb_cfg : CFG.t) (m : Module.t) =
 
   let proxy_blocks =
     m.proxies
-    |> List.map (fun (m : ProxyBlock.Gtirb.Proto.ProxyBlock.t) ->
+    |> List.map (fun (m : ProxyBlock.t) ->
         let u = UUID.of_bytes m in
         (u, Gtirb.Proxy u))
     |> UUIDMap.of_list
@@ -210,8 +205,7 @@ let gtirb_to_gfir prog (gtirb_cfg : CFG.t) (m : Module.t) =
 
   let sym =
     m.symbols
-    |> List.map (fun (s : Symbol.Gtirb.Proto.Symbol.t) ->
-        (UUID.of_bytes s.uuid, s.name))
+    |> List.map (fun (s : Symbol.t) -> (UUID.of_bytes s.uuid, s.name))
     |> UUIDMap.of_list
   in
   let all_blocks =
@@ -225,10 +219,13 @@ let gtirb_to_gfir prog (gtirb_cfg : CFG.t) (m : Module.t) =
     m.aux_data |> StringMap.of_list |> StringMap.filter_map (fun _ v -> v)
   in
   let func_names =
-    AD.function_names auxdata |> or_error UUIDMap.empty
+    Load_auxdata.load AD.function_names auxdata
+    |> or_error UUIDMap.empty
     |> UUIDMap.filter_map (fun _ u -> UUIDMap.find_opt u sym)
   in
-  let func_blocks = AD.function_blocks auxdata |> or_error UUIDMap.empty in
+  let func_blocks =
+    Load_auxdata.load AD.function_blocks auxdata |> or_error UUIDMap.empty
+  in
   (* construct map from block to function *)
   let block_functions =
     func_blocks |> UUIDMap.to_iter
@@ -245,7 +242,7 @@ let gtirb_to_gfir prog (gtirb_cfg : CFG.t) (m : Module.t) =
   in
   (* for each procedure collect its blocks marked as entry blocks*)
   let func_entry_blocks =
-    AD.function_entries auxdata |> or_error UUIDMap.empty
+    Load_auxdata.load AD.function_entries auxdata |> or_error UUIDMap.empty
   in
 
   let entry = UUIDMap.find (UUID.of_bytes m.entry_point) block_functions in

@@ -15,6 +15,7 @@ type t =
   | SSA
   | DSA
   | NoPhis
+  | NoSummaries
   | Params
   | LambdaLift
   | MemoryEncoding
@@ -22,6 +23,7 @@ type t =
   | ReducibleLoops
       (** All loops are reducible. That is, there are no {i irreducible} loops.
       *)
+  | Acyclic
 [@@deriving
   eq,
   ord,

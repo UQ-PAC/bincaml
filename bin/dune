@@ -22,3 +22,8 @@
   trace.core
   trace-tef
   terminal_size))
+
+(executable
+ (name gtirb_graph)
+ (libraries bincaml.gtirb)
+ (modules gtirb_graph))

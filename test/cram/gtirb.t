@@ -111,10 +111,12 @@
      block %ret_1 [ return; ]
   ];
   proc @_init()  -> () {  }
-    modifies $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64, $R29:bv64, $R30:bv64,
-      $SP:bv64, $mem:(bv64->bv8)
-    captures $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64, $R29:bv64, $R30:bv64,
-      $SP:bv64, $mem:(bv64->bv8)
+    modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
+      $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R19:bv64, $R2:bv64, $R29:bv64,
+      $R3:bv64, $R30:bv64, $R4:bv64, $R5:bv64, $R6:bv64, $SP:bv64, $mem:(bv64->bv8)
+    captures $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
+      $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R19:bv64, $R2:bv64, $R29:bv64,
+      $R3:bv64, $R30:bv64, $R4:bv64, $R5:bv64, $R6:bv64, $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400600:bv64, $PC))
   
   [
@@ -151,9 +153,9 @@
      ];
      block %_init_code_2 [
        assert boolor(eq(0x4006c4:bv64, $PC));
-       goto (%_init_ext);
+       goto (%_init_ext_2);
      ];
-     block %_init_ext [
+     block %_init_ext_2 [
        assume eq(0x4006c4:bv64, $PC);
        call @call_weak_fn();
        assert boolor(eq(0x400610:bv64, $PC));
@@ -325,9 +327,9 @@
      ];
      block %__do_global_dtors_aux_code_6 [
        assert boolor(eq(0x4006e0:bv64, $PC));
-       goto (%__do_global_dtors_aux_ext);
+       goto (%__do_global_dtors_aux_ext_2);
      ];
-     block %__do_global_dtors_aux_ext [
+     block %__do_global_dtors_aux_ext_2 [
        assume eq(0x4006e0:bv64, $PC);
        call @deregister_tm_clones();
        assert boolor(eq(0x400768:bv64, $PC));
@@ -549,7 +551,11 @@
        $PC:bv64 := $R16;
        goto (%register_tm_clones_code_7);
      ];
-     block %register_tm_clones_code_7 [ assert false; unreachable; ]
+     block %register_tm_clones_code_7 [
+       assert false;
+       goto (%register_tm_clones_ext);
+     ];
+     block %register_tm_clones_ext [ assert false; unreachable; ]
   ];
   proc @frame_dummy()  -> () {  }
     modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64
@@ -572,60 +578,24 @@
      ];
      block %frame_dummy_code_1 [
        assert boolor(eq(0x400710:bv64, $PC));
-       goto (%frame_dummy_ext);
+       goto (%frame_dummy_ext_1);
      ];
-     block %frame_dummy_ext [
+     block %frame_dummy_ext_1 [
        assume eq(0x400710:bv64, $PC);
        call @register_tm_clones();
        assert false;
        unreachable;
      ]
   ];
-  proc @FUN_400660()  -> () {  }
-    modifies $PC:bv64, $R16:bv64, $R17:bv64
-    captures $PC:bv64, $R16:bv64, $R17:bv64, $mem:(bv64->bv8)
+  proc @abort()  -> () {  }
+    modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
+      $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R19:bv64, $R2:bv64, $R29:bv64,
+      $R3:bv64, $R30:bv64, $R4:bv64, $R5:bv64, $R6:bv64, $SP:bv64, $mem:(bv64->bv8)
+    captures $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
+      $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R19:bv64, $R2:bv64, $R29:bv64,
+      $R3:bv64, $R30:bv64, $R4:bv64, $R5:bv64, $R6:bv64, $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400660:bv64, $PC))
-  
-  [
-     block %FUN_400660_code { .address = 4195936;
-         .gtirb_block = "iedVtPHmSjuLgqSxHgXOuw";
-         .succ = [ { .conditional = "false"; .direct = "false";
-                 .target = "proxy:BsLBdgTFQlOA45HTKKU2gQ"; .type = "Type_Branch" } ] } [
-       assume eq(0x400660:bv64, $PC);
-       goto (%block);
-     ];
-     block %block { .asm = "adrp x16, #0x20000" } [
-       $R16:bv64 := 0x420000:bv64;
-       (var BranchTaken:bool := false, $PC:bv64 := 0x400664:bv64);
-       goto (%block_1);
-     ];
-     block %block_1 { .asm = "ldr x17, [x16, #0x10]" } [
-       var local:bv64 := 0x0:bv64;
-       var local:bv64 := $R16;
-       var local_1:bv64 := 0x0:bv64;
-       var local_2:bv64 := load le $mem:(bv64->bv8) bvadd(local:bv64, 0x10:bv64) 64;
-       var local_1:bv64 := local_2:bv64;
-       $R17:bv64 := zero_extend(0, zero_extend(0, local_1:bv64));
-       (var BranchTaken:bool := false, $PC:bv64 := 0x400668:bv64);
-       goto (%block_2);
-     ];
-     block %block_2 { .asm = "add x16, x16, #0x10" } [
-       var local_3:bv64 := 0x0:bv64;
-       var local_4:bv64 := 0x0:bv64;
-       var local_4:bv64 := $R16;
-       $R16:bv64 := bvadd(local_4:bv64, 0x10:bv64);
-       (var BranchTaken:bool := false, $PC:bv64 := 0x40066c:bv64);
-       goto (%block_3);
-     ];
-     block %block_3 { .asm = "br x17" } [
-       var local_5:bv64 := 0x0:bv64;
-       var BTypeNext:bv2 := 0x1:bv2;
-       var BranchTaken:bool := true;
-       $PC:bv64 := $R17;
-       goto (%FUN_400660_code_1);
-     ];
-     block %FUN_400660_code_1 [ assert false; unreachable; ]
-  ];
+  ;
   proc @Sqrt()  -> () {  }
     modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
       $R0:bv64, $R1:bv64, $SP:bv64, $mem:(bv64->bv8)
@@ -1006,9 +976,11 @@
      ]
   ];
   proc @_start()  -> () {  }
-    modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R2:bv64, $R29:bv64,
-      $R3:bv64, $R30:bv64, $R4:bv64, $R5:bv64, $R6:bv64
-    captures $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R2:bv64, $R29:bv64,
+    modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
+      $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R19:bv64, $R2:bv64, $R29:bv64,
+      $R3:bv64, $R30:bv64, $R4:bv64, $R5:bv64, $R6:bv64, $SP:bv64, $mem:(bv64->bv8)
+    captures $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
+      $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R19:bv64, $R2:bv64, $R29:bv64,
       $R3:bv64, $R30:bv64, $R4:bv64, $R5:bv64, $R6:bv64, $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400680:bv64, $PC))
   
@@ -1092,11 +1064,11 @@
      ];
      block %_start_code_3 [
        assert boolor(eq(0x400640:bv64, $PC));
-       goto (%_start_ext);
+       goto (%_start_ext_5);
      ];
-     block %_start_ext [
+     block %_start_ext_5 [
        assume eq(0x400640:bv64, $PC);
-       call @FUN_400640();
+       call @__libc_start_main();
        assert boolor(eq(0x4006b0:bv64, $PC));
        goto (%_start_code_1);
      ];
@@ -1115,11 +1087,11 @@
      ];
      block %_start_code_4 [
        assert boolor(eq(0x400660:bv64, $PC));
-       goto (%_start_ext_2);
+       goto (%_start_ext_4);
      ];
-     block %_start_ext_2 [
+     block %_start_ext_4 [
        assume eq(0x400660:bv64, $PC);
-       call @FUN_400660();
+       call @abort();
        assert false;
        unreachable;
      ]
@@ -1148,8 +1120,12 @@
      block %ret [ return; ]
   ];
   proc @call_weak_fn()  -> () {  }
-    modifies $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64
-    captures $PC:bv64, $R0:bv64, $R16:bv64, $R17:bv64, $R30:bv64, $mem:(bv64->bv8)
+    modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
+      $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R19:bv64, $R2:bv64, $R29:bv64,
+      $R3:bv64, $R30:bv64, $R4:bv64, $R5:bv64, $R6:bv64, $SP:bv64, $mem:(bv64->bv8)
+    captures $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
+      $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R19:bv64, $R2:bv64, $R29:bv64,
+      $R3:bv64, $R30:bv64, $R4:bv64, $R5:bv64, $R6:bv64, $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x4006c4:bv64, $PC))
   
   [
@@ -1212,11 +1188,11 @@
      ];
      block %call_weak_fn_code_4 [
        assert boolor(eq(0x400650:bv64, $PC));
-       goto (%call_weak_fn_ext_1);
+       goto (%call_weak_fn_ext_2);
      ];
-     block %call_weak_fn_ext_1 [
+     block %call_weak_fn_ext_2 [
        assume eq(0x400650:bv64, $PC);
-       call @.L_400650();
+       call @__gmon_start__();
        assert false;
        unreachable;
      ];
@@ -1294,9 +1270,9 @@
      ];
      block %main_code_2 [
        assert boolor(eq(0x400784:bv64, $PC));
-       goto (%main_ext);
+       goto (%main_ext_2);
      ];
-     block %main_ext [
+     block %main_ext_2 [
        assume eq(0x400784:bv64, $PC);
        call @Sqrt();
        assert boolor(eq(0x400820:bv64, $PC));
@@ -1334,96 +1310,24 @@
      block %main_code_3 [ assert boolor(true); goto (%ret_1); ];
      block %ret_1 [ return; ]
   ];
-  proc @.L_400650()  -> () {  }
-    modifies $PC:bv64, $R16:bv64, $R17:bv64
-    captures $PC:bv64, $R16:bv64, $R17:bv64, $mem:(bv64->bv8)
+  proc @__gmon_start__()  -> () {  }
+    modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
+      $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R19:bv64, $R2:bv64, $R29:bv64,
+      $R3:bv64, $R30:bv64, $R4:bv64, $R5:bv64, $R6:bv64, $SP:bv64, $mem:(bv64->bv8)
+    captures $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
+      $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R19:bv64, $R2:bv64, $R29:bv64,
+      $R3:bv64, $R30:bv64, $R4:bv64, $R5:bv64, $R6:bv64, $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400650:bv64, $PC))
-  
-  [
-     block %L_400650_code { .address = 4195920;
-         .gtirb_block = "i2bc6yURTw+Pq2nxe63pQA";
-         .succ = [ { .conditional = "false"; .direct = "false";
-                 .target = "proxy:QQLF2yhHRgKOi0ouqIEdXw"; .type = "Type_Branch" } ] } [
-       assume eq(0x400650:bv64, $PC);
-       goto (%block);
-     ];
-     block %block { .asm = "adrp x16, #0x20000" } [
-       $R16:bv64 := 0x420000:bv64;
-       (var BranchTaken:bool := false, $PC:bv64 := 0x400654:bv64);
-       goto (%block_1);
-     ];
-     block %block_1 { .asm = "ldr x17, [x16, #8]" } [
-       var local:bv64 := 0x0:bv64;
-       var local:bv64 := $R16;
-       var local_1:bv64 := 0x0:bv64;
-       var local_2:bv64 := load le $mem:(bv64->bv8) bvadd(local:bv64, 0x8:bv64) 64;
-       var local_1:bv64 := local_2:bv64;
-       $R17:bv64 := zero_extend(0, zero_extend(0, local_1:bv64));
-       (var BranchTaken:bool := false, $PC:bv64 := 0x400658:bv64);
-       goto (%block_2);
-     ];
-     block %block_2 { .asm = "add x16, x16, #8" } [
-       var local_3:bv64 := 0x0:bv64;
-       var local_4:bv64 := 0x0:bv64;
-       var local_4:bv64 := $R16;
-       $R16:bv64 := bvadd(local_4:bv64, 0x8:bv64);
-       (var BranchTaken:bool := false, $PC:bv64 := 0x40065c:bv64);
-       goto (%block_3);
-     ];
-     block %block_3 { .asm = "br x17" } [
-       var local_5:bv64 := 0x0:bv64;
-       var BTypeNext:bv2 := 0x1:bv2;
-       var BranchTaken:bool := true;
-       $PC:bv64 := $R17;
-       goto (%L_400650_code_1);
-     ];
-     block %L_400650_code_1 [ assert false; unreachable; ]
-  ];
-  proc @FUN_400640()  -> () {  }
-    modifies $PC:bv64, $R16:bv64, $R17:bv64
-    captures $PC:bv64, $R16:bv64, $R17:bv64, $mem:(bv64->bv8)
+  ;
+  proc @__libc_start_main()  -> () {  }
+    modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
+      $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R19:bv64, $R2:bv64, $R29:bv64,
+      $R3:bv64, $R30:bv64, $R4:bv64, $R5:bv64, $R6:bv64, $SP:bv64, $mem:(bv64->bv8)
+    captures $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
+      $R0:bv64, $R1:bv64, $R16:bv64, $R17:bv64, $R19:bv64, $R2:bv64, $R29:bv64,
+      $R3:bv64, $R30:bv64, $R4:bv64, $R5:bv64, $R6:bv64, $SP:bv64, $mem:(bv64->bv8)
     requires boolor(eq(0x400640:bv64, $PC))
-  
-  [
-     block %FUN_400640_code { .address = 4195904;
-         .gtirb_block = "YmNxI7RsS/6TZy3HTKzvWg";
-         .succ = [ { .conditional = "false"; .direct = "false";
-                 .target = "proxy:3AqniX2CT+OA1g1jJcUzbQ"; .type = "Type_Branch" } ] } [
-       assume eq(0x400640:bv64, $PC);
-       goto (%block);
-     ];
-     block %block { .asm = "adrp x16, #0x20000" } [
-       $R16:bv64 := 0x420000:bv64;
-       (var BranchTaken:bool := false, $PC:bv64 := 0x400644:bv64);
-       goto (%block_1);
-     ];
-     block %block_1 { .asm = "ldr x17, [x16]" } [
-       var local:bv64 := 0x0:bv64;
-       var local:bv64 := $R16;
-       var local_1:bv64 := 0x0:bv64;
-       var local_2:bv64 := load le $mem:(bv64->bv8) bvadd(local:bv64, 0x0:bv64) 64;
-       var local_1:bv64 := local_2:bv64;
-       $R17:bv64 := zero_extend(0, zero_extend(0, local_1:bv64));
-       (var BranchTaken:bool := false, $PC:bv64 := 0x400648:bv64);
-       goto (%block_2);
-     ];
-     block %block_2 { .asm = "add x16, x16, #0" } [
-       var local_3:bv64 := 0x0:bv64;
-       var local_4:bv64 := 0x0:bv64;
-       var local_4:bv64 := $R16;
-       $R16:bv64 := bvadd(local_4:bv64, 0x0:bv64);
-       (var BranchTaken:bool := false, $PC:bv64 := 0x40064c:bv64);
-       goto (%block_3);
-     ];
-     block %block_3 { .asm = "br x17" } [
-       var local_5:bv64 := 0x0:bv64;
-       var BTypeNext:bv2 := 0x1:bv2;
-       var BranchTaken:bool := true;
-       $PC:bv64 := $R17;
-       goto (%FUN_400640_code_1);
-     ];
-     block %FUN_400640_code_1 [ assert false; unreachable; ]
-  ];
+  ;
   proc @deregister_tm_clones()  -> () {  }
     modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
       $R0:bv64, $R1:bv64, $R16:bv64
@@ -1577,7 +1481,11 @@
        $PC:bv64 := $R16;
        goto (%deregister_tm_clones_code_6);
      ];
-     block %deregister_tm_clones_code_6 [ assert false; unreachable; ];
+     block %deregister_tm_clones_code_6 [
+       assert false;
+       goto (%deregister_tm_clones_ext_1);
+     ];
+     block %deregister_tm_clones_ext_1 [ assert false; unreachable; ];
      block %deregister_tm_clones_code_3 { .address = 4196108;
          .gtirb_block = "cdQ2GS2+QhaOa7OUvPWMRQ";
          .succ = [ { .address = 4196200; .conditional = "false"; .direct = "true";
@@ -1649,7 +1557,8 @@
        $PC:bv64 := $R17;
        goto (%FUN_400620_code_1);
      ];
-     block %FUN_400620_code_1 [ assert false; unreachable; ]
+     block %FUN_400620_code_1 [ assert false; goto (%FUN_400620_ext); ];
+     block %FUN_400620_ext [ assert false; unreachable; ]
   ];
   prog entry @_start { .initial_memory = [ { .address = 4194872;
               .bytes = [ "H4sIAAAAAAAA/wFuAJH/L25peC9zdG9yZS92emlpdzRrMWtsODhwcXY0N25obGd6Zjg1bXZobmJpYS1nbGliYy1hYXJjaDY0LXVua25vd24tbGludXgtZ251LTIuNDAtNjYvbGliL2xkLWxpbnV4LWFhcmNoNjQuc28uMQC2zzwDbgAAAA==" ];

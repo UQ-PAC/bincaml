@@ -39,7 +39,6 @@
   
   Boogie program verifier finished with 1 verified, 5 errors
 
-
   $ cat << EOF | bincaml script -
   >  (load-il ../../examples/memory/memory_safety.il)
   >  (run-transforms ssa)
@@ -88,4 +87,3 @@
       out.bpl(440,3): b#inputs
   
   Boogie program verifier finished with 1 verified, 7 errors
-

@@ -8,6 +8,7 @@ trace.json
 **/*.dot
 
 .vscode/
+.helix/
 .direnv
 .envrc
 
