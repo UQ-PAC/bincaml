@@ -28,13 +28,17 @@ include Graph.Graphviz.Dot (struct
         with
         | Some (Symbol_data { name }) ->
             Some
-              { sg_name = sanitise name; sg_attributes = []; sg_parent = None }
+              {
+                sg_name = sanitise name;
+                sg_attributes = [ `Label name; `Fontsize 16 ];
+                sg_parent = None;
+              }
         | _ | (exception _) -> None)
 
   let default_vertex_attributes _ = []
-  let graph_attributes _ = []
+  let graph_attributes _ = [ `Rankdir `LeftToRight ]
   let vertex_name v = quote (Graph_types.show_vert v)
-  let vertex_attributes v = [ `Fontname "Mono" ]
+  let vertex_attributes v = [ `Fontname "Mono"; `Label "" ]
 
   include Graph_internal
 end)
