@@ -25,5 +25,5 @@
 
 (executable
  (name gtirb_graph)
- (libraries bincaml.gtirb)
+ (libraries bincaml.gtirb yojson)
  (modules gtirb_graph))

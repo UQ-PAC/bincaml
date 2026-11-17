@@ -15,8 +15,8 @@ let () =
       CCIO.with_out (filename ^ ".json") (fun out ->
           g
           |> Gtirb_frontend.Gtirb_proto'.IR.to_json
-               (Ocaml_protoc_plugin.Json_options.make ())
-          |> Ocaml_protoc_plugin.Json.to_string |> output_string out);
+               (Ocaml_protoc_plugin.Json_options.make ~enum_names:false ())
+          |> Yojson.Basic.pretty_to_channel out );
 
       let graph = Gtirb_frontend.Gtirb_graph.Loader.graph_of_gtirb_ir g in
       graph
