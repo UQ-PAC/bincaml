@@ -36,7 +36,6 @@ let pretty_proc p =
   let show_expr e = BasilExpr.pretty e in
   Procedure.pretty show_lvar show_var show_expr p
 
-<<<<<<< HEAD
 open struct
   (** Converts the given {!Attrib.t} to a pretty-printer and prepends a space,
       if it is non-None. Otherwise, {!Containers_pp.nil}. *)

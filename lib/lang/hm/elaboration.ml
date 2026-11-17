@@ -189,6 +189,7 @@ let infer_decl st visit_constraint prog scheme =
         let binding' s = retype_var st global_universe s binding in
         match definition with
         | Axiom b ->
+            add_err_ctx (loc_e b) @@ fun () ->
             let b = infer_expr ~univ:global_universe [%here] b scheme in
             let _ = unify st (getty b) (bool_type st) in
             let new_axiom scheme =
@@ -219,6 +220,7 @@ let infer_decl st visit_constraint prog scheme =
                 infer_expr ~univ:global_universe [%here] definition scheme
               in
               let et = AbsTypingExpr.unfix e |> AbstractExpr.get_typ in
+              add_err_ctx (loc_e definition) @@ fun () ->
               let _ = unify st initial_binding_type et in
               e
             in

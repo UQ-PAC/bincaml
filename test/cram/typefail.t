@@ -5,7 +5,10 @@
   bincaml: [WARNING] type conflict: int, <bitvector at construction of sign_extend(32, 2)
   bincaml: [WARNING] type conflict: int, <bitvector at construction of sign_extend(32, 2)
   (run-transforms type-check)
-  bincaml: (run-transforms type-check): Failure("Check failed: @main_1876")
+  bincaml: Exception Failure("Check failed: @main_1876"): exception
+           
+           Related context:
+           ./typefail.sexp
            2 | (run-transforms "type-check")
                                           ^
            

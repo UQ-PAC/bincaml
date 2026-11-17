@@ -22,6 +22,52 @@ Should identify type errors in cases options:
   > EOF
   (load-il test_cases.il)
   (run-transforms hindley-milner-elaborate)
-  bincaml: (run-transforms hindley-milner-elaborate): Lang__Hm_inference__Hm_types.TypeErr("type_error: bool <> 64 \226\132\149 bv : if eq(x:bv64, 0x0:bv64) then 0x1:bv64 else true : fun (x:bv64) :: (if eq(x:bv64, 0x0:bv64) then 0x1:bv64 else true)")
+  bincaml: Type error: bool <> 64 ℕ bv
+           
            
   [123]
+
+
+
+Should produce errors
+
+  $ echo 'let $f (x:bv64) : bool = booland(true, bvult(x, 1:bv32));' > test.il
+  $ cat << EOF | bincaml script -
+  > (load-il "test.il")
+  > (run-transforms "hindley-milner-elaborate")
+  > (dump-il)
+  > EOF
+  (load-il test.il)
+  (run-transforms hindley-milner-elaborate)
+  bincaml: Type error: 32 <> 64
+           
+           Related context:
+           infer expression
+           1 | let $f (x:bv64) : bool = booland(true, bvult(x, 1:bv32));
+                                                           ^^^^^^^^^^^
+           
+           infer expression
+           1 | let $f (x:bv64) : bool = booland(true, bvult(x, 1:bv32));
+                                               ^^^^^^^^^^^^^^^^^^^^^^^^
+           
+  [123]
+
+
+
+Should identify type errors in cases options:
+
+  $ echo 'let $f (x:bv64) : bv64 = (true);' > test_cases.il
+  $ cat << EOF | bincaml script -
+  > (load-il "test_cases.il")
+  > (dump-il)
+  > (run-transforms "hindley-milner-elaborate")
+  > EOF
+  (load-il test_cases.il)
+  (dump-il)
+  let $f (x:bv64) : bv64 = (true);(run-transforms hindley-milner-elaborate)
+  bincaml: Type error: 64 ℕ bv <> bool
+           
+           
+  [123]
+
+
