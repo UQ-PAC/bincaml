@@ -145,5 +145,5 @@ include Graph.Graphviz.Dot (struct
   let vertex_attributes (i, g) =
     let _, to_v = make_vertex_bijection g in
     let comment = Graph_types.show_vert (to_v i) in
-    [ `Fontname "Mono"; `Comment comment ]
+    []
 end)
