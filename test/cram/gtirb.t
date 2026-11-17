@@ -151,9 +151,9 @@
      ];
      block %_init_code_2 [
        assert boolor(eq(0x4006c4:bv64, $PC));
-       goto (%_init_ext);
+       goto (%_init_ext_2);
      ];
-     block %_init_ext [
+     block %_init_ext_2 [
        assume eq(0x4006c4:bv64, $PC);
        call @call_weak_fn();
        assert boolor(eq(0x400610:bv64, $PC));
@@ -325,9 +325,9 @@
      ];
      block %__do_global_dtors_aux_code_6 [
        assert boolor(eq(0x4006e0:bv64, $PC));
-       goto (%__do_global_dtors_aux_ext);
+       goto (%__do_global_dtors_aux_ext_2);
      ];
-     block %__do_global_dtors_aux_ext [
+     block %__do_global_dtors_aux_ext_2 [
        assume eq(0x4006e0:bv64, $PC);
        call @deregister_tm_clones();
        assert boolor(eq(0x400768:bv64, $PC));
@@ -549,7 +549,11 @@
        $PC:bv64 := $R16;
        goto (%register_tm_clones_code_7);
      ];
-     block %register_tm_clones_code_7 [ assert false; unreachable; ]
+     block %register_tm_clones_code_7 [
+       assert false;
+       goto (%register_tm_clones_ext);
+     ];
+     block %register_tm_clones_ext [ assert false; unreachable; ]
   ];
   proc @frame_dummy()  -> () {  }
     modifies $PC:bv64, $R0:bv64, $R1:bv64, $R16:bv64, $R2:bv64
@@ -572,9 +576,9 @@
      ];
      block %frame_dummy_code_1 [
        assert boolor(eq(0x400710:bv64, $PC));
-       goto (%frame_dummy_ext);
+       goto (%frame_dummy_ext_1);
      ];
-     block %frame_dummy_ext [
+     block %frame_dummy_ext_1 [
        assume eq(0x400710:bv64, $PC);
        call @register_tm_clones();
        assert false;
@@ -624,7 +628,8 @@
        $PC:bv64 := $R17;
        goto (%FUN_400660_code_1);
      ];
-     block %FUN_400660_code_1 [ assert false; unreachable; ]
+     block %FUN_400660_code_1 [ assert false; goto (%FUN_400660_ext); ];
+     block %FUN_400660_ext [ assert false; unreachable; ]
   ];
   proc @Sqrt()  -> () {  }
     modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
@@ -1092,9 +1097,9 @@
      ];
      block %_start_code_3 [
        assert boolor(eq(0x400640:bv64, $PC));
-       goto (%_start_ext);
+       goto (%_start_ext_5);
      ];
-     block %_start_ext [
+     block %_start_ext_5 [
        assume eq(0x400640:bv64, $PC);
        call @FUN_400640();
        assert boolor(eq(0x4006b0:bv64, $PC));
@@ -1115,9 +1120,9 @@
      ];
      block %_start_code_4 [
        assert boolor(eq(0x400660:bv64, $PC));
-       goto (%_start_ext_2);
+       goto (%_start_ext_4);
      ];
-     block %_start_ext_2 [
+     block %_start_ext_4 [
        assume eq(0x400660:bv64, $PC);
        call @FUN_400660();
        assert false;
@@ -1212,9 +1217,9 @@
      ];
      block %call_weak_fn_code_4 [
        assert boolor(eq(0x400650:bv64, $PC));
-       goto (%call_weak_fn_ext_1);
+       goto (%call_weak_fn_ext_2);
      ];
-     block %call_weak_fn_ext_1 [
+     block %call_weak_fn_ext_2 [
        assume eq(0x400650:bv64, $PC);
        call @.L_400650();
        assert false;
@@ -1297,9 +1302,9 @@
      ];
      block %main_code_2 [
        assert boolor(eq(0x400784:bv64, $PC));
-       goto (%main_ext);
+       goto (%main_ext_2);
      ];
-     block %main_ext [
+     block %main_ext_2 [
        assume eq(0x400784:bv64, $PC);
        call @Sqrt();
        assert boolor(eq(0x400820:bv64, $PC));
@@ -1380,7 +1385,8 @@
        $PC:bv64 := $R17;
        goto (%L_400650_code_1);
      ];
-     block %L_400650_code_1 [ assert false; unreachable; ]
+     block %L_400650_code_1 [ assert false; goto (%L_400650_ext); ];
+     block %L_400650_ext [ assert false; unreachable; ]
   ];
   proc @FUN_400640()  -> () {  }
     modifies $PC:bv64, $R16:bv64, $R17:bv64
@@ -1425,7 +1431,8 @@
        $PC:bv64 := $R17;
        goto (%FUN_400640_code_1);
      ];
-     block %FUN_400640_code_1 [ assert false; unreachable; ]
+     block %FUN_400640_code_1 [ assert false; goto (%FUN_400640_ext); ];
+     block %FUN_400640_ext [ assert false; unreachable; ]
   ];
   proc @deregister_tm_clones()  -> () {  }
     modifies $PC:bv64, $PSTATE_C:bv1, $PSTATE_N:bv1, $PSTATE_V:bv1, $PSTATE_Z:bv1,
@@ -1580,7 +1587,11 @@
        $PC:bv64 := $R16;
        goto (%deregister_tm_clones_code_6);
      ];
-     block %deregister_tm_clones_code_6 [ assert false; unreachable; ];
+     block %deregister_tm_clones_code_6 [
+       assert false;
+       goto (%deregister_tm_clones_ext_1);
+     ];
+     block %deregister_tm_clones_ext_1 [ assert false; unreachable; ];
      block %deregister_tm_clones_code_3 { .address = 4196108;
          .gtirb_block = "cdQ2GS2+QhaOa7OUvPWMRQ";
          .succ = [ { .address = 4196200; .conditional = "false"; .direct = "true";
@@ -1655,7 +1666,8 @@
        $PC:bv64 := $R17;
        goto (%FUN_400620_code_1);
      ];
-     block %FUN_400620_code_1 [ assert false; unreachable; ]
+     block %FUN_400620_code_1 [ assert false; goto (%FUN_400620_ext); ];
+     block %FUN_400620_ext [ assert false; unreachable; ]
   ];
   prog entry @_start { .initial_memory = [ { .address = 4194872;
               .bytes = [ "H4sIAAAAAAAA/wFuAJH/L25peC9zdG9yZS92emlpdzRrMWtsODhwcXY0N25obGd6Zjg1bXZobmJpYS1nbGliYy1hYXJjaDY0LXVua25vd24tbGludXgtZ251LTIuNDAtNjYvbGliL2xkLWxpbnV4LWFhcmNoNjQuc28uMQC2zzwDbgAAAA==" ];
