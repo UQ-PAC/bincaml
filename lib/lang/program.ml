@@ -36,6 +36,7 @@ let pretty_proc p =
   let show_expr e = BasilExpr.pretty e in
   Procedure.pretty show_lvar show_var show_expr p
 
+<<<<<<< HEAD
 open struct
   (** Converts the given {!Attrib.t} to a pretty-printer and prepends a space,
       if it is non-None. Otherwise, {!Containers_pp.nil}. *)
@@ -49,7 +50,7 @@ open struct
       (if StringMap.is_empty map then None else Some (`Assoc map))
 end
 
-let pretty_declaration d =
+let pretty_declaration ?(pretty_lambda = true) d =
   let open Containers_pp in
   let attrib_text =
     pretty_fragment_attrib_map
@@ -77,7 +78,8 @@ let pretty_declaration d =
   | Function { binding; definition = Function body } -> (
       let open AbstractExpr in
       match BasilExpr.unfix body with
-      | Lambda _ -> Expr.BasilExpr.pretty_let_single binding body None
+      | Lambda _ when pretty_lambda ->
+          Expr.BasilExpr.pretty_let_single binding body None
       | _ ->
           let args, body, rtype = (text "", body, Var.typ binding) in
           text "let "

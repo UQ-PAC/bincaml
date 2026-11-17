@@ -185,7 +185,8 @@ let infer_decl st visit_constraint prog scheme =
         (scheme, `Decl (decl_id, new_def))
     | Function { binding; definition; attrib } -> (
         (* elaboration of var binding *)
-        let binding s = retype_var st global_universe s binding in
+        let scheme = decl_var_typ st global_universe scheme binding in
+        let binding' s = retype_var st global_universe s binding in
         match definition with
         | Axiom b ->
             let b = infer_expr ~univ:global_universe [%here] b scheme in
@@ -194,7 +195,7 @@ let infer_decl st visit_constraint prog scheme =
               Function
                 {
                   attrib;
-                  binding = binding scheme;
+                  binding = binding' scheme;
                   definition =
                     Axiom
                       (elaborate_expr st ~univ:global_universe [%here] b scheme);
@@ -204,17 +205,27 @@ let infer_decl st visit_constraint prog scheme =
         | Uninterpreted ->
             let new_uf s =
               Function
-                { binding = binding s; attrib; definition = Uninterpreted }
+                { binding = binding' s; attrib; definition = Uninterpreted }
             in
             (scheme, `Decl (decl_id, new_uf))
         | Function definition ->
+            let initial_binding_type =
+              lookup_var_typ st ~no_constraint:false global_universe scheme
+                binding
+              |> TypeExpr.find st
+            in
             let e =
-              infer_expr ~univ:global_universe [%here] definition scheme
+              let e =
+                infer_expr ~univ:global_universe [%here] definition scheme
+              in
+              let et = AbsTypingExpr.unfix e |> AbstractExpr.get_typ in
+              let _ = unify st initial_binding_type et in
+              e
             in
             let new_fundef scheme =
               Function
                 {
-                  binding = binding scheme;
+                  binding = binding' scheme;
                   attrib;
                   definition =
                     Function

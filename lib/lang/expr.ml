@@ -230,7 +230,7 @@ module BasilExpr = struct
                 "]}"
           in
           let binding =
-            fill (text " ")
+            fill (text ", ")
               (List.map (fun v -> bracket "(" (Var.pretty v) ")") bound_vars)
             ^+ sep ^+ bracket "(" b ")"
           in

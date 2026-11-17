@@ -29,7 +29,7 @@ val pp_stmt :
 
 val decl_binding : declaration -> string
 val pretty_proc : (Var.t, Expr.BasilExpr.t) Procedure.t -> Containers_pp.t
-val pretty_declaration : declaration -> Containers_pp.t
+val pretty_declaration : ?pretty_lambda:bool -> declaration -> Containers_pp.t
 val get_id_by_name : string -> t -> ID.t
 val set_entry_proc : ID.t -> t -> t
 val set_spec : prog_spec -> t -> t
