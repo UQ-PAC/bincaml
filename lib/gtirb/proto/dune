@@ -1,3 +1,5 @@
+(include_subdirs no)
+
 (library
  (public_name bincaml.gtirb_proto)
  (name gtirb_proto)
