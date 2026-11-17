@@ -14,7 +14,6 @@ let () =
       let g = Gtirb_frontend.Gtirb.of_file filename in
 
       let graph = Gtirb_frontend.Gtirb_graph.Loader.graph_of_gtirb_ir g in
-      Gtirb_frontend.Gtirb_graph.Graph_dot.graph := Some graph;
       graph
       |> Gtirb_frontend.Gtirb_graph.Graph_dot.output_graph
            (open_out (filename ^ ".dot"))
