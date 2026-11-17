@@ -18,9 +18,12 @@ let load_gtirb_prog filename =
   let open Result in
   (* protobuf IR *)
   let g = Gtirb.of_file filename in
+  let gtirb_graph = Gtirb_graph.Loader.graph_of_gtirb_ir g in
   let* c = g.cfg |> Option.to_result "No CFG" in
   (* convert protobuf to program *)
-  let p = List.map (Gfir_to_bincaml.module_to_ir_prog c) g.modules in
+  let p =
+    List.map (Gfir_to_bincaml.module_to_ir_prog gtirb_graph c) g.modules
+  in
   match p with
   | h :: [] -> Ok h
   | _ :: _ -> Error "got more than one module"
