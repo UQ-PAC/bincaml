@@ -38,7 +38,13 @@ module Vert = struct
     | Internal of UUID.t  (** vertex in this procedure *)
     | External of UUID.t  (** vertex in another procedure *)
     | Proxy of UUID.t  (** vertex in another procedure *)
-    | Stmts of { uuid : UUID.t; stmts : Lang.Program.stmt list }
+    | Stmts of {
+        uuid : UUID.t;
+        originating_uuid : UUID.t;
+            (** Originating UUID from GTIRB. Used to resolve address
+                information, for example. *)
+        stmts : Lang.Program.stmt list;
+      }
   [@@deriving eq, ord, show { with_path = false }]
 
   let uuid = function
@@ -47,11 +53,16 @@ module Vert = struct
     | External u -> u
     | Stmts { uuid } -> uuid
 
+  let originating_uuid = function
+    | Stmts { originating_uuid } -> originating_uuid
+    | other -> uuid other
+
   let to_attrib = function
     | Internal uuid -> `String ("internal:" ^ UUID.show uuid)
     | External uuid -> `String ("external:" ^ UUID.show uuid)
     | Proxy uuid -> `String ("proxy:" ^ UUID.show uuid)
-    | Stmts { uuid } -> `String ("stmts:" ^ UUID.show uuid)
+    | Stmts { originating_uuid } ->
+        `String ("stmts:" ^ UUID.show originating_uuid)
 
   let hash = Hash.poly
 end

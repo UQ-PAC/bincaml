@@ -100,9 +100,9 @@ let add_new_code_block (all_blocks : block UUIDMap.t) temp_proc succ_addr
         in
         let es =
           G.succ_e temp_proc.cfg e
-          |> List.map (fun (_, l, t) ->
+          |> List.map (function _, l, t ->
               let addr =
-                address_of_uuid all_blocks (Vert.uuid t)
+                address_of_uuid all_blocks (Vert.originating_uuid t)
                 |> Option.map (fun x -> (".address", `CamlInt x))
                 |> Option.to_list
               in
@@ -175,28 +175,40 @@ let reorder_fallthrough (g : Gfir.G.t) =
   in
   Gfir.G.fold_vertex reorder_fallthrough_succs g g
 
+let make_call_vertex ~caller_uuid ~callee_uuid procid =
+  let stmt =
+    let empty = StringMap.empty in
+    Lang.Stmt.Instr_Call { procid; args = empty; lhs = empty; attrib = empty }
+  and uuid =
+    (* HACK: makes a unique name, but double-encodes the base64... *)
+    UUID.(
+      of_string (show caller_uuid ^ "\000\000\000\000\000" ^ show callee_uuid))
+  in
+  Gfir.Vert.Stmts { uuid; stmts = [ stmt ]; originating_uuid = callee_uuid }
+
 (** Replace all external edges with a defined procedure with stmt edges
     containing a call to that procedure. *)
-let replace_call_edges procids =
-  Gfir.G.map_vertex (function
-    | External uuid as default ->
-        let id = procids uuid in
-        let m =
-          id
-          |> Option.map (fun id ->
-              let stmt =
-                Lang.Stmt.Instr_Call
-                  {
-                    procid = id;
-                    args = StringMap.empty;
-                    lhs = StringMap.empty;
-                    attrib = StringMap.empty;
-                  }
-              in
-              Gfir.Vert.Stmts { uuid; stmts = [ stmt ] })
-        in
-        Option.get_or ~default m
-    | o -> o)
+let replace_call_edges procids g =
+  Fun.flip Gfir.G.iter_edges_e g
+  |> Iter.filter_map (fun old_edge ->
+      let open Option.Infix in
+      let* caller_uuid, callee_uuid =
+        match old_edge with
+        | ( Gfir.Vert.Internal caller_uuid,
+            _,
+            (Gfir.Vert.External callee_uuid | Internal callee_uuid) ) ->
+            Some (caller_uuid, callee_uuid)
+        | _ -> None
+      in
+      let+ callee_id = procids callee_uuid in
+      let new_vert = make_call_vertex ~caller_uuid ~callee_uuid callee_id in
+      (old_edge, new_vert))
+  |> Iter.fold
+       (fun g (old_edge, new_vert) ->
+         let src, label, _ = old_edge in
+         let g = Gfir.G.remove_edge_e g old_edge in
+         Gfir.G.add_edge_e g (src, label, new_vert))
+       g
 
 (** Add the given CFG edge to the IR procedure. We naively translate all edges
     as jumps, on the assumption that
@@ -294,7 +306,8 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
       Gfir.(
         verts
         |> Iter.flat_map (fun v -> G.succ p.cfg v |> List.to_iter)
-        |> Iter.filter_map (fun v -> UUIDMap.find_opt (Vert.uuid v) all_blocks)
+        |> Iter.filter_map (fun v ->
+            UUIDMap.find_opt (Vert.originating_uuid v) all_blocks)
         |> Iter.filter_map Gtirb.address)
     with Invalid_argument _ -> Iter.empty
   in
@@ -308,16 +321,15 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   in
   let proc, blocks =
     Iter.from_iter (fun f -> Gfir.G.iter_vertex f p.cfg)
-    |> Iter.filter_map (function
-      | Gfir.Vert.External uuid | Gfir.Vert.Proxy uuid ->
-          Option.map
-            (fun (b : Gtirb.block) -> (uuid, Gtirb.address b, []))
-            (UUIDMap.find_opt uuid all_blocks)
-      | Gfir.Vert.Stmts { uuid; stmts } ->
-          Option.map
-            (fun (b : Gtirb.block) -> (uuid, Gtirb.address b, stmts))
-            (UUIDMap.find_opt uuid all_blocks)
-      | _ -> None)
+    |> Iter.filter_map (fun vert ->
+        let addr =
+          UUIDMap.find_opt (Gfir.Vert.originating_uuid vert) all_blocks
+          |> Option.flat_map Gtirb.address
+        in
+        match vert with
+        | Gfir.Vert.External uuid | Gfir.Vert.Proxy uuid -> Some (uuid, addr, [])
+        | Gfir.Vert.Stmts { uuid; stmts } -> Some (uuid, addr, stmts)
+        | _ -> None)
     |> Iter.fold
          (add_new_simple_block ~name_suffix:"_ext" succ_addr)
          (proc, blocks)

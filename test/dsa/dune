@@ -26,3 +26,8 @@
  (name cntlm)
  (modules cntlm)
  (libraries bincaml))
+
+(executable
+ (name run)
+ (libraries bincaml.transforms bincaml bincaml.util)
+ (modules run))
