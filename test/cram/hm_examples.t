@@ -83,7 +83,7 @@ typefail example
   $ cat << EOF | bincaml script -
   > (load-il "incorrect_types.il")
   > (run-transforms "hindley-milner-elaborate")
-  warning: here-document at line 1 delimited by end-of-file (wanted `EOF')
+  > EOF
   (load-il incorrect_types.il)
   bincaml: [WARNING] type conflict: int, <bitvector at construction of zero_extend(32, 2)
   bincaml: [WARNING] type conflict: int, <bitvector at construction of zero_extend(32, 2)
