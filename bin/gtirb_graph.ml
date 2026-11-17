@@ -12,6 +12,11 @@ let () =
   match !input_files with
   | [ filename ] ->
       let g = Gtirb_frontend.Gtirb.of_file filename in
+      CCIO.with_out (filename ^ ".json") (fun out ->
+          g
+          |> Gtirb_frontend.Gtirb_proto'.IR.to_json
+               (Ocaml_protoc_plugin.Json_options.make ())
+          |> Ocaml_protoc_plugin.Json.to_string |> output_string out);
 
       let graph = Gtirb_frontend.Gtirb_graph.Loader.graph_of_gtirb_ir g in
       graph
