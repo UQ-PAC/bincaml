@@ -4,7 +4,7 @@
 (** A vertex in the {!Gtirb_frontend.Gtirb_graph.t}.
 
     @canonical Gtirb_frontend.Gtirb_graph.vert *)
-type vert = Uuid of UUID.t [@@deriving eq, show { with_path = false }]
+type vert = Uuid of UUID.t [@@deriving eq, ord, show { with_path = false }]
 
 (** Data stored by a UUID of a particular kind.*)
 type self_data =
@@ -81,6 +81,7 @@ let make_self_uuid_rel (kind : self_data) a =
 (** {3 Derived functions} *)
 
 let equal_vert = equal_vert
+let compare_vert = compare_vert
 let pp_vert = pp_vert
 let show_vert = show_vert
 let pp_self_data = pp_self_data

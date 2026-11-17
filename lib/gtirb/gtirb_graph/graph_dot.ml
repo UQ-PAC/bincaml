@@ -81,22 +81,55 @@ struct
   let edge_attributes (x, _) = G.edge_attributes x
 end
 
+let make_vertex_bijection =
+  let module Bijection = CCBijection.Make (UUID) (Int) in
+  let module Memo = Fix.Memoize.ForType (struct
+    type nonrec t = Graph_internal.t
+  end) in
+  Memo.memoize (fun gr ->
+      let bij =
+        Fun.flip Graph_internal.iter_vertex gr
+        |> Iter.map (function Graph_types.Uuid x -> x)
+        |> Iter.sort ~cmp:UUID.compare
+        |> Iter.mapi Pair.make |> Iter.map Pair.swap |> Bijection.of_iter
+      in
+
+      ( (function Graph_types.Uuid uuid -> Bijection.find_left uuid bij),
+        fun i -> Graph_types.Uuid (Bijection.find_right i bij) ))
+
 include Graph.Graphviz.Dot (struct
   include DotGraphWithSelf (struct
     include Graph_internal
+    module V = Int
+
+    module E = struct
+      type t = int * E.label * int
+
+      let src (a, _, _) = a
+      let dst (_, _, a) = a
+    end
+
+    let iter_vertex k gr =
+      let to_int, _ = make_vertex_bijection gr in
+      iter_vertex (fun v -> k (to_int v)) gr
+
+    let iter_edges_e k gr =
+      let to_int, _ = make_vertex_bijection gr in
+      iter_edges_e (fun (s, e, t) -> k (to_int s, e, to_int t)) gr
+
     include DotDefaults
 
     let edge_attributes (_, edge, _) =
       [ `Label (escape (Graph_types.show_relation edge)) ]
 
     let graph_attributes _ = [ `Rankdir `LeftToRight ]
-    let vertex_name v = quote (Graph_types.show_vert v)
-    let vertex_attributes v = [ `Fontname "Mono"; `Label "" ]
+    let vertex_name = string_of_int
   end)
 
-  let get_subgraph (v, g) =
+  let get_subgraph (i, g) =
+    let _, to_v = make_vertex_bijection g in
     match
-      Graph_query.function_of_block g v
+      Graph_query.function_of_block g (to_v i)
       |> Option.map (Graph_query.function_name g)
       |> Option.map (Graph_query.self_data g)
     with
@@ -104,8 +137,13 @@ include Graph.Graphviz.Dot (struct
         Some
           {
             sg_name = sanitise name;
-            sg_attributes = [ `Label name; `Fontsize 16 ];
+            sg_attributes = [ `Label name; `Fontsize 30; `Fontname "Mono" ];
             sg_parent = None;
           }
     | _ | (exception _) -> None
+
+  let vertex_attributes (i, g) =
+    let _, to_v = make_vertex_bijection g in
+    let comment = Graph_types.show_vert (to_v i) in
+    [ `Fontname "Mono"; `Comment comment ]
 end)
