@@ -28,8 +28,16 @@ val pp_stmt :
   Containers.Format.formatter -> (Var.t, Var.t, Expr.BasilExpr.t) Stmt.t -> unit
 
 val decl_binding : declaration -> string
-val pretty_proc : (Var.t, Expr.BasilExpr.t) Procedure.t -> Containers_pp.t
-val pretty_declaration : declaration -> Containers_pp.t
+
+val pretty_proc :
+  ?pp_type:(Types.t -> Containers_pp.t) ->
+  (Var.t, Expr.BasilExpr.t) Procedure.t ->
+  Containers_pp.t
+
+val pretty_declaration :
+  ?pp_type:(Types.t -> Containers_pp.t) ->
+  declaration -> Containers_pp.t
+
 val get_id_by_name : string -> t -> ID.t
 val set_entry_proc : ID.t -> t -> t
 val set_spec : prog_spec -> t -> t

@@ -30,11 +30,16 @@ let decl_binding = function
   | Procedure { definition } -> ID.to_string (Procedure.id definition)
   | Implicit (VariantCase { variant }) -> variant
 
-let pretty_proc p =
+let expr_pretty ?(type_annot = false) pp_type s =
+  Expr.BasilExpr.cata
+    (Expr.BasilExpr.pretty_alg ~pp_type ~type_annot Expr.BasilExpr.pretty_attr)
+    s
+  |> Expr.BasilExpr.FoldN.get
+
+let pretty_proc ?(pp_type = Containers_pp.text % Types.to_string) p =
   let show_lvar v = Containers_pp.text @@ Var.to_string_il_lvar v in
   let show_var v = Containers_pp.text @@ Var.to_string_il_rvar v in
-  let show_expr e = BasilExpr.pretty e in
-  Procedure.pretty show_lvar show_var show_expr p
+  Procedure.pretty show_lvar show_var (expr_pretty pp_type) p
 
 open struct
   (** Converts the given {!Attrib.t} to a pretty-printer and prepends a space,
@@ -49,8 +54,9 @@ open struct
       (if StringMap.is_empty map then None else Some (`Assoc map))
 end
 
-let pretty_declaration d =
+let pretty_declaration ?(pp_type = Containers_pp.text % Types.to_string) d =
   let open Containers_pp in
+  let expr_pretty = expr_pretty pp_type in
   let attrib_text =
     pretty_fragment_attrib_map
     @@ Option.get_or ~default:StringMap.empty
@@ -64,30 +70,27 @@ let pretty_declaration d =
   | Variable { binding; classification } ->
       let classification =
         classification |> Option.to_list
-        |> List.map (fun e -> text " classification " ^ Expr.BasilExpr.pretty e)
+        |> List.map (fun e -> text " classification " ^ expr_pretty e)
         |> append_l
       in
       text (Var.to_decl_string_il binding) ^ classification ^ attrib_text
   | Function { binding; attrib; definition = Axiom body } ->
-      text "axiom "
-      ^ text (Var.name binding)
-      ^ attrib_text ^+ Expr.BasilExpr.pretty body
+      text "axiom " ^ text (Var.name binding) ^ attrib_text ^+ expr_pretty body
   | Function { binding; definition = Uninterpreted } ->
       text "val " ^ text (Var.to_string binding) ^ attrib_text
   | Function { binding; definition = Function body } -> (
       let open AbstractExpr in
       match BasilExpr.unfix body with
-      | Lambda _ -> Expr.BasilExpr.pretty_let_single binding body None
+      | Lambda _ ->
+          Expr.BasilExpr.pretty_let_single ~pp_type binding body None
       | _ ->
           let args, body, rtype = (text "", body, Var.typ binding) in
           text "let "
           ^ text (Var.name binding)
-          ^ args ^+ text ":"
-          ^+ text (Types.to_string rtype)
-          ^ attrib_text ^+ text "="
-          ^+ nest 2 (Expr.BasilExpr.pretty body))
+          ^ args ^+ text ":" ^+ pp_type rtype ^ attrib_text ^+ text "="
+          ^+ nest 2 (expr_pretty body))
   | Type { binding; typ } -> text (Types.to_string_decl binding typ)
-  | Procedure { definition } -> pretty_proc definition
+  | Procedure { definition } -> pretty_proc ~pp_type definition
 
 (*match definition with
       | Some d ->
@@ -243,12 +246,27 @@ let update_proc id f (prog : t) =
 let output_proc_pretty chan p =
   output_string chan @@ Containers_pp.Pretty.to_string ~width:80 (pretty_proc p)
 
+module TypeMap = Map.Make (Types)
+
 let prog_pretty (p : t) =
   let open Containers_pp in
+  let types =
+    p.declarations |> DeclsList.to_iter
+    |> Iter.filter_map (function
+      | _, Type { binding; typ } -> Some (typ, binding)
+      | _ -> None)
+    |> TypeMap.of_iter
+  in
+  let pp_type t =
+    TypeMap.find_opt t types |> function
+    | Some n -> text n
+    | None -> text @@ Types.to_string t
+  in
+
   let decls =
     p.declarations |> DeclsList.to_iter
     |> Iter.filter (function _, Implicit _ -> false | _ -> true)
-    |> Iter.map (fun (n, v) -> pretty_declaration v)
+    |> Iter.map (fun (n, v) -> pretty_declaration ~pp_type v)
     |> Iter.to_list
   in
   let entry =
@@ -339,7 +357,7 @@ let decl_typ p binding_name t =
                in
                let args = fields in
                let ty = Types.curry args s in
-               print_endline (Types.to_string ty) ;
+               print_endline (Types.to_string ty);
                let constructor =
                  Var.create (ID.name variant) ty ~scope:GlobalConst
                in

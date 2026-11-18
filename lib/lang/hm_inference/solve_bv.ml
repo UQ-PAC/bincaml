@@ -15,7 +15,10 @@ type dependent_bv_constraints =
       record : TypeExpr.t;
       field_name : string;
       field_type : TypeExpr.t;
-    }
+    }  (** record field projection rule. *)
+(* note we do not solve congruence closure of record fields (i.e. inferring record *)
+(* type from field types: we cannot because we do not know field order), *)
+(* only project record type to field access type *)
 
 let show_dependent_bv_constraints = function
   | Add { a; b; equ } ->

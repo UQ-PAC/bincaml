@@ -19,6 +19,28 @@ and endRec = EndRec of ((int * int) * string)
 and str = Str of string
 and integerHex = IntegerHex of ((int * int) * string)
 and integerDec = IntegerDec of ((int * int) * string)
+and infix_IntAdd = Infix_IntAdd of string
+and infix_IntSub = Infix_IntSub of string
+and infix_IntMul = Infix_IntMul of string
+and infix_IntSDiv = Infix_IntSDiv of string
+and infix_BVADD = Infix_BVADD of string
+and infix_BVSUB = Infix_BVSUB of string
+and infix_BVMUL = Infix_BVMUL of string
+and infix_BVSDiv = Infix_BVSDiv of string
+and infix_BVULT = Infix_BVULT of string
+and infix_BVULE = Infix_BVULE of string
+and infix_BVSLT = Infix_BVSLT of string
+and infix_BVSLE = Infix_BVSLE of string
+and infix_LSHIFT = Infix_LSHIFT of string
+and infix_ARSHIFT = Infix_ARSHIFT of string
+and infix_LRSHIFT = Infix_LRSHIFT of string
+and infix_BoolOR = Infix_BoolOR of string
+and infix_BoolAND = Infix_BoolAND of string
+and infix_BoolIMPLIES = Infix_BoolIMPLIES of string
+and infix_BoolEquiv = Infix_BoolEquiv of string
+and infix_Equal = Infix_Equal of string
+and infix_BitOR = Infix_BitOR of string
+and infix_BitAnd = Infix_BitAnd of string
 and moduleT =
    Module1 of decl list
 
@@ -214,6 +236,8 @@ and expr =
  | Expr_Lambda of attribSet * lambdaDef
  | Expr_Let of localIdent * localVarParen list * typeT * expr * expr
  | Expr_Old of openParen * expr * closeParen
+ | Expr_Access of expr * beginList * expr * endList
+ | Expr_BinaryInfix of expr * infixOp * expr
  | Expr_FunctionOp of expr * openParen * expr list * closeParen
  | Expr_Binary of binOp * openParen * expr * expr * closeParen
  | Expr_Assoc of intrinOp * openParen * expr list * closeParen
@@ -232,6 +256,30 @@ and expr =
  | VariantConstr of localIdent * localIdent * openParen * expr list * closeParen
  | RecordConstr of beginRec * fieldAssign list * endRec
  | UpdateRecord of beginRec * ident * fieldAssign list * endRec
+
+and infixOp =
+   InfixOpInfix_IntAdd of infix_IntAdd
+ | InfixOpInfix_IntSub of infix_IntSub
+ | InfixOpInfix_IntMul of infix_IntMul
+ | InfixOpInfix_IntSDiv of infix_IntSDiv
+ | InfixOpInfix_BVADD of infix_BVADD
+ | InfixOpInfix_BVSUB of infix_BVSUB
+ | InfixOpInfix_BVMUL of infix_BVMUL
+ | InfixOpInfix_BVSDiv of infix_BVSDiv
+ | InfixOpInfix_BoolOR of infix_BoolOR
+ | InfixOpInfix_BoolAND of infix_BoolAND
+ | InfixOpInfix_BoolIMPLIES of infix_BoolIMPLIES
+ | InfixOpInfix_BoolEquiv of infix_BoolEquiv
+ | InfixOpInfix_Equal of infix_Equal
+ | InfixOpInfix_BitOR of infix_BitOR
+ | InfixOpInfix_BitAnd of infix_BitAnd
+ | InfixOpInfix_BVULT of infix_BVULT
+ | InfixOpInfix_BVULE of infix_BVULE
+ | InfixOpInfix_BVSLT of infix_BVSLT
+ | InfixOpInfix_BVSLE of infix_BVSLE
+ | InfixOpInfix_LSHIFT of infix_LSHIFT
+ | InfixOpInfix_LRSHIFT of infix_LRSHIFT
+ | InfixOpInfix_ARSHIFT of infix_ARSHIFT
 
 and lambdaDef =
    LambdaDef1 of localVarParen list * lambdaSep * expr

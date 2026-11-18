@@ -1298,6 +1298,39 @@ module BasilASTLoader = struct
             BasilExpr.unexp ~op:`BOOLTOBV1 (BasilExpr.binexp ~op:`EQ e1 e2)
         | `INTGE -> BasilExpr.boolnot (BasilExpr.binexp ~op:`INTLT e1 e2)
         | `INTGT -> BasilExpr.boolnot (BasilExpr.binexp ~op:`INTLE e1 e2))
+    | Expr_BinaryInfix (l, op, r) -> begin
+        let r = trans_expr r in
+        let l = trans_expr l in
+        let nop =
+          match op with
+          | InfixOpInfix_IntAdd _ -> `INTADD
+          | InfixOpInfix_IntSub _ -> `INTSUB
+          | InfixOpInfix_IntMul _ -> `INTMUL
+          | InfixOpInfix_IntSDiv _ -> `INTSDIV
+          | InfixOpInfix_BVADD _ -> `BVADD
+          | InfixOpInfix_BVSUB _ -> `BVSUB
+          | InfixOpInfix_BVMUL _ -> `BVMUL
+          | InfixOpInfix_BVSDiv _ -> `BVSDIV
+          | InfixOpInfix_BoolOR _ -> `OR
+          | InfixOpInfix_BoolAND _ -> `AND
+          | InfixOpInfix_BoolIMPLIES _ -> `IMPLIES
+          | InfixOpInfix_BoolEquiv _ -> `EQ
+          | InfixOpInfix_Equal _ -> `EQ
+          | InfixOpInfix_BitOR _ -> `BVOR
+          | InfixOpInfix_BitAnd _ -> `BVAND
+          | InfixOpInfix_BVULT _ -> `BVULT
+          | InfixOpInfix_BVULE _ -> `BVULE
+          | InfixOpInfix_BVSLT _ -> `BVSLT
+          | InfixOpInfix_BVSLE _ -> `BVSLE
+          | InfixOpInfix_LSHIFT _ -> `BVSHL
+          | InfixOpInfix_LRSHIFT _ -> `BVLSHR
+          | InfixOpInfix_ARSHIFT _ -> `BVASHR
+        in
+        match nop with
+        | #Ops.AllOps.binary as b -> Expr.BasilExpr.binexp ~op:b l r
+        | #Ops.AllOps.intrin as b -> Expr.BasilExpr.applyintrin ~op:b [ l; r ]
+        | _ -> failwith "impossible"
+      end
     | Expr_Unary (unop, o, expr, c) ->
         BasilExpr.unexp ~attrib:(expr_range_attr o c) ~op:(transUnOp unop)
           (trans_expr expr)

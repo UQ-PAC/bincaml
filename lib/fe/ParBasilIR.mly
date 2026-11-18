@@ -44,8 +44,30 @@ open Lexing
 %token <string>               TOK_Str
 %token <(int * int) * string> TOK_IntegerHex
 %token <(int * int) * string> TOK_IntegerDec
+%token <string>               TOK_Infix_IntAdd
+%token <string>               TOK_Infix_IntSub
+%token <string>               TOK_Infix_IntMul
+%token <string>               TOK_Infix_IntSDiv
+%token <string>               TOK_Infix_BVADD
+%token <string>               TOK_Infix_BVSUB
+%token <string>               TOK_Infix_BVMUL
+%token <string>               TOK_Infix_BVSDiv
+%token <string>               TOK_Infix_BVULT
+%token <string>               TOK_Infix_BVULE
+%token <string>               TOK_Infix_BVSLT
+%token <string>               TOK_Infix_BVSLE
+%token <string>               TOK_Infix_LSHIFT
+%token <string>               TOK_Infix_ARSHIFT
+%token <string>               TOK_Infix_LRSHIFT
+%token <string>               TOK_Infix_BoolOR
+%token <string>               TOK_Infix_BoolAND
+%token <string>               TOK_Infix_BoolIMPLIES
+%token <string>               TOK_Infix_BoolEquiv
+%token <string>               TOK_Infix_Equal
+%token <string>               TOK_Infix_BitOR
+%token <string>               TOK_Infix_BitAnd
 
-%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pRecordType pBVType pFunType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pFieldAssign pFieldAssign_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pIntrinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pRecordType pBVType pFunType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pInfixOp pLambdaDef pBinOp pUnOp pCase pCase_list pFieldAssign pFieldAssign_list pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pIntrinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -115,6 +137,7 @@ open Lexing
 %type <AbsBasilIR.expr> pExpr
 %type <AbsBasilIR.expr> pExpr1
 %type <AbsBasilIR.expr> pExpr2
+%type <AbsBasilIR.infixOp> pInfixOp
 %type <AbsBasilIR.lambdaDef> pLambdaDef
 %type <AbsBasilIR.binOp> pBinOp
 %type <AbsBasilIR.unOp> pUnOp
@@ -208,6 +231,7 @@ open Lexing
 %type <AbsBasilIR.expr> expr
 %type <AbsBasilIR.expr> expr1
 %type <AbsBasilIR.expr> expr2
+%type <AbsBasilIR.infixOp> infixOp
 %type <AbsBasilIR.lambdaDef> lambdaDef
 %type <AbsBasilIR.binOp> binOp
 %type <AbsBasilIR.unOp> unOp
@@ -251,6 +275,28 @@ open Lexing
 %type <AbsBasilIR.str> str
 %type <AbsBasilIR.integerHex> integerHex
 %type <AbsBasilIR.integerDec> integerDec
+%type <AbsBasilIR.infix_IntAdd> infix_IntAdd
+%type <AbsBasilIR.infix_IntSub> infix_IntSub
+%type <AbsBasilIR.infix_IntMul> infix_IntMul
+%type <AbsBasilIR.infix_IntSDiv> infix_IntSDiv
+%type <AbsBasilIR.infix_BVADD> infix_BVADD
+%type <AbsBasilIR.infix_BVSUB> infix_BVSUB
+%type <AbsBasilIR.infix_BVMUL> infix_BVMUL
+%type <AbsBasilIR.infix_BVSDiv> infix_BVSDiv
+%type <AbsBasilIR.infix_BVULT> infix_BVULT
+%type <AbsBasilIR.infix_BVULE> infix_BVULE
+%type <AbsBasilIR.infix_BVSLT> infix_BVSLT
+%type <AbsBasilIR.infix_BVSLE> infix_BVSLE
+%type <AbsBasilIR.infix_LSHIFT> infix_LSHIFT
+%type <AbsBasilIR.infix_ARSHIFT> infix_ARSHIFT
+%type <AbsBasilIR.infix_LRSHIFT> infix_LRSHIFT
+%type <AbsBasilIR.infix_BoolOR> infix_BoolOR
+%type <AbsBasilIR.infix_BoolAND> infix_BoolAND
+%type <AbsBasilIR.infix_BoolIMPLIES> infix_BoolIMPLIES
+%type <AbsBasilIR.infix_BoolEquiv> infix_BoolEquiv
+%type <AbsBasilIR.infix_Equal> infix_Equal
+%type <AbsBasilIR.infix_BitOR> infix_BitOR
+%type <AbsBasilIR.infix_BitAnd> infix_BitAnd
 
 %%
 
@@ -392,6 +438,8 @@ pExpr1 : expr1 TOK_EOF { $1 };
 
 pExpr2 : expr2 TOK_EOF { $1 };
 
+pInfixOp : infixOp TOK_EOF { $1 };
+
 pLambdaDef : lambdaDef TOK_EOF { $1 };
 
 pBinOp : binOp TOK_EOF { $1 };
@@ -480,7 +528,7 @@ typeT_list : /* empty */ { []  }
   | typeT SYMB2 typeT_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
-typeAssign : localIdent SYMB6 SYMB7 sumCase_list { TypeAssign_Sum ($1, $4) }
+typeAssign : localIdent SYMB6 sumCase_list { TypeAssign_Sum ($1, $3) }
   | localIdent SYMB6 typeT { TypeAssign_Alias ($1, $3) }
   ;
 
@@ -751,6 +799,8 @@ expr2 : value { Expr_Literal $1 }
   | localVar { Expr_Local $1 }
   | globalVar { Expr_Global $1 }
   | KW_old openParen expr closeParen { Expr_Old ($2, $3, $4) }
+  | expr beginList expr endList { Expr_Access ($1, $2, $3, $4) }
+  | expr infixOp expr { Expr_BinaryInfix ($1, $2, $3) }
   | binOp openParen expr SYMB2 expr closeParen { Expr_Binary ($1, $2, $3, $5, $6) }
   | intrinOp openParen expr_list closeParen { Expr_Assoc ($1, $2, $3, $4) }
   | unOp openParen expr closeParen { Expr_Unary ($1, $2, $3, $4) }
@@ -764,6 +814,30 @@ expr2 : value { Expr_Literal $1 }
   | KW_cases openParen case_list closeParen { Expr_Cases ($2, $3, $4) }
   | openParen expr closeParen { Expr_Paren ($1, $2, $3) }
   | expr2 KW_with localIdent SYMB6 expr { Expr_FieldSet ($1, $3, $5) }
+  ;
+
+infixOp : infix_IntAdd { InfixOpInfix_IntAdd $1 }
+  | infix_IntSub { InfixOpInfix_IntSub $1 }
+  | infix_IntMul { InfixOpInfix_IntMul $1 }
+  | infix_IntSDiv { InfixOpInfix_IntSDiv $1 }
+  | infix_BVADD { InfixOpInfix_BVADD $1 }
+  | infix_BVSUB { InfixOpInfix_BVSUB $1 }
+  | infix_BVMUL { InfixOpInfix_BVMUL $1 }
+  | infix_BVSDiv { InfixOpInfix_BVSDiv $1 }
+  | infix_BoolOR { InfixOpInfix_BoolOR $1 }
+  | infix_BoolAND { InfixOpInfix_BoolAND $1 }
+  | infix_BoolIMPLIES { InfixOpInfix_BoolIMPLIES $1 }
+  | infix_BoolEquiv { InfixOpInfix_BoolEquiv $1 }
+  | infix_Equal { InfixOpInfix_Equal $1 }
+  | infix_BitOR { InfixOpInfix_BitOR $1 }
+  | infix_BitAnd { InfixOpInfix_BitAnd $1 }
+  | infix_BVULT { InfixOpInfix_BVULT $1 }
+  | infix_BVULE { InfixOpInfix_BVULE $1 }
+  | infix_BVSLT { InfixOpInfix_BVSLT $1 }
+  | infix_BVSLE { InfixOpInfix_BVSLE $1 }
+  | infix_LSHIFT { InfixOpInfix_LSHIFT $1 }
+  | infix_LRSHIFT { InfixOpInfix_LRSHIFT $1 }
+  | infix_ARSHIFT { InfixOpInfix_ARSHIFT $1 }
   ;
 
 lambdaDef : localVarParen_list lambdaSep expr { LambdaDef1 ($1, $2, $3) }
@@ -923,4 +997,26 @@ endRec : TOK_EndRec { EndRec ($1)};
 str : TOK_Str { Str ($1)};
 integerHex : TOK_IntegerHex { IntegerHex ($1)};
 integerDec : TOK_IntegerDec { IntegerDec ($1)};
+infix_IntAdd : TOK_Infix_IntAdd { Infix_IntAdd ($1)};
+infix_IntSub : TOK_Infix_IntSub { Infix_IntSub ($1)};
+infix_IntMul : TOK_Infix_IntMul { Infix_IntMul ($1)};
+infix_IntSDiv : TOK_Infix_IntSDiv { Infix_IntSDiv ($1)};
+infix_BVADD : TOK_Infix_BVADD { Infix_BVADD ($1)};
+infix_BVSUB : TOK_Infix_BVSUB { Infix_BVSUB ($1)};
+infix_BVMUL : TOK_Infix_BVMUL { Infix_BVMUL ($1)};
+infix_BVSDiv : TOK_Infix_BVSDiv { Infix_BVSDiv ($1)};
+infix_BVULT : TOK_Infix_BVULT { Infix_BVULT ($1)};
+infix_BVULE : TOK_Infix_BVULE { Infix_BVULE ($1)};
+infix_BVSLT : TOK_Infix_BVSLT { Infix_BVSLT ($1)};
+infix_BVSLE : TOK_Infix_BVSLE { Infix_BVSLE ($1)};
+infix_LSHIFT : TOK_Infix_LSHIFT { Infix_LSHIFT ($1)};
+infix_ARSHIFT : TOK_Infix_ARSHIFT { Infix_ARSHIFT ($1)};
+infix_LRSHIFT : TOK_Infix_LRSHIFT { Infix_LRSHIFT ($1)};
+infix_BoolOR : TOK_Infix_BoolOR { Infix_BoolOR ($1)};
+infix_BoolAND : TOK_Infix_BoolAND { Infix_BoolAND ($1)};
+infix_BoolIMPLIES : TOK_Infix_BoolIMPLIES { Infix_BoolIMPLIES ($1)};
+infix_BoolEquiv : TOK_Infix_BoolEquiv { Infix_BoolEquiv ($1)};
+infix_Equal : TOK_Infix_Equal { Infix_Equal ($1)};
+infix_BitOR : TOK_Infix_BitOR { Infix_BitOR ($1)};
+infix_BitAnd : TOK_Infix_BitAnd { Infix_BitAnd ($1)};
 

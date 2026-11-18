@@ -1,6 +1,6 @@
 
 
-type rec_typ = {field0: bv32, field1: bv64};
+type rec_typ = {field0: bv32; field1: bv64};
 
 var $rec : ref_typ;
 

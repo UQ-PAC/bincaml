@@ -1,16 +1,16 @@
 var shared $Global_4325420_4325424: bv32
   classification true;
 
-type uninterpSort = | UninterpSort;
+type uninterpSort = UninterpSort;
 
-type opaque = | A | B | C;
+type opaque = A | B | C;
 
-type variants = | AA of {a: bv64} | BB of {b:bv32} | CC of {c: bv8};
+type variants = AA of {a: bv64} | BB of {b:bv32} | CC of {c: bv8};
 
-type abcderecord = | Record of {a : bv64; b: bv32; c:bv64};
+type abcderecord = Record of {a : bv64; b: bv32; c:bv64};
 
 /*
-type ilist = | Cons of {head:bv64; tail:ilist} | Nil ;
+type ilist = Cons of {head:bv64; tail:ilist} | Nil ;
 */
 
 type abcde = {a: bv64; b: bv64};
@@ -21,8 +21,8 @@ let $abcd = {a=10:bv64; b=11:bv64};
 
 let $b = abcderecord#Record ({a=1:bv64; b=2:bv32; c=3:bv64});
 
-let $mul_2 (a:bv64), (b:bv64) : bv64 = bvadd(b, bvmul(a, 2:bv64));
-let $three = let func (a:bv64) : bv64 = bvadd(a, 1:bv64) in func($mul_2(2:bv64, 1:bv64));
+let $mul_2 (a:bv64), (b:bv64) : bv64 = b + (a * 2:bv64);
+let $three = let func (a:bv64) : bv64 = a + 1:bv64 in func($mul_2(2:bv64, 1:bv64));
 
 let $test (a:bv64) : bv64 = if (eq(a, 1:bv64)) then (10:bv64) else (11:bv64) ;
 

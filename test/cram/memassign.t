@@ -1,9 +1,9 @@
 
   $ cat << EOF | bincaml script -
-  > (log-level debug)
   > (load-il "memassign.il")
   > (run-transforms "hindley-milner-elaborate")
   > (dump-il "memout.il")
+  > (load-il "memout.il")
   > EOF
   (load-il memassign.il)
   (dump-il memout.il)
@@ -21,3 +21,7 @@
          .originalLabel = "SFN4dpBgSO2bPUu0fyDluw==" } [
        $Global_4325420_4325424:bv32 := store  0x2a:bv32 { .label = "4196176_0" };
        goto (%main_return);
+
+
+
+  $ cat memout.il

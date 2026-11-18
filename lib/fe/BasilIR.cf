@@ -63,7 +63,7 @@ Decl_ProgWithSpec . Decl ::= "prog" "entry" ProcIdent AttribSet [ ProgSpec ] ;
 Decl_Proc . Decl ::= "proc" ProcIdent OpenParen [Params] CloseParen "->" OpenParen [Params] CloseParen AttribSet [ FunSpec ] ProcDef ;
 
 
-TypeAssign_Sum. TypeAssign ::= LocalIdent "=" "|" [SumCase] ;
+TypeAssign_Sum. TypeAssign ::= LocalIdent "="  [SumCase] ;
 TypeAssign_Alias . TypeAssign ::= LocalIdent "=" Type ;
 
 separator nonempty TypeAssign "and";
@@ -250,12 +250,51 @@ Expr_Global  . Expr2 ::= GlobalVar;
 
 -- quantifiers
 
+
+token Infix_IntAdd {".+"} ;
+token Infix_IntSub {".-"} ;
+token Infix_IntMul {".*"} ;
+token Infix_IntSDiv {"./"} ;
+
+token Infix_BVADD {"+"} ;
+token Infix_BVSUB {"-"} ;
+token Infix_BVMUL {"*"} ;
+token Infix_BVSDiv {"/"} ;
+
+token Infix_BVULT{"<u"} ;
+token Infix_BVULE {"<=u"} ;
+token Infix_BVSLT{"<"} ;
+token Infix_BVSLE {"<="} ;
+
+token Infix_LSHIFT {"<<"} ;
+token Infix_ARSHIFT {">>"} ;
+token Infix_LRSHIFT {">>>"} ;
+
+token Infix_BoolOR {"or"} ;
+token Infix_BoolAND {"and"} ;
+token Infix_BoolIMPLIES {"==>"} ;
+token Infix_BoolEquiv {"==>"} ;
+
+token Infix_Equal {"=="} ;
+
+token Infix_BitOR {"||"} ;
+token Infix_BitAnd {"&&"} ;
+
+
+rules InfixOp ::= Infix_IntAdd | Infix_IntSub | Infix_IntMul | Infix_IntSDiv | Infix_BVADD
+    | Infix_BVSUB | Infix_BVMUL | Infix_BVSDiv | Infix_BoolOR | Infix_BoolAND | Infix_BoolIMPLIES
+    | Infix_BoolEquiv | Infix_Equal | Infix_BitOR | Infix_BitAnd
+    | Infix_BVULT | Infix_BVULE | Infix_BVSLT | Infix_BVSLE
+    | Infix_LSHIFT | Infix_LRSHIFT | Infix_ARSHIFT ;
+
 rules LambdaDef     ::=  [LocalVarParen] LambdaSep Expr ;
 Expr_Forall . Expr  ::= "forall" AttribSet LambdaDef ;
 Expr_Exists . Expr  ::= "exists" AttribSet LambdaDef ;
 Expr_Lambda . Expr  ::= "fun"    AttribSet LambdaDef ;
 Expr_Let    . Expr  ::= "let" LocalIdent [LocalVarParen] ":" Type "=" Expr "in" Expr;
 Expr_Old    . Expr2 ::= "old"    OpenParen Expr CloseParen ;
+Expr_Access . Expr2 ::=  Expr BeginList Expr EndList;
+Expr_BinaryInfix  . Expr2 ::= Expr InfixOp Expr ;
 
 -- uninterpreted functions
 Expr_FunctionOp . Expr1       ::= Expr1 OpenParen [Expr] CloseParen;

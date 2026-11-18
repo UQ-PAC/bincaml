@@ -154,41 +154,51 @@ let curry (args : t list) (v : t) =
   let args = List.rev args in
   List.fold_left (fun a p -> Function (p, a)) v args
 
-let rec to_string = function
-  | Boolean -> "bool"
-  | Integer -> "int"
-  | Bitvector i -> "bv" ^ Int.to_string i
-  | Unit -> "()"
-  | Top -> "⊤"
-  | Nothing -> "⊥"
-  | Variable name -> name
-  | Map (key, valt) -> "(" ^ to_string valt ^ "[" ^ to_string key ^ "])"
+let rec pretty =
+  let open Containers_pp in
+  function
+  | Boolean -> text "bool"
+  | Integer -> text "int"
+  | Bitvector i -> text "bv" ^ text (Int.to_string i)
+  | Unit -> text "()"
+  | Top -> text "⊤"
+  | Nothing -> text "⊥"
+  | Variable name -> text name
+  | Map (key, valt) ->
+      bracket "(" (pretty valt ^ bracket "[" (pretty key) "]") ")"
   | Function ((Function _ as a), (Function _ as b)) ->
-      "(" ^ "(" ^ to_string a ^ ")" ^ "->" ^ "(" ^ to_string b ^ ")" ^ ")"
+      bracket "("
+        (bracket "(" (pretty a) ")" ^ text "->" ^ bracket "(" (pretty b) ")")
+        ")"
   | Function ((Function _ as a), b) ->
-      "(" ^ ("(" ^ to_string a ^ ")" ^ "->" ^ to_string b) ^ ")"
+      bracket "(" (bracket "(" (pretty a) ")" ^ text "->" ^ pretty b) ")"
   | Function (a, (Function _ as b)) ->
-      "(" ^ ("(" ^ to_string a ^ ")" ^ "->" ^ to_string b) ^ ")"
-  | Function (a, b) -> "(" ^ (to_string a ^ "->" ^ to_string b) ^ ")"
-  | NewType ([], name) -> name
+      bracket "(" (bracket "(" (pretty a) ")" ^ text "->" ^ pretty b) ")"
+  | Function (a, b) -> bracket "(" (pretty a ^ text "->" ^ pretty b) ")"
+  | NewType ([], name) -> text name
   | NewType (ls, name) ->
-      List.to_string ~start:"(" ~stop:")" to_string ls ^ " " ^ name
+      bracket "("
+        (fill (text ",") (List.map pretty ls) ^ text " " ^ text name)
+        ")"
   | Record fields ->
-      List.to_string ~sep:"; " ~start:"{" ~stop:"}"
-        (function field, typ -> field ^ ": " ^ to_string typ)
-        fields
+      bracket "{"
+        (fill (text ";" ^ newline)
+        @@ List.map
+             (function field, typ -> text field ^ text ": " ^ pretty typ)
+             fields)
+        "}"
   | Variant variants ->
       let pcase vs =
-        List.to_string ~start:"(" ~stop:")" ~sep:", " to_string vs
+        bracket "(" (fill (text "," ^ newline) (List.map pretty vs)) ")"
       in
       let fsort name variants =
-        name ^ match variants with [] -> "" | o -> " of " ^ pcase o
+        text name
+        ^ match variants with [] -> text "" | o -> text " of " ^ pcase o
       in
-      "|"
-      ^ List.to_string ~sep:" | " ~start:"" ~stop:""
-          (function variant, fields -> fsort variant fields)
-          variants
+      fill (text " |" ^ newline)
+      @@ List.map (function variant, fields -> fsort variant fields) variants
 
+let to_string t = Containers_pp.Pretty.to_string ~width:50 (pretty t)
 let to_string_decl name typ = "type " ^ name ^ " = " ^ to_string typ
 let to_string_rexp ty = to_string ty
 

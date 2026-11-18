@@ -153,7 +153,8 @@ module BasilExpr = struct
   end
 
   (** pretty-print a let expression / definition *)
-  let pretty_let ?attrib bound_vars in_expr =
+  let pretty_let ?(pp_type = Containers_pp.text % Types.to_string) ?attrib
+      bound_vars in_expr =
     let open Containers_pp in
     let open FoldN in
     let open AbstractExpr in
@@ -181,15 +182,13 @@ module BasilExpr = struct
             in
             let _, rtype = Types.uncurry (Var.typ name) in
             text (Var.name name)
-            ^+ binding ^+ text ":"
-            ^+ text (Types.to_string_rexp rtype)
-            ^+ text "=" ^+ bracket "(" in_body ")"
+            ^+ binding ^+ text ":" ^+ pp_type rtype ^+ text "="
+            ^+ bracket "(" in_body ")"
         | name, { this = Some e } ->
             let rtype = Var.typ name in
             text (Var.name name)
-            ^+ attrib ^+ text ":"
-            ^+ text (Types.to_string_rexp rtype)
-            ^+ text "=" ^ bracket "(" e ")"
+            ^+ attrib ^+ text ":" ^+ pp_type rtype ^+ text "="
+            ^ bracket "(" e ")"
         | _ -> failwith "undefined ")
     in
     let in_expr =
@@ -199,10 +198,13 @@ module BasilExpr = struct
     in
     text "let" ^+ append_l ~sep:(newline ^ text "and ") vs ^ in_expr
 
-  let pretty_alg ?(type_annot = false) pattrib
+  module ListOptTraverse = List.Traverse (Option)
+
+  let pretty_alg ?(type_annot = false)
+      ?(pp_type = Containers_pp.text % Types.to_string) pattrib
       (expr : Containers_pp.t FoldN.t4 abstract_expr) : Containers_pp.t FoldN.t4
       =
-    let open AbstractExpr in
+    let     open AbstractExpr in
     let open Containers_pp in
     let open Containers_pp.Infix in
     let pass () : Containers_pp.t FoldN.t4 = FoldN.drop_4 expr in
@@ -213,7 +215,7 @@ module BasilExpr = struct
       match expr with
       | Let { attrib; in_body = { this = Some inner_exp }; bound_vars } ->
           return
-          @@ pretty_let bound_vars ~attrib:(pattrib attrib) (Some inner_exp)
+          @@ pretty_let ~pp_type bound_vars ~attrib:(pattrib attrib) (Some inner_exp)
       | Lambda { attrib; op; in_body = { this = Some b }; bound_vars; triggers }
         ->
           let op = Ops.AllOps.to_string op in
@@ -240,7 +242,7 @@ module BasilExpr = struct
       | Lambda { bound_vars; in_body; attrib } -> pass ()
       | Let { bound_vars; in_body; attrib } -> pass ()
       | RVar { id; attrib } when Var.is_local id ->
-          return (text (Var.to_string id) ^ a)
+          return (text (Var.name id) ^ text ":" ^ (pp_type @@ Var.typ id) ^ a)
       | RVar { id; attrib } -> return (text (Var.name id) ^ a)
       | Constant { const } -> return (text (AllOps.to_string const) ^ a)
       | UnaryExpr { op = `ZeroExtend bits; arg = { this = Some arg } } ->
@@ -293,6 +295,16 @@ module BasilExpr = struct
                  ^ a
                  ^ bracket "(" (fill (text "," ^ newline) [ e; e2 ]) ")";
                ])
+      | ApplyIntrin { op = `RecordConstr fields; args }
+        when List.for_all FoldN.is_def args ->
+          let vals = List.map FoldN.get args in
+          let fields = List.map text fields in
+          return
+          @@ bracket "{"
+               (fill (text "; ")
+                  (List.combine fields vals
+                  |> List.map (fun (a, b) -> a ^ text "=" ^ b)))
+               "}"
       | ApplyIntrin
           {
             op = `Cases;
@@ -341,10 +353,7 @@ module BasilExpr = struct
     else
       FoldN.map
         (function
-          | Some e ->
-              Some
-                (e ^ text ":"
-                ^+ text (Types.to_string @@ AbstractExpr.get_typ expr))
+          | Some e -> Some (e ^ text ":" ^+ pp_type @@ AbstractExpr.get_typ expr)
           | None -> None)
         e
 
@@ -375,8 +384,8 @@ module BasilExpr = struct
   let pp fmt s = Format.pp_print_string fmt @@ to_string s
 
   (** pretty print a single let definition *)
-  let pretty_let_single name s body =
-    pretty_let [ (name, cata (pretty_alg pretty_attr) s) ] body
+  let pretty_let_single ?pp_type name s body =
+    pretty_let ?pp_type [ (name, cata (pretty_alg ?pp_type pretty_attr) s) ] body
 
   (** {1 Typing}*)
 
@@ -441,7 +450,7 @@ module BasilExpr = struct
     let type_alg_opt e =
       try type_alg e
       with Failure er ->
-        Logs.warn (fun m -> m "%s at construction of %s" er (to_string exp));
+        Logs.debug (fun m -> m "%s at construction of %s" er (to_string exp));
         Types.Top
     in
     let e = unfix exp in
