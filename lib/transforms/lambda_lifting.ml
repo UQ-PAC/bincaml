@@ -25,7 +25,11 @@ type program_lift_map = proc_lift_map IDMap.t
 let should_lift ~skip_observable ~skip_maps v =
   let skip =
     (skip_observable && Var.is_shared v)
-    || (skip_maps && Var.typ v |> function Map _ -> true | Function _ -> true | _ -> false)
+    || (skip_maps
+       && Var.typ v |> function
+          | Map _ -> true
+          | Function _ -> true
+          | _ -> false)
     || (Var.is_global v && Var.is_constant v)
   in
   not skip

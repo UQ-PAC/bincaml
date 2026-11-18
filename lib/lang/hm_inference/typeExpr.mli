@@ -266,9 +266,9 @@ module Constructors : sig
   val nothing_t : state -> t
   val ptr_typ_sub : state -> t -> t -> t
   val ptr_typ : state -> t
-  val newtype:  state -> t list -> string -> t
-  val tvar_existing:  state -> string -> t
-  val tvar_fresh :  state -> string -> t
-  val make_type :  state -> (t) list -> string -> t
-  val make_record_type :  state -> (string * t) list -> string -> t
+  val newtype : state -> t list -> string -> t
+  val tvar_existing : state -> string -> t
+  val tvar_fresh : state -> string -> t
+  val make_type : state -> t list -> string -> t
+  val make_record_type : state -> (string * t) list -> string -> t
 end

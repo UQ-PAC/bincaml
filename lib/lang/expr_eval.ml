@@ -14,6 +14,10 @@ module PrimValue = struct
     | Int v -> `Integer v
 end
 
+open struct
+  module LMO = List.Traverse (Option)
+end
+
 module VArray = struct
   module ArrayMap = Map.Make (Z)
 
@@ -66,6 +70,43 @@ module Value = struct
   let int e = Some (Prim (Int e))
   let record e = Some (Record e)
 
+  let rec reinterpret_to_bitvector (v : t) : Bitvec.t option =
+    match v with
+    | Prim (Bitvec v) -> Some v
+    | Prim (Bool true) -> Some (Bitvec.one ~size:1)
+    | Prim (Bool false) -> Some (Bitvec.zero ~size:1)
+    | Record values ->
+        Option.bind (LMO.map_m (snd %> reinterpret_to_bitvector) values)
+        @@ fun vs ->
+        Some (List.fold_left Bitvec.concat (Bitvec.zero ~size:0) vs)
+    | _ -> None
+
+  let rec reinterpret_bitvector (typ : Types.t) (v : Bitvec.t) : t option =
+    let open Option.Infix in
+    match typ with
+    | Bitvector sz -> Some (Prim (Bitvec v))
+    | Boolean ->
+        if Bitvec.equal (Bitvec.ones ~size:1) v then Some (Prim (Bool true))
+        else if Bitvec.equal (Bitvec.zero ~size:1) v then
+          Some (Prim (Bool false))
+        else None
+    | Record fields ->
+        let* resl, rem =
+          LMO.fold_m
+            (fun (flds', bv) (_, fld_ty) ->
+              let* w = Types.bit_width fld_ty in
+              let val_bv = Bitvec.extract ~hi:w ~lo:0 bv in
+              let rem_bv = Bitvec.extract ~hi:(Bitvec.size bv) ~lo:w bv in
+              let* v = reinterpret_bitvector fld_ty val_bv in
+              Some (v :: flds', rem_bv))
+            ([], v) fields
+        in
+        (* we probably want to only define the operation if we use the whole bitvector? *)
+        if Bitvec.size rem = 0 then
+          Some (Record (List.rev resl |> List.combine (List.map fst fields)))
+        else None
+    | _ -> None
+
   (** erroring coercions *)
 
   let get_prim = function Some (Prim v) -> Some v | _ -> None
@@ -102,6 +143,13 @@ let eval_expr_alg (e : Value.t option BasilExpr.abstract_expr) : Value.t option
       get_bv b >|= BVOps.eval_unary_unif op >>= bv
   | UnaryExpr { op = #BVOps.unary_bool as op; arg = b } ->
       get_bool b >|= BVOps.eval_unary_bool op >>= bv
+  | UnaryExpr { op = `ToBitvector; arg = b } ->
+      let* b = b in
+      let* v = reinterpret_to_bitvector b in
+      bv v
+  | UnaryExpr { op = `OfBitvector typ; arg = b } ->
+      let* b = get_bv b in
+      reinterpret_bitvector typ b
   | BinaryExpr { op = `WriteField offset; arg1 = a; arg2 = b } ->
       let* a = get_record a in
       let* b = b in

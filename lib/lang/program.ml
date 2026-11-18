@@ -81,8 +81,7 @@ let pretty_declaration ?(pp_type = Containers_pp.text % Types.to_string) d =
   | Function { binding; definition = Function body } -> (
       let open AbstractExpr in
       match BasilExpr.unfix body with
-      | Lambda _ ->
-          Expr.BasilExpr.pretty_let_single ~pp_type binding body None
+      | Lambda _ -> Expr.BasilExpr.pretty_let_single ~pp_type binding body None
       | _ ->
           let args, body, rtype = (text "", body, Var.typ binding) in
           text "let "

@@ -4,46 +4,46 @@
     v}
     [wl-copy] copies to the clipboard on Wayland. *)
 type raw_token = BasilIR.ParBasilIR.token =
-  | TOK_String of (string)
-  | TOK_Str of (string)
+  | TOK_String of string
+  | TOK_Str of string
   | TOK_ProcIdent of ((int * int) * string)
   | TOK_POINTERTYPE of ((int * int) * string)
   | TOK_OpenParen of ((int * int) * string)
   | TOK_LocalIdent of ((int * int) * string)
   | TOK_IntegerHex of ((int * int) * string)
   | TOK_IntegerDec of ((int * int) * string)
-  | TOK_Integer of (int)
-  | TOK_Infix_LSHIFT of (string)
-  | TOK_Infix_LRSHIFT of (string)
-  | TOK_Infix_IntSub of (string)
-  | TOK_Infix_IntSDiv of (string)
-  | TOK_Infix_IntMul of (string)
-  | TOK_Infix_IntAdd of (string)
-  | TOK_Infix_Equal of (string)
-  | TOK_Infix_BoolOR of (string)
-  | TOK_Infix_BoolIMPLIES of (string)
-  | TOK_Infix_BoolEquiv of (string)
-  | TOK_Infix_BoolAND of (string)
-  | TOK_Infix_BitOR of (string)
-  | TOK_Infix_BitAnd of (string)
-  | TOK_Infix_BVULT of (string)
-  | TOK_Infix_BVULE of (string)
-  | TOK_Infix_BVSUB of (string)
-  | TOK_Infix_BVSLT of (string)
-  | TOK_Infix_BVSLE of (string)
-  | TOK_Infix_BVSDiv of (string)
-  | TOK_Infix_BVMUL of (string)
-  | TOK_Infix_BVADD of (string)
-  | TOK_Infix_ARSHIFT of (string)
-  | TOK_Ident of (string)
+  | TOK_Integer of int
+  | TOK_Infix_LSHIFT of string
+  | TOK_Infix_LRSHIFT of string
+  | TOK_Infix_IntSub of string
+  | TOK_Infix_IntSDiv of string
+  | TOK_Infix_IntMul of string
+  | TOK_Infix_IntAdd of string
+  | TOK_Infix_Equal of string
+  | TOK_Infix_BoolOR of string
+  | TOK_Infix_BoolIMPLIES of string
+  | TOK_Infix_BoolEquiv of string
+  | TOK_Infix_BoolAND of string
+  | TOK_Infix_BitOR of string
+  | TOK_Infix_BitAnd of string
+  | TOK_Infix_BVULT of string
+  | TOK_Infix_BVULE of string
+  | TOK_Infix_BVSUB of string
+  | TOK_Infix_BVSLT of string
+  | TOK_Infix_BVSLE of string
+  | TOK_Infix_BVSDiv of string
+  | TOK_Infix_BVMUL of string
+  | TOK_Infix_BVADD of string
+  | TOK_Infix_ARSHIFT of string
+  | TOK_Ident of string
   | TOK_INTTYPE of ((int * int) * string)
   | TOK_GlobalIdent of ((int * int) * string)
   | TOK_EndRec of ((int * int) * string)
   | TOK_EndList of ((int * int) * string)
   | TOK_EOF
-  | TOK_Double of (float)
+  | TOK_Double of float
   | TOK_CloseParen of ((int * int) * string)
-  | TOK_Char of (char)
+  | TOK_Char of char
   | TOK_BlockIdent of ((int * int) * string)
   | TOK_BeginRec of ((int * int) * string)
   | TOK_BeginList of ((int * int) * string)

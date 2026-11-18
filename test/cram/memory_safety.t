@@ -29,6 +29,7 @@
   bincaml: [WARNING] mapaccess on function type (bv64->bv8)
   bincaml: [WARNING] mapaccess on function type (bv64->bv8)
   var $mem: [bv64]bv8;
+  var $stack: [bv64]bv8;
   datatype memory_encoding {Recordmemory_encoding(Recordmemory_encoding_fld_alloc_live: [bv64]bv2, Recordmemory_encoding_fld_alloc_size: [bv64]bv64, Recordmemory_encoding_fld_addr_is_heap: [bv64]bool)}
   function {:extern } {:inline } $me_addr_offset(mem_encoding: memory_encoding, addr: bv64) returns (bv64) {
     bvand_bv64(addr, 4294967295bv64)
@@ -120,10 +121,9 @@
   function {:bvbuiltin "bvule"} {:extern } bvule_bv64_bv64_bool(bv64, bv64) returns (bool);
   function {:bvbuiltin "bvult"} {:extern } bvult_bv64_bv64_bool(bv64, bv64) returns (bool);
   
-  procedure p$malloc(R0_in: bv64, mem_encoding_in: memory_encoding,
-     stack_in: [bv64]bv8) returns (R0_out: bv64, mem_encoding_out: memory_encoding,
-     stack_out: [bv64]bv8);
-    modifies $mem;
+  procedure p$malloc(R0_in: bv64, mem_encoding_in: memory_encoding) returns (R0_out: bv64,
+     mem_encoding_out: memory_encoding);
+    modifies $mem, $stack;
     ensures $me_can_allocate(mem_encoding_in, R0_out, R0_in);
     ensures ($me_addr_offset(mem_encoding_out, R0_out) == 0bv64);
     ensures ($me_alloc_base(
@@ -131,10 +131,8 @@
        $me_addr_alloc(mem_encoding_out, R0_out)
      ) == R0_out);
     ensures $me_allocate(mem_encoding_in, mem_encoding_out, R0_out, R0_in);
-  procedure p$free(R0_in: bv64, mem_encoding_in: memory_encoding,
-     stack_in: [bv64]bv8) returns (mem_encoding_out: memory_encoding,
-     stack_out: [bv64]bv8);
-    modifies $mem;
+  procedure p$free(R0_in: bv64, mem_encoding_in: memory_encoding) returns (mem_encoding_out: memory_encoding);
+    modifies $mem, $stack;
     ensures {:msg "Memory Error: Invalid Free"} (mem_encoding_out == $me_alloc_live_update(
        mem_encoding_in,
        $me_addr_alloc(mem_encoding_in, R0_in),
@@ -149,9 +147,8 @@
        mem_encoding_in,
        $me_addr_alloc(mem_encoding_in, R0_in)
      ) == 1bv2);
-  procedure p$main(mem_encoding_in: memory_encoding, stack_in: [bv64]bv8) returns (mem_encoding_out: memory_encoding,
-     stack_out: [bv64]bv8);
-    modifies $mem;
+  procedure p$main(mem_encoding_in: memory_encoding) returns (mem_encoding_out: memory_encoding);
+    modifies $mem, $stack;
     ensures {:msg "Memory Error: Memory Leak"} (forall 
      i: bv64 :: 
       
@@ -160,34 +157,24 @@
          $me_addr_alloc(mem_encoding_out, i)
        ) != 1bv2)));
     requires $me_init_encoding(mem_encoding_in);
-  implementation p$main(mem_encoding_in: memory_encoding, stack_in: [bv64]bv8) returns (mem_encoding_out: memory_encoding,
-   stack_out: [bv64]bv8) {
+  implementation p$main(mem_encoding_in: memory_encoding) returns (mem_encoding_out: memory_encoding) {
     var mem_encoding_3: memory_encoding;
-    var stack_6: [bv64]bv8;
     var size_2: bv64;
     var mem_encoding_5: memory_encoding;
-    var stack_4: [bv64]bv8;
     var mem_encoding_2: memory_encoding;
     var mem_encoding_1: memory_encoding;
-    var stack_out_2: [bv64]bv8;
     var addr_4: bv64;
-    var stack_5: [bv64]bv8;
-    var stack_out_3: [bv64]bv8;
     var mem_encoding_out_1: memory_encoding;
     var mem_encoding_4: memory_encoding;
     var temp_2: bv8;
     var addr_2: bv64;
     var addr_3: bv64;
-    b#inputs_1:
-      mem_encoding_1 := mem_encoding_in;
-      goto b#inputs;
     b#inputs:
-      stack_4 := stack_in;
+      mem_encoding_1 := mem_encoding_in;
       goto b#main_entry;
     b#main_entry:
       size_2 := 2bv64;
-      call addr_2, mem_encoding_2, stack_5 := p$malloc(2bv64, mem_encoding_in,
-         stack_in);
+      call addr_2, mem_encoding_2 := p$malloc(2bv64, mem_encoding_in);
       addr_3, mem_encoding_3 := addr_2, mem_encoding_2;
       assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
         mem_encoding_2,
@@ -202,26 +189,22 @@
         1bv64
       );
       temp_2 := load8_le($mem, bvadd_bv64(addr_2, 0bv64));
-      call mem_encoding_5, stack_6 := p$free(addr_2, mem_encoding_2, stack_5);
+      call mem_encoding_5 := p$free(addr_2, mem_encoding_2);
       goto b#main_return;
     b#main_return:
-      goto b#returns;
-    b#returns:
-      stack_out_2 := stack_6;
       goto b#Return;
     b#Return:
-      stack_out_3 := stack_6;
-      goto b#returns_1;
-    b#returns_1:
+      assert true;
+      goto b#returns;
+    b#returns:
       mem_encoding_out_1 := mem_encoding_5;
       goto b#Return_1;
     b#Return_1:
-      mem_encoding_out, stack_out := mem_encoding_5, stack_6;
+      mem_encoding_out := mem_encoding_5;
       return;
   }
-  procedure p$double_free(mem_encoding_in: memory_encoding, stack_in: [bv64]bv8) returns (mem_encoding_out: memory_encoding,
-     stack_out: [bv64]bv8);
-    modifies $mem;
+  procedure p$double_free(mem_encoding_in: memory_encoding) returns (mem_encoding_out: memory_encoding);
+    modifies $mem, $stack;
     ensures {:msg "Memory Error: Memory Leak"} (forall 
      i: bv64 :: 
       
@@ -230,36 +213,25 @@
          $me_addr_alloc(mem_encoding_out, i)
        ) != 1bv2)));
     requires $me_init_encoding(mem_encoding_in);
-  implementation p$double_free(mem_encoding_in: memory_encoding, stack_in: [bv64]bv8) returns (mem_encoding_out: memory_encoding,
-   stack_out: [bv64]bv8) {
+  implementation p$double_free(mem_encoding_in: memory_encoding) returns (mem_encoding_out: memory_encoding) {
     var mem_encoding_3: memory_encoding;
-    var stack_6: [bv64]bv8;
     var size_2: bv64;
     var mem_encoding_5: memory_encoding;
     var mem_encoding_2: memory_encoding;
     var mem_encoding_1: memory_encoding;
-    var stack_out_2: [bv64]bv8;
     var addr_4: bv64;
     var mem_encoding_6: memory_encoding;
-    var stack_5: [bv64]bv8;
-    var stack_out_3: [bv64]bv8;
     var mem_encoding_out_1: memory_encoding;
     var mem_encoding_4: memory_encoding;
     var temp_2: bv8;
-    var stack_8: [bv64]bv8;
-    var stack_7: [bv64]bv8;
     var addr_2: bv64;
     var addr_3: bv64;
-    b#inputs_1:
-      mem_encoding_1 := mem_encoding_in;
-      goto b#inputs;
     b#inputs:
-      stack_5 := stack_in;
+      mem_encoding_1 := mem_encoding_in;
       goto b#main_entry;
     b#main_entry:
       size_2 := 2bv64;
-      call addr_2, mem_encoding_2, stack_6 := p$malloc(2bv64, mem_encoding_in,
-         stack_in);
+      call addr_2, mem_encoding_2 := p$malloc(2bv64, mem_encoding_in);
       addr_3, mem_encoding_3 := addr_2, mem_encoding_2;
       assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
         mem_encoding_2,
@@ -274,27 +246,23 @@
         1bv64
       );
       temp_2 := load8_le($mem, bvadd_bv64(addr_2, 0bv64));
-      call mem_encoding_5, stack_7 := p$free(addr_2, mem_encoding_2, stack_6);
-      call mem_encoding_6, stack_8 := p$free(addr_2, mem_encoding_5, stack_7);
+      call mem_encoding_5 := p$free(addr_2, mem_encoding_2);
+      call mem_encoding_6 := p$free(addr_2, mem_encoding_5);
       goto b#main_return;
     b#main_return:
-      goto b#returns;
-    b#returns:
-      stack_out_2 := stack_8;
       goto b#Return;
     b#Return:
-      stack_out_3 := stack_8;
-      goto b#returns_1;
-    b#returns_1:
+      assert true;
+      goto b#returns;
+    b#returns:
       mem_encoding_out_1 := mem_encoding_6;
       goto b#Return_1;
     b#Return_1:
-      mem_encoding_out, stack_out := mem_encoding_6, stack_8;
+      mem_encoding_out := mem_encoding_6;
       return;
   }
-  procedure p$invalid_free(mem_encoding_in: memory_encoding, stack_in: [bv64]bv8) returns (mem_encoding_out: memory_encoding,
-     stack_out: [bv64]bv8);
-    modifies $mem;
+  procedure p$invalid_free(mem_encoding_in: memory_encoding) returns (mem_encoding_out: memory_encoding);
+    modifies $mem, $stack;
     ensures {:msg "Memory Error: Memory Leak"} (forall 
      i: bv64 :: 
       
@@ -303,51 +271,35 @@
          $me_addr_alloc(mem_encoding_out, i)
        ) != 1bv2)));
     requires $me_init_encoding(mem_encoding_in);
-  implementation p$invalid_free(mem_encoding_in: memory_encoding,
-   stack_in: [bv64]bv8) returns (mem_encoding_out: memory_encoding,
-   stack_out: [bv64]bv8) {
+  implementation p$invalid_free(mem_encoding_in: memory_encoding) returns (mem_encoding_out: memory_encoding) {
     var mem_encoding_3: memory_encoding;
-    var stack_6: [bv64]bv8;
     var size_2: bv64;
-    var stack_4: [bv64]bv8;
     var mem_encoding_2: memory_encoding;
     var mem_encoding_1: memory_encoding;
-    var stack_out_2: [bv64]bv8;
-    var stack_5: [bv64]bv8;
-    var stack_out_3: [bv64]bv8;
     var mem_encoding_out_1: memory_encoding;
     var addr_2: bv64;
-    b#inputs_1:
-      mem_encoding_1 := mem_encoding_in;
-      goto b#inputs;
     b#inputs:
-      stack_4 := stack_in;
+      mem_encoding_1 := mem_encoding_in;
       goto b#main_entry;
     b#main_entry:
       size_2 := 2bv64;
-      call addr_2, mem_encoding_2, stack_5 := p$malloc(2bv64, mem_encoding_in,
-         stack_in);
-      call mem_encoding_3, stack_6 := p$free(bvadd_bv64(addr_2, 1bv64),
-         mem_encoding_2, stack_5);
+      call addr_2, mem_encoding_2 := p$malloc(2bv64, mem_encoding_in);
+      call mem_encoding_3 := p$free(bvadd_bv64(addr_2, 1bv64), mem_encoding_2);
       goto b#main_return;
     b#main_return:
-      goto b#returns;
-    b#returns:
-      stack_out_2 := stack_6;
       goto b#Return;
     b#Return:
-      stack_out_3 := stack_6;
-      goto b#returns_1;
-    b#returns_1:
+      assert true;
+      goto b#returns;
+    b#returns:
       mem_encoding_out_1 := mem_encoding_3;
       goto b#Return_1;
     b#Return_1:
-      mem_encoding_out, stack_out := mem_encoding_3, stack_6;
+      mem_encoding_out := mem_encoding_3;
       return;
   }
-  procedure p$use_after_free(mem_encoding_in: memory_encoding, stack_in: [bv64]bv8) returns (mem_encoding_out: memory_encoding,
-     stack_out: [bv64]bv8);
-    modifies $mem;
+  procedure p$use_after_free(mem_encoding_in: memory_encoding) returns (mem_encoding_out: memory_encoding);
+    modifies $mem, $stack;
     ensures {:msg "Memory Error: Memory Leak"} (forall 
      i: bv64 :: 
       
@@ -356,35 +308,24 @@
          $me_addr_alloc(mem_encoding_out, i)
        ) != 1bv2)));
     requires $me_init_encoding(mem_encoding_in);
-  implementation p$use_after_free(mem_encoding_in: memory_encoding,
-   stack_in: [bv64]bv8) returns (mem_encoding_out: memory_encoding,
-   stack_out: [bv64]bv8) {
+  implementation p$use_after_free(mem_encoding_in: memory_encoding) returns (mem_encoding_out: memory_encoding) {
     var mem_encoding_3: memory_encoding;
-    var stack_6: [bv64]bv8;
     var size_2: bv64;
     var mem_encoding_5: memory_encoding;
-    var stack_4: [bv64]bv8;
     var mem_encoding_2: memory_encoding;
     var mem_encoding_1: memory_encoding;
-    var stack_out_2: [bv64]bv8;
     var addr_4: bv64;
-    var stack_5: [bv64]bv8;
-    var stack_out_3: [bv64]bv8;
     var mem_encoding_out_1: memory_encoding;
     var mem_encoding_4: memory_encoding;
     var temp_2: bv8;
     var addr_2: bv64;
     var addr_3: bv64;
-    b#inputs_1:
-      mem_encoding_1 := mem_encoding_in;
-      goto b#inputs;
     b#inputs:
-      stack_4 := stack_in;
+      mem_encoding_1 := mem_encoding_in;
       goto b#main_entry;
     b#main_entry:
       size_2 := 2bv64;
-      call addr_2, mem_encoding_2, stack_5 := p$malloc(2bv64, mem_encoding_in,
-         stack_in);
+      call addr_2, mem_encoding_2 := p$malloc(2bv64, mem_encoding_in);
       addr_3, mem_encoding_3 := addr_2, mem_encoding_2;
       assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
         mem_encoding_2,
@@ -392,7 +333,7 @@
         1bv64
       );
       $mem := store8_le($mem, bvadd_bv64(addr_2, 0bv64), 255bv8);
-      call mem_encoding_4, stack_6 := p$free(addr_2, mem_encoding_2, stack_5);
+      call mem_encoding_4 := p$free(addr_2, mem_encoding_2);
       addr_4, mem_encoding_5 := addr_2, mem_encoding_4;
       assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
         mem_encoding_4,
@@ -402,23 +343,19 @@
       temp_2 := load8_le($mem, bvadd_bv64(addr_2, 0bv64));
       goto b#main_return;
     b#main_return:
-      goto b#returns;
-    b#returns:
-      stack_out_2 := stack_6;
       goto b#Return;
     b#Return:
-      stack_out_3 := stack_6;
-      goto b#returns_1;
-    b#returns_1:
+      assert true;
+      goto b#returns;
+    b#returns:
       mem_encoding_out_1 := mem_encoding_4;
       goto b#Return_1;
     b#Return_1:
-      mem_encoding_out, stack_out := mem_encoding_4, stack_6;
+      mem_encoding_out := mem_encoding_4;
       return;
   }
-  procedure p$out_of_bounds(mem_encoding_in: memory_encoding, stack_in: [bv64]bv8) returns (mem_encoding_out: memory_encoding,
-     stack_out: [bv64]bv8);
-    modifies $mem;
+  procedure p$out_of_bounds(mem_encoding_in: memory_encoding) returns (mem_encoding_out: memory_encoding);
+    modifies $mem, $stack;
     ensures {:msg "Memory Error: Memory Leak"} (forall 
      i: bv64 :: 
       
@@ -427,35 +364,24 @@
          $me_addr_alloc(mem_encoding_out, i)
        ) != 1bv2)));
     requires $me_init_encoding(mem_encoding_in);
-  implementation p$out_of_bounds(mem_encoding_in: memory_encoding,
-   stack_in: [bv64]bv8) returns (mem_encoding_out: memory_encoding,
-   stack_out: [bv64]bv8) {
+  implementation p$out_of_bounds(mem_encoding_in: memory_encoding) returns (mem_encoding_out: memory_encoding) {
     var mem_encoding_3: memory_encoding;
-    var stack_6: [bv64]bv8;
     var size_2: bv64;
     var mem_encoding_5: memory_encoding;
-    var stack_4: [bv64]bv8;
     var mem_encoding_2: memory_encoding;
     var mem_encoding_1: memory_encoding;
-    var stack_out_2: [bv64]bv8;
     var addr_4: bv64;
-    var stack_5: [bv64]bv8;
-    var stack_out_3: [bv64]bv8;
     var mem_encoding_out_1: memory_encoding;
     var mem_encoding_4: memory_encoding;
     var temp_2: bv8;
     var addr_2: bv64;
     var addr_3: bv64;
-    b#inputs_1:
-      mem_encoding_1 := mem_encoding_in;
-      goto b#inputs;
     b#inputs:
-      stack_4 := stack_in;
+      mem_encoding_1 := mem_encoding_in;
       goto b#main_entry;
     b#main_entry:
       size_2 := 2bv64;
-      call addr_2, mem_encoding_2, stack_5 := p$malloc(2bv64, mem_encoding_in,
-         stack_in);
+      call addr_2, mem_encoding_2 := p$malloc(2bv64, mem_encoding_in);
       addr_3, mem_encoding_3 := addr_2, mem_encoding_2;
       assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
         mem_encoding_2,
@@ -470,26 +396,22 @@
         1bv64
       );
       temp_2 := load8_le($mem, bvadd_bv64(addr_2, 4bv64));
-      call mem_encoding_5, stack_6 := p$free(addr_2, mem_encoding_2, stack_5);
+      call mem_encoding_5 := p$free(addr_2, mem_encoding_2);
       goto b#main_return;
     b#main_return:
-      goto b#returns;
-    b#returns:
-      stack_out_2 := stack_6;
       goto b#Return;
     b#Return:
-      stack_out_3 := stack_6;
-      goto b#returns_1;
-    b#returns_1:
+      assert true;
+      goto b#returns;
+    b#returns:
       mem_encoding_out_1 := mem_encoding_5;
       goto b#Return_1;
     b#Return_1:
-      mem_encoding_out, stack_out := mem_encoding_5, stack_6;
+      mem_encoding_out := mem_encoding_5;
       return;
   }
-  procedure p$memory_leak(mem_encoding_in: memory_encoding, stack_in: [bv64]bv8) returns (mem_encoding_out: memory_encoding,
-     stack_out: [bv64]bv8);
-    modifies $mem;
+  procedure p$memory_leak(mem_encoding_in: memory_encoding) returns (mem_encoding_out: memory_encoding);
+    modifies $mem, $stack;
     ensures {:msg "Memory Error: Memory Leak"} (forall 
      i: bv64 :: 
       
@@ -498,32 +420,23 @@
          $me_addr_alloc(mem_encoding_out, i)
        ) != 1bv2)));
     requires $me_init_encoding(mem_encoding_in);
-  implementation p$memory_leak(mem_encoding_in: memory_encoding, stack_in: [bv64]bv8) returns (mem_encoding_out: memory_encoding,
-   stack_out: [bv64]bv8) {
+  implementation p$memory_leak(mem_encoding_in: memory_encoding) returns (mem_encoding_out: memory_encoding) {
     var mem_encoding_3: memory_encoding;
     var size_2: bv64;
-    var stack_4: [bv64]bv8;
     var mem_encoding_2: memory_encoding;
     var mem_encoding_1: memory_encoding;
-    var stack_out_2: [bv64]bv8;
     var addr_4: bv64;
-    var stack_3: [bv64]bv8;
-    var stack_out_3: [bv64]bv8;
     var mem_encoding_out_1: memory_encoding;
     var mem_encoding_4: memory_encoding;
     var temp_2: bv8;
     var addr_2: bv64;
     var addr_3: bv64;
-    b#inputs_1:
-      mem_encoding_1 := mem_encoding_in;
-      goto b#inputs;
     b#inputs:
-      stack_3 := stack_in;
+      mem_encoding_1 := mem_encoding_in;
       goto b#main_entry;
     b#main_entry:
       size_2 := 2bv64;
-      call addr_2, mem_encoding_2, stack_4 := p$malloc(2bv64, mem_encoding_in,
-         stack_in);
+      call addr_2, mem_encoding_2 := p$malloc(2bv64, mem_encoding_in);
       addr_3, mem_encoding_3 := addr_2, mem_encoding_2;
       assert{:msg "Memory Error: Invalid Access"} $me_valid_access(
         mem_encoding_2,
@@ -540,18 +453,15 @@
       temp_2 := load8_le($mem, bvadd_bv64(addr_2, 0bv64));
       goto b#main_return;
     b#main_return:
-      goto b#returns;
-    b#returns:
-      stack_out_2 := stack_4;
       goto b#Return;
     b#Return:
-      stack_out_3 := stack_4;
-      goto b#returns_1;
-    b#returns_1:
+      assert true;
+      goto b#returns;
+    b#returns:
       mem_encoding_out_1 := mem_encoding_2;
       goto b#Return_1;
     b#Return_1:
-      mem_encoding_out, stack_out := mem_encoding_2, stack_4;
+      mem_encoding_out := mem_encoding_2;
       return;
   }(dump-boogie out.bpl)
   bincaml: [WARNING] mapaccess on function type (bv64->bv8)
@@ -564,19 +474,19 @@
   $ boogie out.bpl
   Memory Error: Invalid Free (object not live)
   Execution trace:
-      out.bpl(223,3): b#inputs_1
+      out.bpl(199,3): b#inputs
   Memory Error: Invalid Free (not base address)
   Execution trace:
-      out.bpl(290,3): b#inputs_1
+      out.bpl(251,3): b#inputs
   Memory Error: Invalid Access
   Execution trace:
-      out.bpl(348,3): b#inputs_1
+      out.bpl(293,3): b#inputs
   Memory Error: Invalid Access
   Execution trace:
-      out.bpl(419,3): b#inputs_1
+      out.bpl(349,3): b#inputs
   Memory Error: Memory Leak
   Execution trace:
-      out.bpl(487,3): b#inputs_1
+      out.bpl(404,3): b#inputs
   
   Boogie program verifier finished with 1 verified, 5 errors
 
@@ -613,25 +523,25 @@
   $ boogie out.bpl
   Memory Error: Invalid Free (object not live)
   Execution trace:
-      out.bpl(259,3): b#inputs_1
+      out.bpl(235,3): b#inputs
   Memory Error: Invalid Free (not base address)
   Execution trace:
-      out.bpl(326,3): b#inputs_1
+      out.bpl(287,3): b#inputs
   Memory Error: Invalid Free (object not live)
   Execution trace:
-      out.bpl(326,3): b#inputs_1
-  out.bpl(336,5): Error: a precondition for this call could not be proved
-  out.bpl(149,3): Related location: this is the precondition that could not be proved
+      out.bpl(287,3): b#inputs
+  out.bpl(293,5): Error: a precondition for this call could not be proved
+  out.bpl(147,3): Related location: this is the precondition that could not be proved
   Execution trace:
-      out.bpl(326,3): b#inputs_1
+      out.bpl(287,3): b#inputs
   Memory Error: Invalid Access
   Execution trace:
-      out.bpl(384,3): b#inputs_1
+      out.bpl(329,3): b#inputs
   Memory Error: Invalid Access
   Execution trace:
-      out.bpl(455,3): b#inputs_1
+      out.bpl(385,3): b#inputs
   Memory Error: Memory Leak
   Execution trace:
-      out.bpl(523,3): b#inputs_1
+      out.bpl(440,3): b#inputs
   
   Boogie program verifier finished with 1 verified, 7 errors

@@ -204,7 +204,7 @@ module BasilExpr = struct
       ?(pp_type = Containers_pp.text % Types.to_string) pattrib
       (expr : Containers_pp.t FoldN.t4 abstract_expr) : Containers_pp.t FoldN.t4
       =
-    let     open AbstractExpr in
+    let open AbstractExpr in
     let open Containers_pp in
     let open Containers_pp.Infix in
     let pass () : Containers_pp.t FoldN.t4 = FoldN.drop_4 expr in
@@ -215,7 +215,8 @@ module BasilExpr = struct
       match expr with
       | Let { attrib; in_body = { this = Some inner_exp }; bound_vars } ->
           return
-          @@ pretty_let ~pp_type bound_vars ~attrib:(pattrib attrib) (Some inner_exp)
+          @@ pretty_let ~pp_type bound_vars ~attrib:(pattrib attrib)
+               (Some inner_exp)
       | Lambda { attrib; op; in_body = { this = Some b }; bound_vars; triggers }
         ->
           let op = Ops.AllOps.to_string op in
@@ -385,7 +386,9 @@ module BasilExpr = struct
 
   (** pretty print a single let definition *)
   let pretty_let_single ?pp_type name s body =
-    pretty_let ?pp_type [ (name, cata (pretty_alg ?pp_type pretty_attr) s) ] body
+    pretty_let ?pp_type
+      [ (name, cata (pretty_alg ?pp_type pretty_attr) s) ]
+      body
 
   (** {1 Typing}*)
 

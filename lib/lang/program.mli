@@ -35,8 +35,7 @@ val pretty_proc :
   Containers_pp.t
 
 val pretty_declaration :
-  ?pp_type:(Types.t -> Containers_pp.t) ->
-  declaration -> Containers_pp.t
+  ?pp_type:(Types.t -> Containers_pp.t) -> declaration -> Containers_pp.t
 
 val get_id_by_name : string -> t -> ID.t
 val set_entry_proc : ID.t -> t -> t
