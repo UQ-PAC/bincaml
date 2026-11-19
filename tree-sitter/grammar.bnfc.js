@@ -309,6 +309,16 @@ module.exports = ({
         // (:). [LocalVarParen] ::= LocalVarParen "," [LocalVarParen] ;
         seq($.LocalVarParen, ",", optional($.list_LocalVarParen))
       ),
+    LocalVarLambdaParen: $ =>
+      // LocalVarLambdaParen1. LocalVarLambdaParen ::= OpenParen LocalIdent ":" Type CloseParen ;
+      seq($.token_OpenParen, $.token_LocalIdent, ":", $.Type, $.token_CloseParen),
+    list_LocalVarLambdaParen: $ =>
+      choice(
+        // (:[]). [LocalVarLambdaParen] ::= LocalVarLambdaParen ;
+        $.LocalVarLambdaParen,
+        // (:). [LocalVarLambdaParen] ::= LocalVarLambdaParen "," [LocalVarLambdaParen] ;
+        seq($.LocalVarLambdaParen, ",", $.list_LocalVarLambdaParen)
+      ),
     NamedCallReturn: $ =>
       // NamedCallReturn1. NamedCallReturn ::= LVar "=" LocalIdent ;
       seq($.LVar, "=", $.token_LocalIdent),
@@ -528,7 +538,9 @@ module.exports = ({
         // _. Expr1 ::= Expr2 ;
         $.Expr2,
         // Expr_FunctionOp. Expr1 ::= Expr1 OpenParen [Expr] CloseParen ;
-        seq($.Expr1, $.token_OpenParen, optional($.list_Expr), $.token_CloseParen)
+        seq($.Expr1, $.token_OpenParen, optional($.list_Expr), $.token_CloseParen),
+        // Expr_BinaryInfix. Expr1 ::= Expr1 InfixOp Expr ;
+        seq($.Expr1, $.InfixOp, $.Expr)
       ),
     Expr2: $ =>
       choice(
@@ -568,8 +580,8 @@ module.exports = ({
         seq($.Expr2, "with", $.token_LocalIdent, "=", $.Expr)
       ),
     LambdaDef: $ =>
-      // LambdaDef1. LambdaDef ::= [LocalVarParen] LambdaSep Expr ;
-      seq(optional($.list_LocalVarParen), $.LambdaSep, $.Expr),
+      // LambdaDef1. LambdaDef ::= [LocalVarLambdaParen] LambdaSep Expr ;
+      seq($.list_LocalVarLambdaParen, $.LambdaSep, $.Expr),
     BinOp: $ =>
       choice(
         // BinOp_implies. BinOp ::= "implies" ;
@@ -631,6 +643,63 @@ module.exports = ({
         $.FieldAssign,
         // (:). [FieldAssign] ::= FieldAssign ";" [FieldAssign] ;
         seq($.FieldAssign, ";", optional($.list_FieldAssign))
+      ),
+    InfixOp: $ =>
+      choice(
+        // InfixOpInfix_IntAdd. InfixOp ::= Infix_IntAdd ;
+        $.token_Infix_IntAdd,
+        // InfixOpInfix_IntSub. InfixOp ::= Infix_IntSub ;
+        $.token_Infix_IntSub,
+        // InfixOpInfix_IntLT. InfixOp ::= Infix_IntLT ;
+        $.token_Infix_IntLT,
+        // InfixOpInfix_IntLE. InfixOp ::= Infix_IntLE ;
+        $.token_Infix_IntLE,
+        // InfixOpInfix_IntGT. InfixOp ::= Infix_IntGT ;
+        $.token_Infix_IntGT,
+        // InfixOpInfix_IntGE. InfixOp ::= Infix_IntGE ;
+        $.token_Infix_IntGE,
+        // InfixOpInfix_IntMul. InfixOp ::= Infix_IntMul ;
+        $.token_Infix_IntMul,
+        // InfixOpInfix_IntSDiv. InfixOp ::= Infix_IntSDiv ;
+        $.token_Infix_IntSDiv,
+        // InfixOpInfix_BVADD. InfixOp ::= Infix_BVADD ;
+        $.token_Infix_BVADD,
+        // InfixOpInfix_BVSUB. InfixOp ::= Infix_BVSUB ;
+        $.token_Infix_BVSUB,
+        // InfixOpInfix_BVMUL. InfixOp ::= Infix_BVMUL ;
+        $.token_Infix_BVMUL,
+        // InfixOpInfix_BVSDiv. InfixOp ::= Infix_BVSDiv ;
+        $.token_Infix_BVSDiv,
+        // InfixOpInfix_BoolOR. InfixOp ::= Infix_BoolOR ;
+        $.token_Infix_BoolOR,
+        // InfixOpInfix_BoolAND. InfixOp ::= Infix_BoolAND ;
+        $.token_Infix_BoolAND,
+        // InfixOpInfix_BoolIMPLIES. InfixOp ::= Infix_BoolIMPLIES ;
+        $.token_Infix_BoolIMPLIES,
+        // InfixOpInfix_BoolEquiv. InfixOp ::= Infix_BoolEquiv ;
+        $.token_Infix_BoolEquiv,
+        // InfixOpInfix_Equal. InfixOp ::= Infix_Equal ;
+        $.token_Infix_Equal,
+        // InfixOpInfix_NotEqual. InfixOp ::= Infix_NotEqual ;
+        $.token_Infix_NotEqual,
+        // InfixOpInfix_BitOR. InfixOp ::= Infix_BitOR ;
+        $.token_Infix_BitOR,
+        // InfixOpInfix_BitAnd. InfixOp ::= Infix_BitAnd ;
+        $.token_Infix_BitAnd,
+        // InfixOpInfix_BVULT. InfixOp ::= Infix_BVULT ;
+        $.token_Infix_BVULT,
+        // InfixOpInfix_BVULE. InfixOp ::= Infix_BVULE ;
+        $.token_Infix_BVULE,
+        // InfixOpInfix_BVSLT. InfixOp ::= Infix_BVSLT ;
+        $.token_Infix_BVSLT,
+        // InfixOpInfix_BVSLE. InfixOp ::= Infix_BVSLE ;
+        $.token_Infix_BVSLE,
+        // InfixOpInfix_LSHIFT. InfixOp ::= Infix_LSHIFT ;
+        $.token_Infix_LSHIFT,
+        // InfixOpInfix_LRSHIFT. InfixOp ::= Infix_LRSHIFT ;
+        $.token_Infix_LRSHIFT,
+        // InfixOpInfix_ARSHIFT. InfixOp ::= Infix_ARSHIFT ;
+        $.token_Infix_ARSHIFT
       ),
     EqOp: $ =>
       choice(
@@ -853,6 +922,60 @@ module.exports = ({
       /0x([abcdef]|\d)+/,
     token_IntegerDec: $ =>
       /\d+/,
+    token_Infix_IntAdd: $ =>
+      /\.\+/,
+    token_Infix_IntSub: $ =>
+      /\.-/,
+    token_Infix_IntMul: $ =>
+      /\.\*/,
+    token_Infix_IntSDiv: $ =>
+      /\.\//,
+    token_Infix_IntLT: $ =>
+      /\.</,
+    token_Infix_IntLE: $ =>
+      /\.<=/,
+    token_Infix_IntGT: $ =>
+      /\.>/,
+    token_Infix_IntGE: $ =>
+      /\.>=/,
+    token_Infix_BVADD: $ =>
+      /\+/,
+    token_Infix_BVSUB: $ =>
+      /-/,
+    token_Infix_BVMUL: $ =>
+      /\*/,
+    token_Infix_BVSDiv: $ =>
+      /\//,
+    token_Infix_BVULT: $ =>
+      /<u/,
+    token_Infix_BVULE: $ =>
+      /<=u/,
+    token_Infix_BVSLT: $ =>
+      /</,
+    token_Infix_BVSLE: $ =>
+      /<=/,
+    token_Infix_LSHIFT: $ =>
+      /<</,
+    token_Infix_ARSHIFT: $ =>
+      />>/,
+    token_Infix_LRSHIFT: $ =>
+      />>>/,
+    token_Infix_BitOR: $ =>
+      /\|\|\|/,
+    token_Infix_BitAnd: $ =>
+      /&&&/,
+    token_Infix_BoolOR: $ =>
+      /\|\|/,
+    token_Infix_BoolAND: $ =>
+      /&&/,
+    token_Infix_BoolIMPLIES: $ =>
+      /==>/,
+    token_Infix_BoolEquiv: $ =>
+      /<=>/,
+    token_Infix_Equal: $ =>
+      /==/,
+    token_Infix_NotEqual: $ =>
+      /<>/,
     token_CommentSingle: $ =>
       /\/\/[^\n\r]*/,
     token_CommentMulti: $ =>

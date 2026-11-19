@@ -56,6 +56,33 @@ let rec showEndRec (AbsBasilIR.EndRec (_,i)) : showable = s2s "EndRec " >> showS
 let rec showStr (AbsBasilIR.Str i) : showable = s2s "Str " >> showString i
 let rec showIntegerHex (AbsBasilIR.IntegerHex (_,i)) : showable = s2s "IntegerHex " >> showString i
 let rec showIntegerDec (AbsBasilIR.IntegerDec (_,i)) : showable = s2s "IntegerDec " >> showString i
+let rec showInfix_IntAdd (AbsBasilIR.Infix_IntAdd i) : showable = s2s "Infix_IntAdd " >> showString i
+let rec showInfix_IntSub (AbsBasilIR.Infix_IntSub i) : showable = s2s "Infix_IntSub " >> showString i
+let rec showInfix_IntMul (AbsBasilIR.Infix_IntMul i) : showable = s2s "Infix_IntMul " >> showString i
+let rec showInfix_IntSDiv (AbsBasilIR.Infix_IntSDiv i) : showable = s2s "Infix_IntSDiv " >> showString i
+let rec showInfix_IntLT (AbsBasilIR.Infix_IntLT i) : showable = s2s "Infix_IntLT " >> showString i
+let rec showInfix_IntLE (AbsBasilIR.Infix_IntLE i) : showable = s2s "Infix_IntLE " >> showString i
+let rec showInfix_IntGT (AbsBasilIR.Infix_IntGT i) : showable = s2s "Infix_IntGT " >> showString i
+let rec showInfix_IntGE (AbsBasilIR.Infix_IntGE i) : showable = s2s "Infix_IntGE " >> showString i
+let rec showInfix_BVADD (AbsBasilIR.Infix_BVADD i) : showable = s2s "Infix_BVADD " >> showString i
+let rec showInfix_BVSUB (AbsBasilIR.Infix_BVSUB i) : showable = s2s "Infix_BVSUB " >> showString i
+let rec showInfix_BVMUL (AbsBasilIR.Infix_BVMUL i) : showable = s2s "Infix_BVMUL " >> showString i
+let rec showInfix_BVSDiv (AbsBasilIR.Infix_BVSDiv i) : showable = s2s "Infix_BVSDiv " >> showString i
+let rec showInfix_BVULT (AbsBasilIR.Infix_BVULT i) : showable = s2s "Infix_BVULT " >> showString i
+let rec showInfix_BVULE (AbsBasilIR.Infix_BVULE i) : showable = s2s "Infix_BVULE " >> showString i
+let rec showInfix_BVSLT (AbsBasilIR.Infix_BVSLT i) : showable = s2s "Infix_BVSLT " >> showString i
+let rec showInfix_BVSLE (AbsBasilIR.Infix_BVSLE i) : showable = s2s "Infix_BVSLE " >> showString i
+let rec showInfix_LSHIFT (AbsBasilIR.Infix_LSHIFT i) : showable = s2s "Infix_LSHIFT " >> showString i
+let rec showInfix_ARSHIFT (AbsBasilIR.Infix_ARSHIFT i) : showable = s2s "Infix_ARSHIFT " >> showString i
+let rec showInfix_LRSHIFT (AbsBasilIR.Infix_LRSHIFT i) : showable = s2s "Infix_LRSHIFT " >> showString i
+let rec showInfix_BitOR (AbsBasilIR.Infix_BitOR i) : showable = s2s "Infix_BitOR " >> showString i
+let rec showInfix_BitAnd (AbsBasilIR.Infix_BitAnd i) : showable = s2s "Infix_BitAnd " >> showString i
+let rec showInfix_BoolOR (AbsBasilIR.Infix_BoolOR i) : showable = s2s "Infix_BoolOR " >> showString i
+let rec showInfix_BoolAND (AbsBasilIR.Infix_BoolAND i) : showable = s2s "Infix_BoolAND " >> showString i
+let rec showInfix_BoolIMPLIES (AbsBasilIR.Infix_BoolIMPLIES i) : showable = s2s "Infix_BoolIMPLIES " >> showString i
+let rec showInfix_BoolEquiv (AbsBasilIR.Infix_BoolEquiv i) : showable = s2s "Infix_BoolEquiv " >> showString i
+let rec showInfix_Equal (AbsBasilIR.Infix_Equal i) : showable = s2s "Infix_Equal " >> showString i
+let rec showInfix_NotEqual (AbsBasilIR.Infix_NotEqual i) : showable = s2s "Infix_NotEqual " >> showString i
 
 let rec showModuleT (e : AbsBasilIR.moduleT) : showable = match e with
        AbsBasilIR.Module1 decls -> s2s "Module1" >> c2s ' ' >> c2s '(' >> showList showDecl decls >> c2s ')'
@@ -205,6 +232,10 @@ and showGlobalVarParen (e : AbsBasilIR.globalVarParen) : showable = match e with
   |    AbsBasilIR.GlobalVarParen1 (openparen, globalident, type', closeparen) -> s2s "GlobalVarParen1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
 
+and showLocalVarLambdaParen (e : AbsBasilIR.localVarLambdaParen) : showable = match e with
+       AbsBasilIR.LocalVarLambdaParen1 (openparen, localident, type', closeparen) -> s2s "LocalVarLambdaParen1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showLocalIdent localident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+
+
 and showNamedCallReturn (e : AbsBasilIR.namedCallReturn) : showable = match e with
        AbsBasilIR.NamedCallReturn1 (lvar, localident) -> s2s "NamedCallReturn1" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showLocalIdent localident >> c2s ')'
 
@@ -300,6 +331,7 @@ and showExpr (e : AbsBasilIR.expr) : showable = match e with
   |    AbsBasilIR.Expr_Old (openparen, expr, closeparen) -> s2s "Expr_Old" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_FunctionOp (expr, openparen, exprs, closeparen) -> s2s "Expr_FunctionOp" >> c2s ' ' >> c2s '(' >> showExpr expr  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showExpr exprs  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Binary (binop, openparen, expr0, expr, closeparen) -> s2s "Expr_Binary" >> c2s ' ' >> c2s '(' >> showBinOp binop  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+  |    AbsBasilIR.Expr_BinaryInfix (expr0, infixop, expr) -> s2s "Expr_BinaryInfix" >> c2s ' ' >> c2s '(' >> showExpr expr0  >> s2s ", " >>  showInfixOp infixop  >> s2s ", " >>  showExpr expr >> c2s ')'
   |    AbsBasilIR.Expr_Assoc (intrinop, openparen, exprs, closeparen) -> s2s "Expr_Assoc" >> c2s ' ' >> c2s '(' >> showIntrinOp intrinop  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showList showExpr exprs  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_Unary (unop, openparen, expr, closeparen) -> s2s "Expr_Unary" >> c2s ' ' >> c2s '(' >> showUnOp unop  >> s2s ", " >>  showOpenParen openparen  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
   |    AbsBasilIR.Expr_LoadBe (openparen, intval, expr0, expr, closeparen) -> s2s "Expr_LoadBe" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showIntVal intval  >> s2s ", " >>  showExpr expr0  >> s2s ", " >>  showExpr expr  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
@@ -317,7 +349,7 @@ and showExpr (e : AbsBasilIR.expr) : showable = match e with
 
 
 and showLambdaDef (e : AbsBasilIR.lambdaDef) : showable = match e with
-       AbsBasilIR.LambdaDef1 (localvarparens, lambdasep, expr) -> s2s "LambdaDef1" >> c2s ' ' >> c2s '(' >> showList showLocalVarParen localvarparens  >> s2s ", " >>  showLambdaSep lambdasep  >> s2s ", " >>  showExpr expr >> c2s ')'
+       AbsBasilIR.LambdaDef1 (localvarlambdaparens, lambdasep, expr) -> s2s "LambdaDef1" >> c2s ' ' >> c2s '(' >> showList showLocalVarLambdaParen localvarlambdaparens  >> s2s ", " >>  showLambdaSep lambdasep  >> s2s ", " >>  showExpr expr >> c2s ')'
 
 
 and showBinOp (e : AbsBasilIR.binOp) : showable = match e with
@@ -347,6 +379,36 @@ and showCase (e : AbsBasilIR.case) : showable = match e with
 
 and showFieldAssign (e : AbsBasilIR.fieldAssign) : showable = match e with
        AbsBasilIR.FieldAssign1 (localident, expr) -> s2s "FieldAssign1" >> c2s ' ' >> c2s '(' >> showLocalIdent localident  >> s2s ", " >>  showExpr expr >> c2s ')'
+
+
+and showInfixOp (e : AbsBasilIR.infixOp) : showable = match e with
+       AbsBasilIR.InfixOpInfix_IntAdd infix_intadd -> s2s "InfixOpInfix_IntAdd" >> c2s ' ' >> c2s '(' >> showInfix_IntAdd infix_intadd >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_IntSub infix_intsub -> s2s "InfixOpInfix_IntSub" >> c2s ' ' >> c2s '(' >> showInfix_IntSub infix_intsub >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_IntLT infix_intlt -> s2s "InfixOpInfix_IntLT" >> c2s ' ' >> c2s '(' >> showInfix_IntLT infix_intlt >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_IntLE infix_intle -> s2s "InfixOpInfix_IntLE" >> c2s ' ' >> c2s '(' >> showInfix_IntLE infix_intle >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_IntGT infix_intgt -> s2s "InfixOpInfix_IntGT" >> c2s ' ' >> c2s '(' >> showInfix_IntGT infix_intgt >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_IntGE infix_intge -> s2s "InfixOpInfix_IntGE" >> c2s ' ' >> c2s '(' >> showInfix_IntGE infix_intge >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_IntMul infix_intmul -> s2s "InfixOpInfix_IntMul" >> c2s ' ' >> c2s '(' >> showInfix_IntMul infix_intmul >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_IntSDiv infix_intsdiv -> s2s "InfixOpInfix_IntSDiv" >> c2s ' ' >> c2s '(' >> showInfix_IntSDiv infix_intsdiv >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_BVADD infix_bvadd -> s2s "InfixOpInfix_BVADD" >> c2s ' ' >> c2s '(' >> showInfix_BVADD infix_bvadd >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_BVSUB infix_bvsub -> s2s "InfixOpInfix_BVSUB" >> c2s ' ' >> c2s '(' >> showInfix_BVSUB infix_bvsub >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_BVMUL infix_bvmul -> s2s "InfixOpInfix_BVMUL" >> c2s ' ' >> c2s '(' >> showInfix_BVMUL infix_bvmul >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_BVSDiv infix_bvsdiv -> s2s "InfixOpInfix_BVSDiv" >> c2s ' ' >> c2s '(' >> showInfix_BVSDiv infix_bvsdiv >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_BoolOR infix_boolor -> s2s "InfixOpInfix_BoolOR" >> c2s ' ' >> c2s '(' >> showInfix_BoolOR infix_boolor >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_BoolAND infix_booland -> s2s "InfixOpInfix_BoolAND" >> c2s ' ' >> c2s '(' >> showInfix_BoolAND infix_booland >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_BoolIMPLIES infix_boolimplies -> s2s "InfixOpInfix_BoolIMPLIES" >> c2s ' ' >> c2s '(' >> showInfix_BoolIMPLIES infix_boolimplies >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_BoolEquiv infix_boolequiv -> s2s "InfixOpInfix_BoolEquiv" >> c2s ' ' >> c2s '(' >> showInfix_BoolEquiv infix_boolequiv >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_Equal infix_equal -> s2s "InfixOpInfix_Equal" >> c2s ' ' >> c2s '(' >> showInfix_Equal infix_equal >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_NotEqual infix_notequal -> s2s "InfixOpInfix_NotEqual" >> c2s ' ' >> c2s '(' >> showInfix_NotEqual infix_notequal >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_BitOR infix_bitor -> s2s "InfixOpInfix_BitOR" >> c2s ' ' >> c2s '(' >> showInfix_BitOR infix_bitor >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_BitAnd infix_bitand -> s2s "InfixOpInfix_BitAnd" >> c2s ' ' >> c2s '(' >> showInfix_BitAnd infix_bitand >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_BVULT infix_bvult -> s2s "InfixOpInfix_BVULT" >> c2s ' ' >> c2s '(' >> showInfix_BVULT infix_bvult >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_BVULE infix_bvule -> s2s "InfixOpInfix_BVULE" >> c2s ' ' >> c2s '(' >> showInfix_BVULE infix_bvule >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_BVSLT infix_bvslt -> s2s "InfixOpInfix_BVSLT" >> c2s ' ' >> c2s '(' >> showInfix_BVSLT infix_bvslt >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_BVSLE infix_bvsle -> s2s "InfixOpInfix_BVSLE" >> c2s ' ' >> c2s '(' >> showInfix_BVSLE infix_bvsle >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_LSHIFT infix_lshift -> s2s "InfixOpInfix_LSHIFT" >> c2s ' ' >> c2s '(' >> showInfix_LSHIFT infix_lshift >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_LRSHIFT infix_lrshift -> s2s "InfixOpInfix_LRSHIFT" >> c2s ' ' >> c2s '(' >> showInfix_LRSHIFT infix_lrshift >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_ARSHIFT infix_arshift -> s2s "InfixOpInfix_ARSHIFT" >> c2s ' ' >> c2s '(' >> showInfix_ARSHIFT infix_arshift >> c2s ')'
 
 
 and showEqOp (e : AbsBasilIR.eqOp) : showable = match e with

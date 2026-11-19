@@ -12,13 +12,17 @@ let%expect_test "error then error" =
   [%expect
     {|
     <-  <--
-    aa  bbb
+    ab  cde
         <-
-        dd
-    a: Syntax error: unrecognised token
-    b: Syntax error: unrecognised token
-    c: Syntax error: unrecognised token
-    d: TOK_EOF
+        fg
+    a: (TOK_Infix_BVSLT "<")
+    b: (TOK_Infix_BVSUB "-")
+    c: (TOK_Infix_BVSLT "<")
+    d: (TOK_Infix_BVSUB "-")
+    e: (TOK_Infix_BVSUB "-")
+    f: (TOK_Infix_BVSLT "<")
+    g: (TOK_Infix_BVSUB "-")
+    h: TOK_EOF
     |}]
 
 let%expect_test "error then token" =
@@ -29,10 +33,11 @@ let%expect_test "error then token" =
   [%expect
     {|
     <- e
-    aa b
-    a: Syntax error: unrecognised token
-    b: (TOK_LocalIdent ((3, 4), "e"))
-    c: TOK_EOF
+    ab c
+    a: (TOK_Infix_BVSLT "<")
+    b: (TOK_Infix_BVSUB "-")
+    c: (TOK_LocalIdent ((3, 4), "e"))
+    d: TOK_EOF
     |}]
 
 let%expect_test "errors on same line" =
@@ -42,12 +47,24 @@ let%expect_test "errors on same line" =
   [%expect
     {|
      <---   <--- aa <--  <--  <--
-     aaaa   bbbb cc ddd  eee  ggg
-    a: Syntax error: unrecognised token
-    b: Syntax error: unrecognised token
-    c: (TOK_LocalIdent ((13, 15), "aa"))
-    d: Syntax error: unrecognised token
-    e: Syntax error: unrecognised token
-    f: Syntax error: unrecognised token
-    g: TOK_EOF
+     abcd   efgh ii jkl  mno  pqr
+    a: (TOK_Infix_BVSLT "<")
+    b: (TOK_Infix_BVSUB "-")
+    c: (TOK_Infix_BVSUB "-")
+    d: (TOK_Infix_BVSUB "-")
+    e: (TOK_Infix_BVSLT "<")
+    f: (TOK_Infix_BVSUB "-")
+    g: (TOK_Infix_BVSUB "-")
+    h: (TOK_Infix_BVSUB "-")
+    i: (TOK_LocalIdent ((13, 15), "aa"))
+    j: (TOK_Infix_BVSLT "<")
+    k: (TOK_Infix_BVSUB "-")
+    l: (TOK_Infix_BVSUB "-")
+    m: (TOK_Infix_BVSLT "<")
+    n: (TOK_Infix_BVSUB "-")
+    o: (TOK_Infix_BVSUB "-")
+    p: (TOK_Infix_BVSLT "<")
+    q: (TOK_Infix_BVSUB "-")
+    r: (TOK_Infix_BVSUB "-")
+    s: TOK_EOF
     |}]
