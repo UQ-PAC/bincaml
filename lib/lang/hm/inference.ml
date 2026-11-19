@@ -57,6 +57,12 @@ let scheme_of_op st ~visit_constraint (gen : ID.generator)
       curry_f [ bvunk a ] (bvunk equ)
   | `BOOLTOBV1 -> curry_f [ bool_type ] (bv_type 1)
   | `Bitvector b -> bv_type (Bitvec.size b)
+  | `NEQ ->
+      let a = fv () in
+      curry_f [ a; a ] bool_type
+  | `EQ ->
+      let a = fv () in
+      curry_f [ a; a ] bool_type
   | #Ops.BVOps.binary_unif ->
       let a = fv () in
       curry_f [ bvunk a; bvunk a ] (bvunk a)

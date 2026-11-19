@@ -28,6 +28,7 @@
   loop_removal)
  (package bincaml)
  (deps
+  ops.il
   loop_dfg.sexp
   ../../examples/loop.il
   %{bin:bincaml}

@@ -74,6 +74,31 @@ let endRec = '}'
 let str = '"' ([^ '"' '\\']| '\\' ('"' | '\\' | 'b' | 'f' | 'n' | 'r' | 't' | ('a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'x' | _digit)('a' | 'b' | 'c' | 'd' | 'e' | 'f' | _digit)('a' | 'b' | 'c' | 'd' | 'e' | 'f' | _digit)))* '"'
 let integerHex = "0x" ('a' | 'b' | 'c' | 'd' | 'e' | 'f' | _digit)+
 let integerDec = _digit +
+let infix_IntAdd = ".+"
+let infix_IntSub = ".-"
+let infix_IntMul = ".*"
+let infix_IntSDiv = "./"
+let infix_IntLT = ".<"
+let infix_IntLE = ".<="
+let infix_BVADD = '+'
+let infix_BVSUB = '-'
+let infix_BVMUL = '*'
+let infix_BVSDiv = '/'
+let infix_BVULT = "<u"
+let infix_BVULE = "<=u"
+let infix_BVSLT = '<'
+let infix_BVSLE = "<="
+let infix_LSHIFT = "<<"
+let infix_ARSHIFT = ">>"
+let infix_LRSHIFT = ">>>"
+let infix_BitOR = "|||"
+let infix_BitAnd = "&&&"
+let infix_BoolOR = "||"
+let infix_BoolAND = "&&"
+let infix_BoolIMPLIES = "==>"
+let infix_BoolEquiv = "<=>"
+let infix_Equal = "=="
+let infix_NotEqual = "<>"
 
 (* lexing rules *)
 rule token =
@@ -112,6 +137,56 @@ rule token =
                 { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_IntegerHex ((lexeme_start lexbuf, lexeme_end lexbuf), l) }
       | integerDec
                 { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_IntegerDec ((lexeme_start lexbuf, lexeme_end lexbuf), l) }
+      | infix_IntAdd
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_IntAdd l }
+      | infix_IntSub
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_IntSub l }
+      | infix_IntMul
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_IntMul l }
+      | infix_IntSDiv
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_IntSDiv l }
+      | infix_IntLT
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_IntLT l }
+      | infix_IntLE
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_IntLE l }
+      | infix_BVADD
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_BVADD l }
+      | infix_BVSUB
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_BVSUB l }
+      | infix_BVMUL
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_BVMUL l }
+      | infix_BVSDiv
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_BVSDiv l }
+      | infix_BVULT
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_BVULT l }
+      | infix_BVULE
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_BVULE l }
+      | infix_BVSLT
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_BVSLT l }
+      | infix_BVSLE
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_BVSLE l }
+      | infix_LSHIFT
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_LSHIFT l }
+      | infix_ARSHIFT
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_ARSHIFT l }
+      | infix_LRSHIFT
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_LRSHIFT l }
+      | infix_BitOR
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_BitOR l }
+      | infix_BitAnd
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_BitAnd l }
+      | infix_BoolOR
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_BoolOR l }
+      | infix_BoolAND
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_BoolAND l }
+      | infix_BoolIMPLIES
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_BoolIMPLIES l }
+      | infix_BoolEquiv
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_BoolEquiv l }
+      | infix_Equal
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_Equal l }
+      | infix_NotEqual
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_NotEqual l }
       | _letter _idchar*
                 { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Ident l }
       | _digit+ { TOK_Integer (int_of_string (lexeme lexbuf)) }

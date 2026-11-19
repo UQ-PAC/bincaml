@@ -80,6 +80,106 @@ and transIntegerDec (x : integerDec) : result = match x with
     IntegerDec string -> failure x
 
 
+and transInfix_IntAdd (x : infix_IntAdd) : result = match x with
+    Infix_IntAdd string -> failure x
+
+
+and transInfix_IntSub (x : infix_IntSub) : result = match x with
+    Infix_IntSub string -> failure x
+
+
+and transInfix_IntMul (x : infix_IntMul) : result = match x with
+    Infix_IntMul string -> failure x
+
+
+and transInfix_IntSDiv (x : infix_IntSDiv) : result = match x with
+    Infix_IntSDiv string -> failure x
+
+
+and transInfix_IntLT (x : infix_IntLT) : result = match x with
+    Infix_IntLT string -> failure x
+
+
+and transInfix_IntLE (x : infix_IntLE) : result = match x with
+    Infix_IntLE string -> failure x
+
+
+and transInfix_BVADD (x : infix_BVADD) : result = match x with
+    Infix_BVADD string -> failure x
+
+
+and transInfix_BVSUB (x : infix_BVSUB) : result = match x with
+    Infix_BVSUB string -> failure x
+
+
+and transInfix_BVMUL (x : infix_BVMUL) : result = match x with
+    Infix_BVMUL string -> failure x
+
+
+and transInfix_BVSDiv (x : infix_BVSDiv) : result = match x with
+    Infix_BVSDiv string -> failure x
+
+
+and transInfix_BVULT (x : infix_BVULT) : result = match x with
+    Infix_BVULT string -> failure x
+
+
+and transInfix_BVULE (x : infix_BVULE) : result = match x with
+    Infix_BVULE string -> failure x
+
+
+and transInfix_BVSLT (x : infix_BVSLT) : result = match x with
+    Infix_BVSLT string -> failure x
+
+
+and transInfix_BVSLE (x : infix_BVSLE) : result = match x with
+    Infix_BVSLE string -> failure x
+
+
+and transInfix_LSHIFT (x : infix_LSHIFT) : result = match x with
+    Infix_LSHIFT string -> failure x
+
+
+and transInfix_ARSHIFT (x : infix_ARSHIFT) : result = match x with
+    Infix_ARSHIFT string -> failure x
+
+
+and transInfix_LRSHIFT (x : infix_LRSHIFT) : result = match x with
+    Infix_LRSHIFT string -> failure x
+
+
+and transInfix_BitOR (x : infix_BitOR) : result = match x with
+    Infix_BitOR string -> failure x
+
+
+and transInfix_BitAnd (x : infix_BitAnd) : result = match x with
+    Infix_BitAnd string -> failure x
+
+
+and transInfix_BoolOR (x : infix_BoolOR) : result = match x with
+    Infix_BoolOR string -> failure x
+
+
+and transInfix_BoolAND (x : infix_BoolAND) : result = match x with
+    Infix_BoolAND string -> failure x
+
+
+and transInfix_BoolIMPLIES (x : infix_BoolIMPLIES) : result = match x with
+    Infix_BoolIMPLIES string -> failure x
+
+
+and transInfix_BoolEquiv (x : infix_BoolEquiv) : result = match x with
+    Infix_BoolEquiv string -> failure x
+
+
+and transInfix_Equal (x : infix_Equal) : result = match x with
+    Infix_Equal string -> failure x
+
+
+and transInfix_NotEqual (x : infix_NotEqual) : result = match x with
+    Infix_NotEqual string -> failure x
+
+
 and transModule (x : moduleT) : result = match x with
     Module1 decls -> failure x
 
@@ -323,6 +423,7 @@ and transExpr (x : expr) : result = match x with
   | Expr_Old (openparen, expr, closeparen) -> failure x
   | Expr_FunctionOp (expr, openparen, exprs, closeparen) -> failure x
   | Expr_Binary (binop, openparen, expr0, expr, closeparen) -> failure x
+  | Expr_BinaryInfix (expr0, infixop, expr) -> failure x
   | Expr_Assoc (intrinop, openparen, exprs, closeparen) -> failure x
   | Expr_Unary (unop, openparen, expr, closeparen) -> failure x
   | Expr_LoadBe (openparen, intval, expr0, expr, closeparen) -> failure x
@@ -370,6 +471,34 @@ and transCase (x : case) : result = match x with
 
 and transFieldAssign (x : fieldAssign) : result = match x with
     FieldAssign1 (localident, expr) -> failure x
+
+
+and transInfixOp (x : infixOp) : result = match x with
+    InfixOpInfix_IntAdd infix_intadd -> failure x
+  | InfixOpInfix_IntSub infix_intsub -> failure x
+  | InfixOpInfix_IntLT infix_intlt -> failure x
+  | InfixOpInfix_IntLE infix_intle -> failure x
+  | InfixOpInfix_IntMul infix_intmul -> failure x
+  | InfixOpInfix_IntSDiv infix_intsdiv -> failure x
+  | InfixOpInfix_BVADD infix_bvadd -> failure x
+  | InfixOpInfix_BVSUB infix_bvsub -> failure x
+  | InfixOpInfix_BVMUL infix_bvmul -> failure x
+  | InfixOpInfix_BVSDiv infix_bvsdiv -> failure x
+  | InfixOpInfix_BoolOR infix_boolor -> failure x
+  | InfixOpInfix_BoolAND infix_booland -> failure x
+  | InfixOpInfix_BoolIMPLIES infix_boolimplies -> failure x
+  | InfixOpInfix_BoolEquiv infix_boolequiv -> failure x
+  | InfixOpInfix_Equal infix_equal -> failure x
+  | InfixOpInfix_NotEqual infix_notequal -> failure x
+  | InfixOpInfix_BitOR infix_bitor -> failure x
+  | InfixOpInfix_BitAnd infix_bitand -> failure x
+  | InfixOpInfix_BVULT infix_bvult -> failure x
+  | InfixOpInfix_BVULE infix_bvule -> failure x
+  | InfixOpInfix_BVSLT infix_bvslt -> failure x
+  | InfixOpInfix_BVSLE infix_bvsle -> failure x
+  | InfixOpInfix_LSHIFT infix_lshift -> failure x
+  | InfixOpInfix_LRSHIFT infix_lrshift -> failure x
+  | InfixOpInfix_ARSHIFT infix_arshift -> failure x
 
 
 and transEqOp (x : eqOp) : result = match x with
