@@ -50,6 +50,8 @@ open Lexing
 %token <string>               TOK_Infix_IntSDiv
 %token <string>               TOK_Infix_IntLT
 %token <string>               TOK_Infix_IntLE
+%token <string>               TOK_Infix_IntGT
+%token <string>               TOK_Infix_IntGE
 %token <string>               TOK_Infix_BVADD
 %token <string>               TOK_Infix_BVSUB
 %token <string>               TOK_Infix_BVMUL
@@ -70,7 +72,7 @@ open Lexing
 %token <string>               TOK_Infix_Equal
 %token <string>               TOK_Infix_NotEqual
 
-%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pRecordType pPointerType pBVType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pFieldVal_list pFieldVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pFieldAssign pFieldAssign_list pInfixOp pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pIntrinOp pPointerBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
+%start pModuleT pDecl_list pBlockIdent_list pLambdaSep pVarModifiers pVarModifiers_list pDecl pTypeT_list pTypeAssign pTypeAssign_list pProcDef pField_list pField pIntType pBoolType pRecordType pPointerType pBVType pMapType pRecordField pRecordField_list pSumCase pSumCase_list pType1 pTypeT pIntVal pBVVal pFieldVal_list pFieldVal pEndian pAssignment pStmt pAssignment_list pLocalVar pLocalVar_list pGlobalVar pGlobalVar_list pVar pLocalVarParen pGlobalVarParen pLocalVarParen_list pLocalVarLambdaParen pLocalVarLambdaParen_list pNamedCallReturn pNamedCallReturn_list pLVars pNamedCallArg pNamedCallArg_list pCallParams pJump pLVar pLVar_list pBlock_list pStmtWithAttrib pStmtWithAttrib_list pJumpWithAttrib pPhiExpr pPhiExpr_list pPhiAssign pPhiAssign_list pBlock pAttrKeyValue pAttrKeyValue_list pAttribSet pAttr_list pAttr pParams pParams_list pValue pExpr_list pExpr pExpr1 pExpr2 pLambdaDef pBinOp pUnOp pCase pCase_list pFieldAssign pFieldAssign_list pInfixOp pEqOp pBVUnOp pBVBinOp pBVLogicalBinOp pIntBinOp pIntLogicalBinOp pIntrinOp pPointerBinOp pRequireTok pEnsureTok pRelyTok pGuarTok pFunSpec pVarSpec pProgSpec pFunSpec_list pProgSpec_list
 %type <AbsBasilIR.moduleT> pModuleT
 %type <AbsBasilIR.decl list> pDecl_list
 %type <AbsBasilIR.blockIdent list> pBlockIdent_list
@@ -112,6 +114,8 @@ open Lexing
 %type <AbsBasilIR.localVarParen> pLocalVarParen
 %type <AbsBasilIR.globalVarParen> pGlobalVarParen
 %type <AbsBasilIR.localVarParen list> pLocalVarParen_list
+%type <AbsBasilIR.localVarLambdaParen> pLocalVarLambdaParen
+%type <AbsBasilIR.localVarLambdaParen list> pLocalVarLambdaParen_list
 %type <AbsBasilIR.namedCallReturn> pNamedCallReturn
 %type <AbsBasilIR.namedCallReturn list> pNamedCallReturn_list
 %type <AbsBasilIR.lVars> pLVars
@@ -209,6 +213,8 @@ open Lexing
 %type <AbsBasilIR.localVarParen> localVarParen
 %type <AbsBasilIR.globalVarParen> globalVarParen
 %type <AbsBasilIR.localVarParen list> localVarParen_list
+%type <AbsBasilIR.localVarLambdaParen> localVarLambdaParen
+%type <AbsBasilIR.localVarLambdaParen list> localVarLambdaParen_list
 %type <AbsBasilIR.namedCallReturn> namedCallReturn
 %type <AbsBasilIR.namedCallReturn list> namedCallReturn_list
 %type <AbsBasilIR.lVars> lVars
@@ -289,6 +295,8 @@ open Lexing
 %type <AbsBasilIR.infix_IntSDiv> infix_IntSDiv
 %type <AbsBasilIR.infix_IntLT> infix_IntLT
 %type <AbsBasilIR.infix_IntLE> infix_IntLE
+%type <AbsBasilIR.infix_IntGT> infix_IntGT
+%type <AbsBasilIR.infix_IntGE> infix_IntGE
 %type <AbsBasilIR.infix_BVADD> infix_BVADD
 %type <AbsBasilIR.infix_BVSUB> infix_BVSUB
 %type <AbsBasilIR.infix_BVMUL> infix_BVMUL
@@ -392,6 +400,10 @@ pLocalVarParen : localVarParen TOK_EOF { $1 };
 pGlobalVarParen : globalVarParen TOK_EOF { $1 };
 
 pLocalVarParen_list : localVarParen_list TOK_EOF { $1 };
+
+pLocalVarLambdaParen : localVarLambdaParen TOK_EOF { $1 };
+
+pLocalVarLambdaParen_list : localVarLambdaParen_list TOK_EOF { $1 };
 
 pNamedCallReturn : namedCallReturn TOK_EOF { $1 };
 
@@ -685,6 +697,13 @@ localVarParen_list : /* empty */ { []  }
   | localVarParen SYMB2 localVarParen_list { (fun (x,xs) -> x::xs) ($1, $3) }
   ;
 
+localVarLambdaParen : openParen localIdent SYMB5 typeT closeParen { LocalVarLambdaParen1 ($1, $2, $4, $5) }
+  ;
+
+localVarLambdaParen_list : localVarLambdaParen { (fun x -> [x]) $1 }
+  | localVarLambdaParen SYMB2 localVarLambdaParen_list { (fun (x,xs) -> x::xs) ($1, $3) }
+  ;
+
 namedCallReturn : lVar SYMB6 localIdent { NamedCallReturn1 ($1, $3) }
   ;
 
@@ -816,6 +835,7 @@ expr : expr1 {  $1 }
 
 expr1 : expr2 {  $1 }
   | expr1 openParen expr_list closeParen { Expr_FunctionOp ($1, $2, $3, $4) }
+  | expr1 infixOp expr { Expr_BinaryInfix ($1, $2, $3) }
   ;
 
 expr2 : value { Expr_Literal $1 }
@@ -823,7 +843,6 @@ expr2 : value { Expr_Literal $1 }
   | globalVar { Expr_Global $1 }
   | KW_old openParen expr closeParen { Expr_Old ($2, $3, $4) }
   | binOp openParen expr SYMB2 expr closeParen { Expr_Binary ($1, $2, $3, $5, $6) }
-  | expr infixOp expr { Expr_BinaryInfix ($1, $2, $3) }
   | intrinOp openParen expr_list closeParen { Expr_Assoc ($1, $2, $3, $4) }
   | unOp openParen expr closeParen { Expr_Unary ($1, $2, $3, $4) }
   | KW_load_be openParen intVal SYMB2 expr SYMB2 expr closeParen { Expr_LoadBe ($2, $3, $5, $7, $8) }
@@ -838,7 +857,7 @@ expr2 : value { Expr_Literal $1 }
   | expr2 KW_with localIdent SYMB6 expr { Expr_FieldSet ($1, $3, $5) }
   ;
 
-lambdaDef : localVarParen_list lambdaSep expr { LambdaDef1 ($1, $2, $3) }
+lambdaDef : localVarLambdaParen_list lambdaSep expr { LambdaDef1 ($1, $2, $3) }
   ;
 
 binOp : KW_implies { BinOp_implies  }
@@ -880,6 +899,8 @@ infixOp : infix_IntAdd { InfixOpInfix_IntAdd $1 }
   | infix_IntSub { InfixOpInfix_IntSub $1 }
   | infix_IntLT { InfixOpInfix_IntLT $1 }
   | infix_IntLE { InfixOpInfix_IntLE $1 }
+  | infix_IntGT { InfixOpInfix_IntGT $1 }
+  | infix_IntGE { InfixOpInfix_IntGE $1 }
   | infix_IntMul { InfixOpInfix_IntMul $1 }
   | infix_IntSDiv { InfixOpInfix_IntSDiv $1 }
   | infix_BVADD { InfixOpInfix_BVADD $1 }
@@ -1029,6 +1050,8 @@ infix_IntMul : TOK_Infix_IntMul { Infix_IntMul ($1)};
 infix_IntSDiv : TOK_Infix_IntSDiv { Infix_IntSDiv ($1)};
 infix_IntLT : TOK_Infix_IntLT { Infix_IntLT ($1)};
 infix_IntLE : TOK_Infix_IntLE { Infix_IntLE ($1)};
+infix_IntGT : TOK_Infix_IntGT { Infix_IntGT ($1)};
+infix_IntGE : TOK_Infix_IntGE { Infix_IntGE ($1)};
 infix_BVADD : TOK_Infix_BVADD { Infix_BVADD ($1)};
 infix_BVSUB : TOK_Infix_BVSUB { Infix_BVSUB ($1)};
 infix_BVMUL : TOK_Infix_BVMUL { Infix_BVMUL ($1)};

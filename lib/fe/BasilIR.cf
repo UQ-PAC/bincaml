@@ -142,6 +142,9 @@ rules LocalVarParen ::= OpenParen LocalIdent ":" Type CloseParen ;
 rules GlobalVarParen ::= GlobalVar | OpenParen GlobalIdent ":" Type CloseParen ;
 separator LocalVarParen ",";
 
+rules LocalVarLambdaParen ::= OpenParen LocalIdent ":" Type CloseParen ;
+separator nonempty LocalVarLambdaParen ",";
+
 
 --                        lvar               endian mem addr   size
 Stmt_Load_Var  . Stmt ::= LVar ":="   "load" Endian Var Expr IntVal;
@@ -250,7 +253,7 @@ Expr_Global  . Expr2 ::= GlobalVar;
 
 -- quantifiers
 
-rules LambdaDef     ::=  [LocalVarParen] LambdaSep Expr ;
+rules LambdaDef     ::=  [LocalVarLambdaParen] LambdaSep Expr ;
 Expr_Forall . Expr  ::= "forall" AttribSet LambdaDef ;
 Expr_Exists . Expr  ::= "exists" AttribSet LambdaDef ;
 Expr_Lambda . Expr  ::= "fun"    AttribSet LambdaDef ;
@@ -264,7 +267,7 @@ Expr_FunctionOp . Expr1       ::= Expr1 OpenParen [Expr] CloseParen;
 
 rules BinOp ::= "implies" | "get" | BVBinOp | BVLogicalBinOp | IntLogicalBinOp | IntBinOp | EqOp | PointerBinOp ;
 Expr_Binary . Expr2      ::= BinOp OpenParen Expr "," Expr CloseParen ;
-Expr_BinaryInfix  . Expr2 ::= Expr InfixOp Expr ;
+Expr_BinaryInfix  . Expr1 ::= Expr1 InfixOp Expr ;
 Expr_Assoc  . Expr2      ::= IntrinOp OpenParen [Expr] CloseParen ;
 
 rules UnOp ::= BVUnOp | "boolnot" | "intneg" | "booltobv1" | "gamma" | "classification";
@@ -306,6 +309,8 @@ token Infix_IntMul {".*"} ;
 token Infix_IntSDiv {"./"} ;
 token Infix_IntLT {".<"} ;
 token Infix_IntLE {".<="} ;
+token Infix_IntGT {".>"} ;
+token Infix_IntGE {".>="} ;
 
 token Infix_BVADD {"+"} ;
 token Infix_BVSUB {"-"} ;
@@ -334,7 +339,7 @@ token Infix_Equal {"=="} ;
 token Infix_NotEqual {"<>"} ;
 
 
-rules InfixOp ::= Infix_IntAdd | Infix_IntSub | Infix_IntLT | Infix_IntLE | Infix_IntMul | Infix_IntSDiv | Infix_BVADD
+rules InfixOp ::= Infix_IntAdd | Infix_IntSub | Infix_IntLT | Infix_IntLE | Infix_IntGT | Infix_IntGE | Infix_IntMul | Infix_IntSDiv | Infix_BVADD
     | Infix_BVSUB | Infix_BVMUL | Infix_BVSDiv | Infix_BoolOR | Infix_BoolAND | Infix_BoolIMPLIES
     | Infix_BoolEquiv | Infix_Equal | Infix_NotEqual | Infix_BitOR | Infix_BitAnd
     | Infix_BVULT | Infix_BVULE | Infix_BVSLT | Infix_BVSLE

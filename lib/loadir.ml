@@ -907,6 +907,13 @@ module BasilASTLoader = struct
          (function LocalVarParen1 (_, i, t, _) -> LocalTyped (i, t))
          lvs
 
+  and unpac_lambdaparen_nonempty ?(bound = StringMap.empty) p_st lvs :
+      Var.t list =
+    unpack_local_lvars ~bound p_st true
+    @@ List.map
+         (function LocalVarLambdaParen1 (_, i, t, _) -> LocalTyped (i, t))
+         lvs
+
   and trans_jump p_st (x : BasilIR.AbsBasilIR.jumpWithAttrib) =
     let jump = match x with JumpWithAttrib1 (jump, _) -> jump in
     match jump with
@@ -1309,6 +1316,8 @@ module BasilASTLoader = struct
           | InfixOpInfix_IntAdd _ -> `INTADD
           | InfixOpInfix_IntLT _ -> `INTLT
           | InfixOpInfix_IntLE _ -> `INTLE
+          | InfixOpInfix_IntGT _ -> `INTGT
+          | InfixOpInfix_IntGE _ -> `INTGE
           | InfixOpInfix_IntSub _ -> `INTSUB
           | InfixOpInfix_IntMul _ -> `INTMUL
           | InfixOpInfix_IntSDiv _ -> `INTDIV
@@ -1335,7 +1344,8 @@ module BasilASTLoader = struct
         match nop with
         | #Ops.AllOps.binary as b -> Expr.BasilExpr.binexp ~op:b l r
         | #Ops.AllOps.intrin as b -> Expr.BasilExpr.applyintrin ~op:b [ l; r ]
-        | o -> failwith ("impossible" ^ Ops.AllOps.to_string o)
+        | `INTGE -> Expr.BasilExpr.binexp ~op:`INTLE r l
+        | `INTGT -> Expr.BasilExpr.binexp ~op:`INTLT r l
       end
     | Expr_Unary (unop, o, expr, c) ->
         BasilExpr.unexp ~attrib:(expr_range_attr o c) ~op:(transUnOp unop)
@@ -1382,7 +1392,7 @@ module BasilASTLoader = struct
     | Expr_Old (o, e, c) ->
         BasilExpr.unexp ~attrib:(expr_range_attr o c) ~op:`Old (trans_expr e)
     | Expr_Forall (attrs, LambdaDef1 (lv, _, e)) ->
-        let bound = unpac_lambdaparen ~bound:StringMap.empty p_st lv in
+        let bound = unpac_lambdaparen_nonempty ~bound:StringMap.empty p_st lv in
         let triggers =
           List.map (List.map trans_expr) (get_trigger_attrib ~binds p_st attrs)
         in
@@ -1392,7 +1402,7 @@ module BasilASTLoader = struct
         let _, attrib = trans_attrib_set ~binds p_st attrs in
         BasilExpr.forall ~attrib ~triggers ~bound (trans_expr ~nbinds:bound e)
     | Expr_Lambda (attrs, LambdaDef1 (lv, _, e)) ->
-        let bound = unpac_lambdaparen ~bound:StringMap.empty p_st lv in
+        let bound = unpac_lambdaparen_nonempty ~bound:StringMap.empty p_st lv in
         let binds =
           StringMap.add_list binds (List.map (fun v -> (Var.name v, v)) bound)
         in
@@ -1412,7 +1422,7 @@ module BasilASTLoader = struct
         let in_expr = trans_expr ~nbinds:[ funvar ] in_expr in
         BasilExpr.letexp [ (funvar, func) ] in_expr
     | Expr_Exists (attrs, LambdaDef1 (lv, _, e)) ->
-        let bound = unpac_lambdaparen ~bound:StringMap.empty p_st lv in
+        let bound = unpac_lambdaparen_nonempty ~bound:StringMap.empty p_st lv in
         let triggers =
           List.map (List.map trans_expr) (get_trigger_attrib ~binds p_st attrs)
         in

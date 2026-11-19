@@ -21,6 +21,8 @@ type raw_token = BasilIR.ParBasilIR.token =
   | TOK_Infix_IntMul of string
   | TOK_Infix_IntLT of string
   | TOK_Infix_IntLE of string
+  | TOK_Infix_IntGT of string
+  | TOK_Infix_IntGE of string
   | TOK_Infix_IntAdd of string
   | TOK_Infix_Equal of string
   | TOK_Infix_BoolOR of string

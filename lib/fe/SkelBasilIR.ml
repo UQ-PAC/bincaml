@@ -104,6 +104,14 @@ and transInfix_IntLE (x : infix_IntLE) : result = match x with
     Infix_IntLE string -> failure x
 
 
+and transInfix_IntGT (x : infix_IntGT) : result = match x with
+    Infix_IntGT string -> failure x
+
+
+and transInfix_IntGE (x : infix_IntGE) : result = match x with
+    Infix_IntGE string -> failure x
+
+
 and transInfix_BVADD (x : infix_BVADD) : result = match x with
     Infix_BVADD string -> failure x
 
@@ -328,6 +336,10 @@ and transGlobalVarParen (x : globalVarParen) : result = match x with
   | GlobalVarParen1 (openparen, globalident, type', closeparen) -> failure x
 
 
+and transLocalVarLambdaParen (x : localVarLambdaParen) : result = match x with
+    LocalVarLambdaParen1 (openparen, localident, type', closeparen) -> failure x
+
+
 and transNamedCallReturn (x : namedCallReturn) : result = match x with
     NamedCallReturn1 (lvar, localident) -> failure x
 
@@ -441,7 +453,7 @@ and transExpr (x : expr) : result = match x with
 
 
 and transLambdaDef (x : lambdaDef) : result = match x with
-    LambdaDef1 (localvarparens, lambdasep, expr) -> failure x
+    LambdaDef1 (localvarlambdaparens, lambdasep, expr) -> failure x
 
 
 and transBinOp (x : binOp) : result = match x with
@@ -478,6 +490,8 @@ and transInfixOp (x : infixOp) : result = match x with
   | InfixOpInfix_IntSub infix_intsub -> failure x
   | InfixOpInfix_IntLT infix_intlt -> failure x
   | InfixOpInfix_IntLE infix_intle -> failure x
+  | InfixOpInfix_IntGT infix_intgt -> failure x
+  | InfixOpInfix_IntGE infix_intge -> failure x
   | InfixOpInfix_IntMul infix_intmul -> failure x
   | InfixOpInfix_IntSDiv infix_intsdiv -> failure x
   | InfixOpInfix_BVADD infix_bvadd -> failure x

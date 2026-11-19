@@ -24,6 +24,8 @@ and infix_IntMul = Infix_IntMul of string
 and infix_IntSDiv = Infix_IntSDiv of string
 and infix_IntLT = Infix_IntLT of string
 and infix_IntLE = Infix_IntLE of string
+and infix_IntGT = Infix_IntGT of string
+and infix_IntGE = Infix_IntGE of string
 and infix_BVADD = Infix_BVADD of string
 and infix_BVSUB = Infix_BVSUB of string
 and infix_BVMUL = Infix_BVMUL of string
@@ -164,6 +166,9 @@ and globalVarParen =
    GlobalVarParenGlobalVar of globalVar
  | GlobalVarParen1 of openParen * globalIdent * typeT * closeParen
 
+and localVarLambdaParen =
+   LocalVarLambdaParen1 of openParen * localIdent * typeT * closeParen
+
 and namedCallReturn =
    NamedCallReturn1 of lVar * localIdent
 
@@ -260,7 +265,7 @@ and expr =
  | SortValRec of localIdent * beginRec * fieldAssign list * endRec
 
 and lambdaDef =
-   LambdaDef1 of localVarParen list * lambdaSep * expr
+   LambdaDef1 of localVarLambdaParen list * lambdaSep * expr
 
 and binOp =
    BinOp_implies
@@ -292,6 +297,8 @@ and infixOp =
  | InfixOpInfix_IntSub of infix_IntSub
  | InfixOpInfix_IntLT of infix_IntLT
  | InfixOpInfix_IntLE of infix_IntLE
+ | InfixOpInfix_IntGT of infix_IntGT
+ | InfixOpInfix_IntGE of infix_IntGE
  | InfixOpInfix_IntMul of infix_IntMul
  | InfixOpInfix_IntSDiv of infix_IntSDiv
  | InfixOpInfix_BVADD of infix_BVADD

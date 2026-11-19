@@ -156,6 +156,12 @@ let prtInfix_IntLT _ (AbsBasilIR.Infix_IntLT i) : doc = render i
 let prtInfix_IntLE _ (AbsBasilIR.Infix_IntLE i) : doc = render i
 
 
+let prtInfix_IntGT _ (AbsBasilIR.Infix_IntGT i) : doc = render i
+
+
+let prtInfix_IntGE _ (AbsBasilIR.Infix_IntGE i) : doc = render i
+
+
 let prtInfix_BVADD _ (AbsBasilIR.Infix_BVADD i) : doc = render i
 
 
@@ -396,6 +402,13 @@ and prtGlobalVarParen (i:int) (e : AbsBasilIR.globalVarParen) : doc = match e wi
   |    AbsBasilIR.GlobalVarParen1 (openparen, globalident, type_, closeparen) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtGlobalIdent 0 globalident ; render ":" ; prtTypeT 0 type_ ; prtCloseParen 0 closeparen])
 
 
+and prtLocalVarLambdaParen (i:int) (e : AbsBasilIR.localVarLambdaParen) : doc = match e with
+       AbsBasilIR.LocalVarLambdaParen1 (openparen, localident, type_, closeparen) -> prPrec i 0 (concatD [prtOpenParen 0 openparen ; prtLocalIdent 0 localident ; render ":" ; prtTypeT 0 type_ ; prtCloseParen 0 closeparen])
+
+and prtLocalVarLambdaParenListBNFC i es : doc = match (i, es) with
+    (_,[]) -> (concatD [])
+  | (_,[x]) -> (concatD [prtLocalVarLambdaParen 0 x])
+  | (_,x::xs) -> (concatD [prtLocalVarLambdaParen 0 x ; render "," ; prtLocalVarLambdaParenListBNFC 0 xs])
 and prtNamedCallReturn (i:int) (e : AbsBasilIR.namedCallReturn) : doc = match e with
        AbsBasilIR.NamedCallReturn1 (lvar, localident) -> prPrec i 0 (concatD [prtLVar 0 lvar ; render "=" ; prtLocalIdent 0 localident])
 
@@ -520,7 +533,7 @@ and prtExpr (i:int) (e : AbsBasilIR.expr) : doc = match e with
   |    AbsBasilIR.Expr_Old (openparen, expr, closeparen) -> prPrec i 2 (concatD [render "old" ; prtOpenParen 0 openparen ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_FunctionOp (expr, openparen, exprs, closeparen) -> prPrec i 1 (concatD [prtExpr 1 expr ; prtOpenParen 0 openparen ; prtExprListBNFC 0 exprs ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Binary (binop, openparen, expr1, expr2, closeparen) -> prPrec i 2 (concatD [prtBinOp 0 binop ; prtOpenParen 0 openparen ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; prtCloseParen 0 closeparen])
-  |    AbsBasilIR.Expr_BinaryInfix (expr1, infixop, expr2) -> prPrec i 2 (concatD [prtExpr 0 expr1 ; prtInfixOp 0 infixop ; prtExpr 0 expr2])
+  |    AbsBasilIR.Expr_BinaryInfix (expr1, infixop, expr2) -> prPrec i 1 (concatD [prtExpr 1 expr1 ; prtInfixOp 0 infixop ; prtExpr 0 expr2])
   |    AbsBasilIR.Expr_Assoc (intrinop, openparen, exprs, closeparen) -> prPrec i 2 (concatD [prtIntrinOp 0 intrinop ; prtOpenParen 0 openparen ; prtExprListBNFC 0 exprs ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_Unary (unop, openparen, expr, closeparen) -> prPrec i 2 (concatD [prtUnOp 0 unop ; prtOpenParen 0 openparen ; prtExpr 0 expr ; prtCloseParen 0 closeparen])
   |    AbsBasilIR.Expr_LoadBe (openparen, intval, expr1, expr2, closeparen) -> prPrec i 2 (concatD [render "load_be" ; prtOpenParen 0 openparen ; prtIntVal 0 intval ; render "," ; prtExpr 0 expr1 ; render "," ; prtExpr 0 expr2 ; prtCloseParen 0 closeparen])
@@ -541,7 +554,7 @@ and prtExprListBNFC i es : doc = match (i, es) with
   | (_,[x]) -> (concatD [prtExpr 0 x])
   | (_,x::xs) -> (concatD [prtExpr 0 x ; render "," ; prtExprListBNFC 0 xs])
 and prtLambdaDef (i:int) (e : AbsBasilIR.lambdaDef) : doc = match e with
-       AbsBasilIR.LambdaDef1 (localvarparens, lambdasep, expr) -> prPrec i 0 (concatD [prtLocalVarParenListBNFC 0 localvarparens ; prtLambdaSep 0 lambdasep ; prtExpr 0 expr])
+       AbsBasilIR.LambdaDef1 (localvarlambdaparens, lambdasep, expr) -> prPrec i 0 (concatD [prtLocalVarLambdaParenListBNFC 0 localvarlambdaparens ; prtLambdaSep 0 lambdasep ; prtExpr 0 expr])
 
 
 and prtBinOp (i:int) (e : AbsBasilIR.binOp) : doc = match e with
@@ -584,6 +597,8 @@ and prtInfixOp (i:int) (e : AbsBasilIR.infixOp) : doc = match e with
   |    AbsBasilIR.InfixOpInfix_IntSub infixintsub -> prPrec i 0 (concatD [prtInfix_IntSub 0 infixintsub])
   |    AbsBasilIR.InfixOpInfix_IntLT infixintlt -> prPrec i 0 (concatD [prtInfix_IntLT 0 infixintlt])
   |    AbsBasilIR.InfixOpInfix_IntLE infixintle -> prPrec i 0 (concatD [prtInfix_IntLE 0 infixintle])
+  |    AbsBasilIR.InfixOpInfix_IntGT infixintgt -> prPrec i 0 (concatD [prtInfix_IntGT 0 infixintgt])
+  |    AbsBasilIR.InfixOpInfix_IntGE infixintge -> prPrec i 0 (concatD [prtInfix_IntGE 0 infixintge])
   |    AbsBasilIR.InfixOpInfix_IntMul infixintmul -> prPrec i 0 (concatD [prtInfix_IntMul 0 infixintmul])
   |    AbsBasilIR.InfixOpInfix_IntSDiv infixintsdiv -> prPrec i 0 (concatD [prtInfix_IntSDiv 0 infixintsdiv])
   |    AbsBasilIR.InfixOpInfix_BVADD infixbvadd -> prPrec i 0 (concatD [prtInfix_BVADD 0 infixbvadd])

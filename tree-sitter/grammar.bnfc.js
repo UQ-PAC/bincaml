@@ -309,6 +309,16 @@ module.exports = ({
         // (:). [LocalVarParen] ::= LocalVarParen "," [LocalVarParen] ;
         seq($.LocalVarParen, ",", optional($.list_LocalVarParen))
       ),
+    LocalVarLambdaParen: $ =>
+      // LocalVarLambdaParen1. LocalVarLambdaParen ::= OpenParen LocalIdent ":" Type CloseParen ;
+      seq($.token_OpenParen, $.token_LocalIdent, ":", $.Type, $.token_CloseParen),
+    list_LocalVarLambdaParen: $ =>
+      choice(
+        // (:[]). [LocalVarLambdaParen] ::= LocalVarLambdaParen ;
+        $.LocalVarLambdaParen,
+        // (:). [LocalVarLambdaParen] ::= LocalVarLambdaParen "," [LocalVarLambdaParen] ;
+        seq($.LocalVarLambdaParen, ",", $.list_LocalVarLambdaParen)
+      ),
     NamedCallReturn: $ =>
       // NamedCallReturn1. NamedCallReturn ::= LVar "=" LocalIdent ;
       seq($.LVar, "=", $.token_LocalIdent),
@@ -528,7 +538,9 @@ module.exports = ({
         // _. Expr1 ::= Expr2 ;
         $.Expr2,
         // Expr_FunctionOp. Expr1 ::= Expr1 OpenParen [Expr] CloseParen ;
-        seq($.Expr1, $.token_OpenParen, optional($.list_Expr), $.token_CloseParen)
+        seq($.Expr1, $.token_OpenParen, optional($.list_Expr), $.token_CloseParen),
+        // Expr_BinaryInfix. Expr1 ::= Expr1 InfixOp Expr ;
+        seq($.Expr1, $.InfixOp, $.Expr)
       ),
     Expr2: $ =>
       choice(
@@ -542,8 +554,6 @@ module.exports = ({
         seq("old", $.token_OpenParen, $.Expr, $.token_CloseParen),
         // Expr_Binary. Expr2 ::= BinOp OpenParen Expr "," Expr CloseParen ;
         seq($.BinOp, $.token_OpenParen, $.Expr, ",", $.Expr, $.token_CloseParen),
-        // Expr_BinaryInfix. Expr2 ::= Expr InfixOp Expr ;
-        seq($.Expr, $.InfixOp, $.Expr),
         // Expr_Assoc. Expr2 ::= IntrinOp OpenParen [Expr] CloseParen ;
         seq($.IntrinOp, $.token_OpenParen, optional($.list_Expr), $.token_CloseParen),
         // Expr_Unary. Expr2 ::= UnOp OpenParen Expr CloseParen ;
@@ -570,8 +580,8 @@ module.exports = ({
         seq($.Expr2, "with", $.token_LocalIdent, "=", $.Expr)
       ),
     LambdaDef: $ =>
-      // LambdaDef1. LambdaDef ::= [LocalVarParen] LambdaSep Expr ;
-      seq(optional($.list_LocalVarParen), $.LambdaSep, $.Expr),
+      // LambdaDef1. LambdaDef ::= [LocalVarLambdaParen] LambdaSep Expr ;
+      seq($.list_LocalVarLambdaParen, $.LambdaSep, $.Expr),
     BinOp: $ =>
       choice(
         // BinOp_implies. BinOp ::= "implies" ;
@@ -644,6 +654,10 @@ module.exports = ({
         $.token_Infix_IntLT,
         // InfixOpInfix_IntLE. InfixOp ::= Infix_IntLE ;
         $.token_Infix_IntLE,
+        // InfixOpInfix_IntGT. InfixOp ::= Infix_IntGT ;
+        $.token_Infix_IntGT,
+        // InfixOpInfix_IntGE. InfixOp ::= Infix_IntGE ;
+        $.token_Infix_IntGE,
         // InfixOpInfix_IntMul. InfixOp ::= Infix_IntMul ;
         $.token_Infix_IntMul,
         // InfixOpInfix_IntSDiv. InfixOp ::= Infix_IntSDiv ;
@@ -920,6 +934,10 @@ module.exports = ({
       /\.</,
     token_Infix_IntLE: $ =>
       /\.<=/,
+    token_Infix_IntGT: $ =>
+      /\.>/,
+    token_Infix_IntGE: $ =>
+      /\.>=/,
     token_Infix_BVADD: $ =>
       /\+/,
     token_Infix_BVSUB: $ =>

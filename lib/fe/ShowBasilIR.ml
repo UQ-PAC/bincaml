@@ -62,6 +62,8 @@ let rec showInfix_IntMul (AbsBasilIR.Infix_IntMul i) : showable = s2s "Infix_Int
 let rec showInfix_IntSDiv (AbsBasilIR.Infix_IntSDiv i) : showable = s2s "Infix_IntSDiv " >> showString i
 let rec showInfix_IntLT (AbsBasilIR.Infix_IntLT i) : showable = s2s "Infix_IntLT " >> showString i
 let rec showInfix_IntLE (AbsBasilIR.Infix_IntLE i) : showable = s2s "Infix_IntLE " >> showString i
+let rec showInfix_IntGT (AbsBasilIR.Infix_IntGT i) : showable = s2s "Infix_IntGT " >> showString i
+let rec showInfix_IntGE (AbsBasilIR.Infix_IntGE i) : showable = s2s "Infix_IntGE " >> showString i
 let rec showInfix_BVADD (AbsBasilIR.Infix_BVADD i) : showable = s2s "Infix_BVADD " >> showString i
 let rec showInfix_BVSUB (AbsBasilIR.Infix_BVSUB i) : showable = s2s "Infix_BVSUB " >> showString i
 let rec showInfix_BVMUL (AbsBasilIR.Infix_BVMUL i) : showable = s2s "Infix_BVMUL " >> showString i
@@ -230,6 +232,10 @@ and showGlobalVarParen (e : AbsBasilIR.globalVarParen) : showable = match e with
   |    AbsBasilIR.GlobalVarParen1 (openparen, globalident, type', closeparen) -> s2s "GlobalVarParen1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showGlobalIdent globalident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
 
 
+and showLocalVarLambdaParen (e : AbsBasilIR.localVarLambdaParen) : showable = match e with
+       AbsBasilIR.LocalVarLambdaParen1 (openparen, localident, type', closeparen) -> s2s "LocalVarLambdaParen1" >> c2s ' ' >> c2s '(' >> showOpenParen openparen  >> s2s ", " >>  showLocalIdent localident  >> s2s ", " >>  showTypeT type'  >> s2s ", " >>  showCloseParen closeparen >> c2s ')'
+
+
 and showNamedCallReturn (e : AbsBasilIR.namedCallReturn) : showable = match e with
        AbsBasilIR.NamedCallReturn1 (lvar, localident) -> s2s "NamedCallReturn1" >> c2s ' ' >> c2s '(' >> showLVar lvar  >> s2s ", " >>  showLocalIdent localident >> c2s ')'
 
@@ -343,7 +349,7 @@ and showExpr (e : AbsBasilIR.expr) : showable = match e with
 
 
 and showLambdaDef (e : AbsBasilIR.lambdaDef) : showable = match e with
-       AbsBasilIR.LambdaDef1 (localvarparens, lambdasep, expr) -> s2s "LambdaDef1" >> c2s ' ' >> c2s '(' >> showList showLocalVarParen localvarparens  >> s2s ", " >>  showLambdaSep lambdasep  >> s2s ", " >>  showExpr expr >> c2s ')'
+       AbsBasilIR.LambdaDef1 (localvarlambdaparens, lambdasep, expr) -> s2s "LambdaDef1" >> c2s ' ' >> c2s '(' >> showList showLocalVarLambdaParen localvarlambdaparens  >> s2s ", " >>  showLambdaSep lambdasep  >> s2s ", " >>  showExpr expr >> c2s ')'
 
 
 and showBinOp (e : AbsBasilIR.binOp) : showable = match e with
@@ -380,6 +386,8 @@ and showInfixOp (e : AbsBasilIR.infixOp) : showable = match e with
   |    AbsBasilIR.InfixOpInfix_IntSub infix_intsub -> s2s "InfixOpInfix_IntSub" >> c2s ' ' >> c2s '(' >> showInfix_IntSub infix_intsub >> c2s ')'
   |    AbsBasilIR.InfixOpInfix_IntLT infix_intlt -> s2s "InfixOpInfix_IntLT" >> c2s ' ' >> c2s '(' >> showInfix_IntLT infix_intlt >> c2s ')'
   |    AbsBasilIR.InfixOpInfix_IntLE infix_intle -> s2s "InfixOpInfix_IntLE" >> c2s ' ' >> c2s '(' >> showInfix_IntLE infix_intle >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_IntGT infix_intgt -> s2s "InfixOpInfix_IntGT" >> c2s ' ' >> c2s '(' >> showInfix_IntGT infix_intgt >> c2s ')'
+  |    AbsBasilIR.InfixOpInfix_IntGE infix_intge -> s2s "InfixOpInfix_IntGE" >> c2s ' ' >> c2s '(' >> showInfix_IntGE infix_intge >> c2s ')'
   |    AbsBasilIR.InfixOpInfix_IntMul infix_intmul -> s2s "InfixOpInfix_IntMul" >> c2s ' ' >> c2s '(' >> showInfix_IntMul infix_intmul >> c2s ')'
   |    AbsBasilIR.InfixOpInfix_IntSDiv infix_intsdiv -> s2s "InfixOpInfix_IntSDiv" >> c2s ' ' >> c2s '(' >> showInfix_IntSDiv infix_intsdiv >> c2s ')'
   |    AbsBasilIR.InfixOpInfix_BVADD infix_bvadd -> s2s "InfixOpInfix_BVADD" >> c2s ' ' >> c2s '(' >> showInfix_BVADD infix_bvadd >> c2s ')'

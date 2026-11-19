@@ -80,6 +80,8 @@ let infix_IntMul = ".*"
 let infix_IntSDiv = "./"
 let infix_IntLT = ".<"
 let infix_IntLE = ".<="
+let infix_IntGT = ".>"
+let infix_IntGE = ".>="
 let infix_BVADD = '+'
 let infix_BVSUB = '-'
 let infix_BVMUL = '*'
@@ -149,6 +151,10 @@ rule token =
                 { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_IntLT l }
       | infix_IntLE
                 { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_IntLE l }
+      | infix_IntGT
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_IntGT l }
+      | infix_IntGE
+                { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_IntGE l }
       | infix_BVADD
                 { let l = lexeme lexbuf in try Hashtbl.find resword_table l with Not_found -> TOK_Infix_BVADD l }
       | infix_BVSUB
