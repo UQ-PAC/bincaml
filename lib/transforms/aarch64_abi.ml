@@ -65,7 +65,7 @@ let insert_callee_saved_assertions proc callee_saved =
 
       (* Store the initial values of globals, and use them to initialise the mutable local versions. *)
       let proc, fresh_entry =
-        Lang.Procedure.fresh_block ~name:"callee_saved_registers_entry" proc
+        Lang.Procedure.fresh_block ~name:"%callee_saved_registers_entry" proc
           ~stmts:
             (let al =
                VarMap.to_iter callee_saved_locals
@@ -78,7 +78,7 @@ let insert_callee_saved_assertions proc callee_saved =
           ()
       in
       let proc, fresh_exit =
-        Lang.Procedure.fresh_block ~name:"callee_saved_registers_exit" proc
+        Lang.Procedure.fresh_block ~name:"%callee_saved_registers_exit" proc
           ~stmts:
             (VarMap.to_iter callee_saved_locals
             |> Iter.map (fun (_, (initial, local)) ->
@@ -103,19 +103,14 @@ let insert_callee_saved_assertions proc callee_saved =
 
 let transform_procedure proc =
   let spec = Lang.Procedure.specification proc in
-  let { Lang.Procedure.modifies_globs; ensures } = spec in
+  let { Lang.Procedure.modifies_globs } = spec in
 
   let callee_saved, modifies_globs =
     modifies_globs |> List.partition variable_is_callee_saved
   in
 
-  let callee_saved_postconditions =
-    callee_saved |> List.map make_unchanged_assertion
-  in
-  let ensures = callee_saved_postconditions @ ensures in
-
   let proc =
-    Lang.Procedure.set_specification proc { spec with modifies_globs; ensures }
+    Lang.Procedure.set_specification proc { spec with modifies_globs }
   in
 
   insert_callee_saved_assertions proc callee_saved
