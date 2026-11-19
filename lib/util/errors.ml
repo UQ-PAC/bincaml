@@ -241,14 +241,13 @@ let pp_bincamlerr fmt { message; reason; error_context; input } =
   let fmt_locations =
     Format.list ~sep:Format.newline (format_context_info ?source:input)
   in
+  Format.fprintf fmt "%s: %s%a" (show_error_class reason) message Format.newline
+    ();
   if List.is_empty error_context |> not then begin
     Format.fprintf fmt "Related context:";
     Format.pp_force_newline fmt ();
     Format.fprintf fmt "%a" fmt_locations (List.rev error_context)
-  end;
-  Format.fprintf fmt "%s: %s%a" (show_error_class reason) message Format.newline
-    ();
-  Format.pp_force_newline fmt ()
+  end
 
 let () =
   Printexc.register_printer (function

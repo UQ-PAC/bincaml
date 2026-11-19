@@ -22,12 +22,11 @@ Should identify type errors in cases options:
   > EOF
   (load-il test_cases.il)
   (run-transforms hindley-milner-elaborate)
-  bincaml: Related context:
+  bincaml: Type error: bool <> 64 ℕ bv
+           Related context:
            declaration
            1 | let $f (x:bv64) : bv64 = if eq(x, 0:bv64) then 1:bv64 else true;
                    ^^
-           Type error: bool <> 64 ℕ bv
-           
            
   [123]
 
@@ -42,7 +41,8 @@ Should produce errors
   > EOF
   (load-il test.il)
   (run-transforms hindley-milner-elaborate)
-  bincaml: Related context:
+  bincaml: Type error: 32 <> 64
+           Related context:
            infer expression
            1 | let $f (x:bv64) : bool = booland(true, bvult(x, 1:bv32));
                                                            ^^^^^^^^^^^
@@ -54,8 +54,6 @@ Should produce errors
            declaration
            1 | let $f (x:bv64) : bool = booland(true, bvult(x, 1:bv32));
                    ^^
-           Type error: 32 <> 64
-           
            
   [123]
 
@@ -72,12 +70,11 @@ Should identify type errors in cases options:
   (load-il test_cases.il)
   (dump-il)
   let $f (x:bv64) : bv64 = (true);(run-transforms hindley-milner-elaborate)
-  bincaml: Related context:
+  bincaml: Type error: 64 ℕ bv <> bool
+           Related context:
            declaration
            1 | let $f (x:bv64) : bv64 = (true);
                    ^^
-           Type error: 64 ℕ bv <> bool
-           
            
   [123]
 
@@ -94,7 +91,8 @@ typefail example
   bincaml: [WARNING] type conflict: int, <bitvector at construction of sign_extend(32, 2)
   bincaml: [WARNING] type conflict: int, <bitvector at construction of sign_extend(32, 2)
   (run-transforms hindley-milner-elaborate)
-  bincaml: Related context:
+  bincaml: Type error: 32 ℕ bv <> int
+           Related context:
            infer expression
            19 |     $NF: bool := eq(1, 0x1:bv32) { .label = "%00000408" };
                                    ^^^^^^^^^^^^^
@@ -106,7 +104,5 @@ typefail example
            procedure
            15 | proc @main_1876 () -> ()
                      ^^^^^^^^^^
-           Type error: 32 ℕ bv <> int
-           
            
   [123]

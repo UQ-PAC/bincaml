@@ -36,7 +36,6 @@ Some error messages for log configuration.
   (log-level)
   bincaml: Error: Expected at least one argument in cmd log-level
            
-           
   [123]
 
   $ cat << EOF | bincaml script -
@@ -47,7 +46,6 @@ Some error messages for log configuration.
   (load-il ../../examples/irreducible_loop_1.il)
   (log-level blah)
   bincaml: Error: Incorrect log level option given, correct options are ["info", "quiet", "app", "error", "warning", "debug"] in cmd log-level
-           
            
   [123]
 
@@ -60,6 +58,5 @@ Some error messages for log configuration.
   (load-il ../../examples/irreducible_loop_1.il)
   (log-level info nowheoijifsda)
   bincaml: Error: source nowheoijifsda not found in cmd log-level
-           
            
   [123]

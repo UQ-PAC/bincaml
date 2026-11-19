@@ -5,7 +5,8 @@
   bincaml: [WARNING] type conflict: int, <bitvector at construction of sign_extend(32, 2)
   bincaml: [WARNING] type conflict: int, <bitvector at construction of sign_extend(32, 2)
   (run-transforms type-check)
-  bincaml: Related context:
+  bincaml: Error: Check failed: type-check
+           Related context:
            checking procedure
            15 | proc @main_1876 () -> ()
                      ^^^^^^^^^^
@@ -13,8 +14,6 @@
            ./typefail.sexp
            2 | (run-transforms "type-check")
                                           ^
-           Error: Check failed: type-check
-           
            
   Paramters for the function has a type mismatch: type of eq(1, 0x1:bv32) != type of $NF:bv1 (bool != bv1) at statement 0 in %main_entry
   Arguments are not of the same type in eq at statement 0 in %main_entry

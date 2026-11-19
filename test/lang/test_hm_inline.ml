@@ -22,6 +22,5 @@ let%expect_test "return type of function" =
 
     partially apply bv64: ok((bv64->bv64))
     type error: error(Type error: 64 <> 24
-
     )
     |}]

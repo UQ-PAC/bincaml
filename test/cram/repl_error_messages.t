@@ -10,12 +10,11 @@ non-existent command
   $ bincaml script test.sexp
   (load-il ../../examples/irreducible_loop_1.il)
   (non-command)
-  bincaml: Related context:
+  bincaml: Error: not a command: non-command
+           Related context:
            test.sexp
            2 | (non-command)
                           ^
-           Error: not a command: non-command
-           
            
   [123]
 
@@ -27,12 +26,11 @@ run command without program loaded
   > EOF
   $ bincaml script test.sexp
   (run-transform ssa)
-  bincaml: Related context:
+  bincaml: Exception Invalid_argument("no program loaded"): 
+           Related context:
            test.sexp
            1 | (run-transform ssa)
                                 ^
-           Exception Invalid_argument("no program loaded"): 
-           
            
   [123]
 
@@ -46,12 +44,11 @@ run nonexistent transform
   $ bincaml script test.sexp
   (load-il ../../examples/irreducible_loop_1.il)
   (run-transform blah)
-  bincaml: Related context:
+  bincaml: Exception Invalid_argument("not found: blah"): 
+           Related context:
            test.sexp
            2 | (run-transform blah)
                                  ^
-           Exception Invalid_argument("not found: blah"): 
-           
            
   [123]
 
@@ -64,7 +61,8 @@ parse error file
   > EOF
   $ bincaml script test.sexp
   (load-il empty.il)
-  bincaml: Related context:
+  bincaml: Input error: parse error
+           Related context:
            next token
            1 | a
                ^
@@ -73,8 +71,6 @@ parse error file
            test.sexp
            1 | (load-il "empty.il")
                                  ^
-           Input error: parse error
-           
            
   [123]
 

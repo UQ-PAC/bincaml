@@ -1728,14 +1728,12 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn
-  {|
-  ( "Related context:\
+[@@expect.uncaught_exn {|
+  ( "Input error: load error\
+   \nRelated context:\
    \nno such block: %main_7\
    \n12 |     goto(%main_7, %main_11);\
    \n              \027[1;31m^^^^^^^\027[0m\
-   \nInput error: load error\
-   \n\
    \n")
   |}]
 
@@ -1759,14 +1757,12 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn
-  {|
-  ( "Related context:\
+[@@expect.uncaught_exn {|
+  ( "Input error: load error\
+   \nRelated context:\
    \nno such procedure: @cat_4198032\
    \n7 |     call @cat_4198032();\
    \n             \027[1;31m^^^^^^^^^^^^\027[0m\
-   \nInput error: load error\
-   \n\
    \n")
   |}]
 
@@ -1792,14 +1788,12 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn
-  {|
-  ( "Related context:\
+[@@expect.uncaught_exn {|
+  ( "Input error: parse error\
+   \nRelated context:\
    \nnext token\
    \n8 |     :bv1 := 1:bv1;\
    \n        \027[1;31m^\027[0m\
-   \nInput error: parse error\
-   \n\
    \n")
   |}]
 
