@@ -120,6 +120,8 @@ let find_int_opt k (e : t option) =
   | `Integer i -> Some i
   | _ -> None
 
+let get_location a = StringMap.find_opt location_key a |> Option.map loc_of_attr
+
 let find_loc_opt (e : t option) =
   find_opt location_key e |> Option.map loc_of_attr
 
@@ -128,3 +130,14 @@ let find_int_map k (m : attrib_map) =
   | Some (`CamlInt n) -> Some (Z.of_int n)
   | Some (`Integer n) -> Some n
   | _ -> None
+
+let add_loc_error_ctx ~msg attrib continue =
+  let loc =
+    (fun ~msg e ->
+      get_location e |> Option.map (fun l -> Errors.location_loc ~msg l))
+      ~msg attrib
+  in
+  match loc with
+  | None -> continue ()
+  | Some loc ->
+      Errors.update_error (Errors.add_error_context ~ctx_info:loc) continue

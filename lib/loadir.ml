@@ -189,15 +189,14 @@ module BasilASTLoader = struct
   and trans_typedecl t =
     match t with
     | TypeAssign_Sum (localIdent, typeT) ->
-        let n = unsafe_unsigil (`Type localIdent) in
+        let n = ident_name (`Type localIdent) in
         ( n,
           Types.mk_adt n
             (typeT
             |> List.map (function
-              | SortType variant ->
-                  (unsafe_unsigil (`TypeConstructor variant), [])
+              | SortType variant -> (ident_name (`TypeConstructor variant), [])
               | VariantCase (variant, _, fields, _) ->
-                  ( unsafe_unsigil (`TypeConstructor variant),
+                  ( ident_name (`TypeConstructor variant),
                     List.map trans_recordfield fields ))) )
 
   (** First pass; process like forward declaration: only add the information
@@ -205,7 +204,7 @@ module BasilASTLoader = struct
   and trans_declaration prog (x : decl) : load_st =
     match x with
     | Decl_Type sort ->
-        let name = unsafe_unsigil (`Type sort) in
+        let name = ident_name (`Type sort) in
         let typ = Types.mk_sort name in
         map_prog (fun prog -> Program.decl_typ prog typ) prog
     | Decl_RecType types ->
@@ -221,17 +220,18 @@ module BasilASTLoader = struct
           (fun p ->
             Program.decl_global p ~classification
               (Var.create
-                 (unsafe_unsigil (`Global bident))
+                 (ident_name (`Global bident))
                  ~scope (trans_type type')))
           prog
     | Decl_Var (modifiers, bident, type', spec) ->
         let classification = trans_varspec prog spec in
+        let attrib = ident_pos (`Global bident) |> Attrib.attr_of_loc in
         let scope = var_modifiers_shared modifiers in
         map_prog
           (fun p ->
-            Program.decl_global p ~classification
+            Program.decl_global ~attrib p ~classification
               (Var.create
-                 (unsafe_unsigil (`Global bident))
+                 (ident_name (`Global bident))
                  ~scope (trans_type type')))
           prog
     | Decl_ProgEmpty (ProcIdent (_, id), attr) -> prog
@@ -242,7 +242,7 @@ module BasilASTLoader = struct
           (fun p ->
             Program.decl_global p
               (Var.create
-                 (unsafe_unsigil (`Global glident))
+                 (ident_name (`Global glident))
                  ~scope:GlobalConst ftype))
           prog
     | Decl_FunNoType (glident, _, _) -> prog
@@ -251,7 +251,7 @@ module BasilASTLoader = struct
         let arg_types = List.map Var.typ bound in
         let rtype = Types.curry arg_types (trans_type typ) in
         let bvar =
-          Var.create (unsafe_unsigil (`Global glident)) ~scope:GlobalConst rtype
+          Var.create (ident_name (`Global glident)) ~scope:GlobalConst rtype
         in
         let fundef : Program.declaration =
           Function
@@ -264,9 +264,8 @@ module BasilASTLoader = struct
         map_prog (fun prog -> Program.add_decl prog fundef) prog
     | Decl_Axiom (name, _, _) ->
         let bvar =
-          Var.create (unsafe_unsigil (`Global name)) ~scope:GlobalConst Boolean
+          Var.create (ident_name (`Global name)) ~scope:GlobalConst Boolean
         in
-
         let fundef : Program.declaration =
           Function
             {
@@ -293,6 +292,7 @@ module BasilASTLoader = struct
         let formal_out_params_order = List.map param_to_formal out_params in
         let formal_out_params = StringMap.of_list formal_out_params_order in
         let _, attrib = trans_attrib_set prog ~binds:formal_in_params attrib in
+        let attrib = Attrib.join_map_locs attrib (Attrib.attr_of_loc id_pos) in
         Hashtbl.add prog.params_order id
           (formal_in_params_order, formal_out_params_order);
         let is_stub = Stdlib.(definition = ProcDef_Empty) in
@@ -353,9 +353,11 @@ module BasilASTLoader = struct
                      msg = Printf.sprintf "no type defined";
                    }))
     in
+    let attrib_pos = ident_pos (`Global glident) |> Attrib.attr_of_loc in
     let _, attrib = trans_attrib_set ~binds:StringMap.empty prog attrList in
+    let attrib = Attrib.join_map_locs attrib attrib_pos in
     let binding =
-      Var.create (unsafe_unsigil (`Global glident)) ~scope:GlobalConst rtype
+      Var.create (ident_name (`Global glident)) ~scope:GlobalConst rtype
     in
 
     let fundef : Program.declaration =
@@ -376,7 +378,7 @@ module BasilASTLoader = struct
         let _, attrib = trans_attrib_set ~binds:StringMap.empty prog attr in
         let body = trans_expr prog body in
         let bvar =
-          Var.create (unsafe_unsigil (`Global name)) ~scope:GlobalConst Boolean
+          Var.create (ident_name (`Global name)) ~scope:GlobalConst Boolean
         in
 
         let fundef : Program.declaration =
@@ -501,7 +503,7 @@ module BasilASTLoader = struct
   and trans_recordfield field =
     match field with
     | RecordField1 (id, ty) ->
-        Types.mk_field (unsafe_unsigil (`Type id)) (trans_type ty)
+        Types.mk_field (ident_name (`Type id)) (trans_type ty)
 
   and transRECORDTYPE (fields : field list) =
     Types.Struct
@@ -522,7 +524,7 @@ module BasilASTLoader = struct
     | TypeMapType maptype -> transMapType maptype
     | TypeBVType (BVType1 bvtype) -> transBVTYPE bvtype
     | TypeParen (_, typeT, _) -> trans_type typeT
-    | TypeVarType name -> Types.Variable (unsafe_unsigil (`Type name))
+    | TypeVarType name -> Types.Variable (ident_name (`Type name))
     | TypeRecordType (RecordType1 (_, fields, _)) -> transRECORDTYPE fields
     | TypePointerType (PointerType1 (_, l, u, _)) -> transPOINTERTYPE l u
 
@@ -556,7 +558,7 @@ module BasilASTLoader = struct
         with e ->
           let v =
             Var.create ~scope:LocalVar
-              (unsafe_unsigil (`Local localVar))
+              (ident_name (`Local localVar))
               (trans_type ty)
           in
           Logs.warn (fun m ->
@@ -569,7 +571,7 @@ module BasilASTLoader = struct
         with e ->
           let v =
             Var.create ~scope:GlobalVar
-              (unsafe_unsigil (`Global globalVar))
+              (ident_name (`Global globalVar))
               (trans_type ty)
           in
           Logs.warn (fun m ->
@@ -583,7 +585,7 @@ module BasilASTLoader = struct
     List.map
       (function
         | AttrKeyValue1 (bident, attr) ->
-            (unsafe_unsigil (`Attr bident), trans_attr ~binds p_st attr))
+            (ident_name (`Attr bident), trans_attr ~binds p_st attr))
       kv
     |> StringMap.of_list
 
@@ -602,7 +604,7 @@ module BasilASTLoader = struct
     | Attr_Str s -> `String (trans_str s)
 
   and trans_attrib_set ~binds p_st (atrs : attribSet) :
-      Attrib.loc option * Attrib.attrib_map =
+      Errors.loc option * Attrib.attrib_map =
     match atrs with
     | AttribSet_Empty -> (None, StringMap.empty)
     | AttribSet_Some (BeginRec (l, _), attrKeyValue, EndRec (r, _)) ->
@@ -748,11 +750,11 @@ module BasilASTLoader = struct
           (p_st, locs, `Stmt (Instr_Assign { al = List.rev assigns; attrib }))
       | Stmt_DirectCall
           (calllvars, bident, OpenParen (l, _), exprs, CloseParen (r, _))
-        when Option.is_some
-             @@ Intrinsic.of_string (unsafe_unsigil (`Proc bident)) ->
+        when Option.is_some @@ Intrinsic.of_string (ident_name (`Proc bident))
+        ->
           let p_st, lhs = trans_intrin_lhs p_st calllvars in
           let name =
-            Intrinsic.of_string (unsafe_unsigil (`Proc bident))
+            Intrinsic.of_string (ident_name (`Proc bident))
             |> Option.get_exn_or "unreachable"
           in
           let args =
@@ -764,7 +766,7 @@ module BasilASTLoader = struct
           (p_st, locs, `Call (Instr_IntrinCall { lhs; name; args; attrib }))
       | Stmt_DirectCall
           (calllvars, bident, OpenParen (l, _), exprs, CloseParen (r, _)) ->
-          let n = unsafe_unsigil (`Proc bident) in
+          let n = ident_name (`Proc bident) in
           let bloc = loc_ident (`Proc bident) in
           let procid =
             try Procedure.id @@ Program.get_proc_by_name n p_st.prog
@@ -829,7 +831,7 @@ module BasilASTLoader = struct
     | CallParams_Named nl ->
         nl
         |> List.map (function NamedCallArg1 (li, e) ->
-            (unsafe_unsigil (`Local li), trans_expr e))
+            (ident_name (`Local li), trans_expr e))
         |> StringMap.of_list
 
   and trans_intrin_lhs prog (x : lVars) : load_st * Var.t list =
@@ -882,7 +884,7 @@ module BasilASTLoader = struct
             match v with
             | NamedCallReturn1 (lVar, ident) ->
                 let p_st, v = trans_lvar prog lVar in
-                (p_st, (unsafe_unsigil (`Local ident), v) :: ls)
+                (p_st, (ident_name (`Local ident), v) :: ls)
           in
           let p_st, lvars = lvars |> List.fold_left f (prog, []) in
           (Attrib.attr_of_loc (Attrib.join_range l r), StringMap.of_list lvars)
@@ -898,7 +900,7 @@ module BasilASTLoader = struct
     lvs
     |> List.map (function
       | LocalTyped (i, t) ->
-          Var.create ~scope (unsafe_unsigil (`Local i)) (trans_type t)
+          Var.create ~scope (ident_name (`Local i)) (trans_type t)
       | LocalUntyped i -> lookup_local_decl ~binds:bound i p_st)
 
   and unpac_lambdaparen ?(bound = StringMap.empty) p_st lvs : Var.t list =
@@ -941,12 +943,12 @@ module BasilASTLoader = struct
     | LVar_Local (LocalTyped (bident, type')) ->
         assign_var prog
           (Var.create ~scope:LocalVar
-             (unsafe_unsigil (`Local bident))
+             (ident_name (`Local bident))
              (trans_type type'))
     | LVar_LocalConst (LocalTyped (bident, type')) ->
         assign_var prog
           (Var.create ~scope:LocalConst
-             (unsafe_unsigil (`Local bident))
+             (ident_name (`Local bident))
              (trans_type type'))
     | LVar_LocalConst (LocalUntyped _) -> failwith "type annotation needed"
     | LVar_Global (GlobalTyped (bident, type')) ->
@@ -955,7 +957,7 @@ module BasilASTLoader = struct
           with e ->
             let v =
               Var.create ~scope:GlobalVar
-                (unsafe_unsigil (`Global bident))
+                (ident_name (`Global bident))
                 (trans_type type')
             in
             Logs.warn (fun m ->
@@ -1003,7 +1005,7 @@ module BasilASTLoader = struct
               List.map
                 (function
                   | PhiExpr1 (blockIdent, var) ->
-                      ( find_block_ident (unsafe_unsigil (`Block blockIdent)),
+                      ( find_block_ident (ident_name (`Block blockIdent)),
                         trans_var prog var ))
                 phexprs
             in
@@ -1096,7 +1098,7 @@ module BasilASTLoader = struct
     | `Block (BlockIdent (pos, g)) -> pos
 
   and lookup_local_decl ?(binds = StringMap.empty) ident p_st =
-    let vn = unsafe_unsigil (`Local ident) in
+    let vn = ident_name (`Local ident) in
     let token_char_offset_range = Some (loc_ident (`Local ident)) in
     try
       match StringMap.find_opt vn binds with
@@ -1119,7 +1121,7 @@ module BasilASTLoader = struct
         raise (LoadError { token_char_offset_range; msg; input = None })
 
   and lookup_constructor p_st ident =
-    let vn = unsafe_unsigil (`Local ident) in
+    let vn = ident_name (`Local ident) in
     match Program.get_implicit_decl_by_name vn p_st.prog with
     | Program.(Some (VariantCase { constructor })) -> constructor
     | _ ->
@@ -1128,7 +1130,7 @@ module BasilASTLoader = struct
         raise (LoadError { token_char_offset_range; msg; input = None })
 
   and lookup_type p_st ident =
-    let vn = unsafe_unsigil (`Local ident) in
+    let vn = ident_name (`Local ident) in
     let token_char_offset_range = Some (loc_ident (`Local ident)) in
     let fail () =
       let msg = "Unable to find type declaration for:" ^ vn in
@@ -1143,7 +1145,7 @@ module BasilASTLoader = struct
     | _ -> fail ()
 
   and lookup_global_decl ident p_st =
-    let vn = unsafe_unsigil (`Global ident) in
+    let vn = ident_name (`Global ident) in
     let token_char_offset_range = Some (loc_ident (`Global ident)) in
     match Program.get_decl_by_name vn p_st.prog with
     | Some (Variable { binding }) -> binding
@@ -1183,22 +1185,27 @@ module BasilASTLoader = struct
                  fields),
             trans_type typ )
 
-  and unsafe_unsigil g : string =
+  and ident_name_pos g =
     match g with
     | `Type (LocalIdent (pos, g)) ->
-        if String.take 1 g |> String.for_all Char.is_lowercase_ascii then g
+        if String.take 1 g |> String.for_all Char.is_lowercase_ascii then
+          (pos, g)
         else failwith ("Invalid type name: " ^ g ^ " must start with lowercase.")
     | `TypeConstructor (LocalIdent (pos, g)) ->
-        if String.take 1 g |> String.for_all Char.is_uppercase_ascii then g
+        if String.take 1 g |> String.for_all Char.is_uppercase_ascii then
+          (pos, g)
         else
           failwith
             ("Invalid type constuctor name: " ^ g
            ^ " must start with lowercase.")
-    | `Global (GlobalIdent (pos, g)) -> g
-    | `Local (LocalIdent (pos, g)) -> g
-    | `Proc (ProcIdent (pos, g)) -> g
-    | `Block (BlockIdent (pos, g)) -> g
-    | `Attr (BIdent (pos, g)) -> g
+    | `Global (GlobalIdent (pos, g)) -> (pos, g)
+    | `Local (LocalIdent (pos, g)) -> (pos, g)
+    | `Proc (ProcIdent (pos, g)) -> (pos, g)
+    | `Block (BlockIdent (pos, g)) -> (pos, g)
+    | `Attr (BIdent (pos, g)) -> (pos, g)
+
+  and ident_name g : string = snd (ident_name_pos g)
+  and ident_pos g = fst (ident_name_pos g)
 
   and trans_cases p_st c =
     let cases =
@@ -1227,8 +1234,7 @@ module BasilASTLoader = struct
     BasilExpr.applyintrin ~op:`Cases cases
 
   and trans_field_assign trans_expr (f : fieldAssign) =
-    match f with
-    | FieldAssign1 (k, v) -> (unsafe_unsigil (`Local k), trans_expr v)
+    match f with FieldAssign1 (k, v) -> (ident_name (`Local k), trans_expr v)
 
   and trans_expr ?(binds = StringMap.empty) (p_st : load_st)
       (x : BasilIR.AbsBasilIR.expr) : BasilExpr.t =
@@ -1240,16 +1246,30 @@ module BasilASTLoader = struct
         p_st
     in
     let open Ops in
+    let attr_loc_range a b =
+      let a, b =
+        match (a, b) with OpenParen (a, _), CloseParen (b, _) -> (a, b)
+      in
+
+      Attrib.join_map_locs (Attrib.attr_of_loc a) (Attrib.attr_of_loc b)
+    in
+    let set_attr a e =
+      BasilExpr.unfix e
+      |> AbstractExpr.map_attrib (Attrib.merge_map_shadow a)
+      |> BasilExpr.fix
+    in
     match x with
     | Expr_Match (e, o, cases, c) ->
         let e = trans_expr e in
-        trans_match p_st e cases
-    | Expr_Cases (o, cases, c) -> trans_cases p_st cases
+        trans_match p_st e cases |> set_attr (attr_loc_range o c)
+    | Expr_Cases (o, cases, c) ->
+        trans_cases p_st cases |> set_attr (attr_loc_range o c)
     | Expr_Paren (o, e, c) ->
         trans_expr e |> BasilExpr.unfix
         |> AbstractExpr.map_attrib (fun e ->
             Attrib.merge_map_shadow e (expr_range_attr o c))
         |> BasilExpr.fix
+        |> set_attr (attr_loc_range o c)
     | Expr_Global (GlobalUntyped g) ->
         BasilExpr.rvar @@ lookup_global_decl g p_st
     | Expr_Global (GlobalTyped (g, type')) ->
@@ -1258,7 +1278,7 @@ module BasilASTLoader = struct
           with e ->
             let v =
               Var.create ~scope:GlobalVar
-                (unsafe_unsigil (`Global g))
+                (ident_name (`Global g))
                 (trans_type type')
             in
             Logs.warn (fun m ->
@@ -1274,33 +1294,40 @@ module BasilASTLoader = struct
         with Not_found | LoadError _ ->
           let v =
             Var.create ~scope:LocalVar
-              (unsafe_unsigil (`Local g))
+              (ident_name (`Local g))
               (trans_type type')
           in
           (*print_endline @@ "warn: local use before def: " ^ Var.to_string v;*)
           BasilExpr.rvar v)
-    | Expr_Assoc (binop, _, rs, _) -> (
+    | Expr_Assoc (binop, o, rs, c) -> (
         match trans_intrinop binop with
         | #AllOps.intrin as op ->
-            BasilExpr.applyintrin ~op (List.map trans_expr rs)
+            BasilExpr.applyintrin ~attrib:(attr_loc_range o c) ~op
+              (List.map trans_expr rs)
         | _ -> failwith "non-associative operator")
-    | Expr_Binary (binop, _, expr0, expr, _) -> (
+    | Expr_Binary (binop, o, expr0, expr, c) -> (
         let op = transBinOp binop in
         let e1 = trans_expr expr0 in
         let e2 = trans_expr expr in
+        let attrib = attr_loc_range o c in
         match op with
-        | #AllOps.binary as op -> BasilExpr.binexp ~op e1 e2
-        | #AllOps.intrin as op -> BasilExpr.applyintrin ~op [ e1; e2 ]
-        | `BVUGT -> BasilExpr.boolnot (BasilExpr.binexp ~op:`BVULE e1 e2)
-        | `BVUGE -> BasilExpr.boolnot (BasilExpr.binexp ~op:`BVULT e1 e2)
-        | `BVSGT -> BasilExpr.boolnot (BasilExpr.binexp ~op:`BVSLE e1 e2)
-        | `BVSGE -> BasilExpr.boolnot (BasilExpr.binexp ~op:`BVSLT e1 e2)
-        | `BVXNOR -> BasilExpr.boolnot (BasilExpr.binexp ~op:`BVXOR e1 e2)
-        | `BVNOR -> BasilExpr.boolnot (BasilExpr.binexp ~op:`BVOR e1 e2)
+        | #AllOps.binary as op -> BasilExpr.binexp ~attrib ~op e1 e2
+        | #AllOps.intrin as op -> BasilExpr.applyintrin ~attrib ~op [ e1; e2 ]
+        | `BVUGT -> BasilExpr.binexp ~attrib ~op:`BVULT e2 e1
+        | `BVUGE -> BasilExpr.binexp ~attrib ~op:`BVULE e2 e1
+        | `BVSGT -> BasilExpr.binexp ~attrib ~op:`BVSLT e2 e1
+        | `BVSGE -> BasilExpr.binexp ~attrib ~op:`BVSLE e2 e1
+        | `BVXNOR ->
+            BasilExpr.unexp ~op:`BVNOT ~attrib
+              (BasilExpr.binexp ~op:`BVXOR e1 e2)
+        | `BVNOR ->
+            BasilExpr.unexp ~op:`BVNOT ~attrib
+              (BasilExpr.binexp ~op:`BVOR e1 e2)
         | `BVCOMP ->
-            BasilExpr.unexp ~op:`BOOLTOBV1 (BasilExpr.binexp ~op:`EQ e1 e2)
-        | `INTGE -> BasilExpr.boolnot (BasilExpr.binexp ~op:`INTLT e1 e2)
-        | `INTGT -> BasilExpr.boolnot (BasilExpr.binexp ~op:`INTLE e1 e2))
+            BasilExpr.unexp ~attrib ~op:`BOOLTOBV1
+              (BasilExpr.binexp ~op:`EQ e1 e2)
+        | `INTGE -> BasilExpr.binexp ~attrib ~op:`INTLE e2 e1
+        | `INTGT -> BasilExpr.binexp ~attrib ~op:`INTLT e2 e1)
     | Expr_Unary (unop, o, expr, c) ->
         BasilExpr.unexp ~attrib:(expr_range_attr o c) ~op:(transUnOp unop)
           (trans_expr expr)
@@ -1318,12 +1345,12 @@ module BasilASTLoader = struct
           ~lo_incl:(transIntVal intval |> Z.to_int)
           (trans_expr expr)
     | Expr_FieldSet (record, fname, value) ->
-        let fname = unsafe_unsigil (`Local fname) in
+        let fname = ident_name (`Local fname) in
         BasilExpr.field_store ~field:fname (trans_expr record)
           (trans_expr value)
     | Expr_Field (record, fname) ->
         let fname =
-          String.chop_prefix ~pre:"." @@ unsafe_unsigil (`Attr fname)
+          String.chop_prefix ~pre:"." @@ ident_name (`Attr fname)
           |> Option.get_exn_or "safe by parser"
         in
         BasilExpr.field_read ~field:fname (trans_expr record)
@@ -1364,7 +1391,7 @@ module BasilASTLoader = struct
         BasilExpr.lambda ~attrib ~bound (trans_expr ~nbinds:bound e)
     | Expr_Let (id, param, rt, body, in_expr) ->
         (* construct lambda with let syntax *)
-        let id = unsafe_unsigil (`Local id) in
+        let id = ident_name (`Local id) in
         let bound = unpac_lambdaparen ~bound:StringMap.empty p_st param in
         let funct = Types.curry (List.map Var.typ bound) (trans_type rt) in
         let funvar = Var.create id funct ~scope:LocalConst in
@@ -1477,59 +1504,28 @@ end
 
 exception ILBParseError of { input : Pp_loc.Input.t; lexbuf : Lexing.lexbuf }
 
-let format_ploc input =
- fun f ->
-  Pp_loc.setup_highlight_tags f
-    ~single_line_underline:
-      {
-        open_tag =
-          (fun _ -> Format.ANSI_codes.string_of_style_list [ `Bold; `FG `Red ]);
-        close_tag = (fun _ -> Format.ANSI_codes.string_of_style `Reset);
-      }
-    ();
-
-  Pp_loc.pp ~input ~max_lines:5 f
-
-let show_ilbparseerror e =
-  match e with
-  | LoadError { input = None; msg } -> msg
-  | LoadError
-      { input = Some input; msg; token_char_offset_range = Some (btok, etok) }
-    ->
-      let o =
-        Format.asprintf "Error: %s%a%a" msg Format.pp_print_newline ()
-          (format_ploc input)
-          [ (Pp_loc.Position.of_offset btok, Pp_loc.Position.of_offset etok) ]
-      in
-      o
-  | ILBParseError { input; lexbuf } ->
-      let loc =
-        [
-          ( Pp_loc.Position.of_lexing @@ Lexing.lexeme_start_p lexbuf,
-            Pp_loc.Position.of_lexing @@ Lexing.lexeme_end_p lexbuf );
-        ]
-      in
-      let fname = (Lexing.lexeme_end_p lexbuf).pos_fname in
-      let lnum = (Lexing.lexeme_end_p lexbuf).pos_lnum in
-      let o =
-        Format.asprintf "Parse error:  %s:%d%a%a" fname lnum
-          Format.pp_print_newline () (format_ploc input) loc
-      in
-      o
-  | _ -> failwith "diff error"
-
-let () =
-  Printexc.register_printer (function
-    | BasilIR.BNFC_Util.Parse_error (b, e) ->
-        let fname = b.pos_fname in
-        let x = b.pos_lnum in
-        let col = b.pos_cnum - b.pos_bol in
-        Some (Printf.sprintf "Parse error in \"%s\" line %d col %d" fname x col)
-    | ILBParseError _ as e -> Some (show_ilbparseerror e)
-    | LoadError _ as e -> Some (show_ilbparseerror e)
-    | _ -> None (* for other exceptions *))
+let conv_error_info (f : unit -> 'a) =
+  Errors.protect_with_info
+    (function
+      | BasilIR.BNFC_Util.Parse_error (b, e) ->
+          let ctx_info =
+            Errors.location_position ~msg:"error token" (b, Some e)
+          in
+          Some (Errors.error ~ctx_info "bnfc parse error" Errors.InputError)
+      | ILBParseError { input; lexbuf } ->
+          let ctx_info = Errors.location_lexing ~msg:"next token" lexbuf in
+          Some (Errors.error ~input ~ctx_info "parse error" InputError)
+      | LoadError { token_char_offset_range; msg; input = i } ->
+          let ctx_info =
+            Option.map (Errors.location_loc ~msg) token_char_offset_range
+          in
+          Some (Errors.error ?input:i ?ctx_info "load error" InputError)
+      | Errors.BincamlError e -> Some e
+      | other -> Some (Errors.error_of_exn other))
+    f
 
 let concrete_prog_ast_of_channel ?input ?filename c =
+  conv_error_info @@ fun () ->
   let open BasilIR in
   let input = Option.get_or ~default:(Pp_loc.Input.in_channel c) input in
   let lexbuf = Lexing.from_channel ~with_positions:true c in
@@ -1539,6 +1535,7 @@ let concrete_prog_ast_of_channel ?input ?filename c =
 
 let concrete_prog_ast_of_string ?input ?filename str =
   let open BasilIR in
+  conv_error_info @@ fun () ->
   let input = Option.get_or ~default:(Pp_loc.Input.string str) input in
   let lexbuf = Lexing.from_string ~with_positions:true str in
   filename |> Option.iter (fun f -> Lexing.set_filename lexbuf f);
@@ -1546,6 +1543,7 @@ let concrete_prog_ast_of_string ?input ?filename str =
   with ParBasilIR.Error -> raise (ILBParseError { input; lexbuf })
 
 let parse_proc ?input lexbuf =
+  conv_error_info @@ fun () ->
   let open BasilIR in
   try ParBasilIR.pDecl LexBasilIR.token lexbuf
   with ParBasilIR.Error -> (
@@ -1556,6 +1554,7 @@ let parse_proc ?input lexbuf =
     | None -> raise (BNFC_Util.Parse_error (start_pos, end_pos)))
 
 let parse_expr ?input lexbuf =
+  conv_error_info @@ fun () ->
   let open BasilIR in
   try ParBasilIR.pExpr LexBasilIR.token lexbuf
   with ParBasilIR.Error -> (
@@ -1566,24 +1565,32 @@ let parse_expr ?input lexbuf =
     | None -> raise (BNFC_Util.Parse_error (start_pos, end_pos)))
 
 let parse_proc_string st c =
+  Errors.update_error (Errors.add_input ~input_string:c) @@ fun () ->
+  conv_error_info @@ fun () ->
   let lexbuf = Lexing.from_string ~with_positions:true c in
   let input = Pp_loc.Input.string c in
   let proc = parse_proc ~input lexbuf in
   BasilASTLoader.trans_definition st proc
 
 let parse_proc_channel st c =
+  Errors.update_error (Errors.add_input ~input_channel:c) @@ fun () ->
+  conv_error_info @@ fun () ->
   let lexbuf = Lexing.from_channel ~with_positions:true c in
   let proc = parse_proc lexbuf in
   BasilASTLoader.trans_definition st proc
 
 let parse_expr_string s =
+  conv_error_info @@ fun () ->
   let lexbuf = Lexing.from_string ~with_positions:true s in
   let input = Pp_loc.Input.string s in
+  Errors.update_error (Errors.add_input ~input) @@ fun () ->
+  conv_error_info @@ fun () ->
   let e = parse_expr ~input lexbuf in
   BasilASTLoader.trans_expr (load_st_empty ()) e
 
 let protect_parse parsefun =
   let parse input lexbuf =
+    conv_error_info @@ fun () ->
     let open BasilIR in
     try parsefun LexBasilIR.token lexbuf
     with ParBasilIR.Error -> (
@@ -1598,6 +1605,7 @@ let protect_parse parsefun =
 (** Loads a single block in isolation in a proceudre and returns it, does not
     support procedure calls or returns *)
 let load_single_block_proc ?(proc = "<proc>") ?input lexbuf =
+  conv_error_info @@ fun () ->
   let block = protect_parse BasilIR.ParBasilIR.pBlock input lexbuf in
   let prog, proc = Program.create_single_proc ~name:proc () in
   let st = { prog; params_order = Hashtbl.create 30; curr_proc = Some proc } in
@@ -1638,16 +1646,21 @@ let load_single_block ?proc ~input lexbuf =
   block
 
 let parse_single_block_proc ?proc s =
+  conv_error_info @@ fun () ->
   let lexbuf = Lexing.from_string ~with_positions:true s in
   let input = Pp_loc.Input.string s in
+  Errors.update_error (Errors.add_input ~input) @@ fun () ->
   load_single_block_proc ?proc ~input lexbuf
 
 let parse_single_block s : Program.bloc =
+  conv_error_info @@ fun () ->
   let lexbuf = Lexing.from_string ~with_positions:true s in
   let input = Pp_loc.Input.string s in
+  Errors.update_error (Errors.add_input ~input) @@ fun () ->
   load_single_block ~input lexbuf
 
 let ast_of_concrete_ast ?(lst : load_st option) ~name m =
+  conv_error_info @@ fun () ->
   Trace_core.with_span ~__FILE__ ~__LINE__ "convert-concrete-ast" @@ fun f ->
   let e = BasilASTLoader.trans_program ?lst ~name m in
   Program.procs e.prog |> Iter.map snd |> Iter.iter Lang.Check.wf_checks;
@@ -1655,6 +1668,8 @@ let ast_of_concrete_ast ?(lst : load_st option) ~name m =
 
 let ast_of_string ?(lst : load_st option) ?__LINE__ ?__FILE__ ?__FUNCTION__
     string =
+  Errors.update_error (Errors.add_input ~input_string:string) @@ fun () ->
+  conv_error_info @@ fun () ->
   let name =
     let open Option.Infix in
     let* line = __LINE__ >|= Int.to_string in
@@ -1670,6 +1685,8 @@ let ast_of_string ?(lst : load_st option) ?__LINE__ ?__FILE__ ?__FUNCTION__
     raise (LoadError { input = Some input; token_char_offset_range; msg })
 
 let ast_of_channel ?(lst : load_st option) ?input fname c =
+  Errors.update_error (Errors.add_input ~input_channel:c) @@ fun () ->
+  conv_error_info @@ fun () ->
   let m =
     Trace_core.with_span ~__FILE__ ~__LINE__ "load-concrete-ast" @@ fun f ->
     let m = concrete_prog_ast_of_channel ?input ~filename:fname c in
@@ -1680,6 +1697,7 @@ let ast_of_channel ?(lst : load_st option) ?input fname c =
     raise (LoadError { input; token_char_offset_range; msg })
 
 let ast_of_fname ?(lst : load_st option) fname =
+  conv_error_info @@ fun () ->
   IO.with_in fname (fun c ->
       ast_of_channel ?lst ~input:(Pp_loc.Input.file fname) fname c)
 
@@ -1709,7 +1727,9 @@ proc @main_4196260 () -> ()
   [%expect.unreachable]
 [@@expect.uncaught_exn
   {|
-  ( "Error: no such block: %main_7\
+  ( "Input error: load error\
+   \nRelated context:\
+   \nno such block: %main_7\
    \n12 |     goto(%main_7, %main_11);\
    \n              \027[1;31m^^^^^^^\027[0m\
    \n")
@@ -1737,7 +1757,9 @@ proc @main_4196260 () -> ()
   [%expect.unreachable]
 [@@expect.uncaught_exn
   {|
-  ( "Error: no such procedure: @cat_4198032\
+  ( "Input error: load error\
+   \nRelated context:\
+   \nno such procedure: @cat_4198032\
    \n7 |     call @cat_4198032();\
    \n             \027[1;31m^^^^^^^^^^^^\027[0m\
    \n")
@@ -1767,7 +1789,9 @@ proc @main_4196260 () -> ()
   [%expect.unreachable]
 [@@expect.uncaught_exn
   {|
-  ( "Parse error:  <string>:8\
+  ( "Input error: parse error\
+   \nRelated context:\
+   \nnext token\
    \n8 |     :bv1 := 1:bv1;\
    \n        \027[1;31m^\027[0m\
    \n")

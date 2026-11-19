@@ -46,10 +46,14 @@ open struct
   let pretty_fragment_attrib_map : Attrib.attrib_map -> Containers_pp.t =
    fun map ->
     pretty_fragment_attrib
-      (if StringMap.is_empty map then None else Some (`Assoc map))
+      (if
+         StringMap.is_empty
+           (StringMap.filter (fun k _ -> not @@ Attrib.is_internal_key k) map)
+       then None
+       else Some (`Assoc map))
 end
 
-let pretty_declaration d =
+let pretty_declaration ?(pretty_lambda = true) d =
   let open Containers_pp in
   let attrib_text =
     pretty_fragment_attrib_map
@@ -77,7 +81,8 @@ let pretty_declaration d =
   | Function { binding; definition = Function body } -> (
       let open AbstractExpr in
       match BasilExpr.unfix body with
-      | Lambda _ -> Expr.BasilExpr.pretty_let_single binding body None
+      | Lambda _ when pretty_lambda ->
+          Expr.BasilExpr.pretty_let_single binding body None
       | _ ->
           let args, body, rtype = (text "", body, Var.typ binding) in
           text "let "

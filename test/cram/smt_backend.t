@@ -13,7 +13,7 @@
   (define-fun trm () Bool true)
   (define-fun trm_1 () Bool true)
   
-  Failing Assertion: assert boolnot(bvslt(x_1:bv64, 0x0:bv64))
+  Failing Assertion: assert bvsle(0x0:bv64, x_1:bv64)
   Belonging to procedure: @f3
   Counterexample:
   (define-fun trm () Bool false)

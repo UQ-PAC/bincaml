@@ -73,11 +73,12 @@ let assume_proc_decl st ctx ?(no_constraint = false) (p : Program.proc) =
 let infer_proc st vc prog ctx ?(no_constraint = false) (p : Program.proc) =
   let spec = Procedure.specification p in
   let univ = TypeExpr.V.proc_univ @@ Procedure.id p in
+  Attrib.add_loc_error_ctx ~msg:"procedure" (Procedure.attrib p) @@ fun () ->
   let ibool_list b =
     List.map
       (fun a ->
         let a = infer_expr st vc ~univ [%here] a ctx in
-        let _ = unify st (bool_type st) (getty a) in
+        let _ = unify ~pos:[%here] st (bool_type st) (getty a) in
         a)
       b
   in
@@ -185,16 +186,20 @@ let infer_decl st visit_constraint prog scheme =
         (scheme, `Decl (decl_id, new_def))
     | Function { binding; definition; attrib } -> (
         (* elaboration of var binding *)
-        let binding s = retype_var st global_universe s binding in
+        let scheme = decl_var_typ st global_universe scheme binding in
+        let binding' s = retype_var st global_universe s binding in
+        Logs.debug (fun m ->
+            m "%s" (Attrib.to_string ~show_internal:true (`Assoc attrib)));
         match definition with
         | Axiom b ->
+            Attrib.add_loc_error_ctx ~msg:"declaration" attrib @@ fun () ->
             let b = infer_expr ~univ:global_universe [%here] b scheme in
-            let _ = unify st (getty b) (bool_type st) in
+            let _ = unify ~pos:[%here] st (getty b) (bool_type st) in
             let new_axiom scheme =
               Function
                 {
                   attrib;
-                  binding = binding scheme;
+                  binding = binding' scheme;
                   definition =
                     Axiom
                       (elaborate_expr st ~univ:global_universe [%here] b scheme);
@@ -204,17 +209,29 @@ let infer_decl st visit_constraint prog scheme =
         | Uninterpreted ->
             let new_uf s =
               Function
-                { binding = binding s; attrib; definition = Uninterpreted }
+                { binding = binding' s; attrib; definition = Uninterpreted }
             in
             (scheme, `Decl (decl_id, new_uf))
         | Function definition ->
+            let initial_binding_type =
+              lookup_var_typ st ~no_constraint:false global_universe scheme
+                binding
+              |> TypeExpr.find st
+            in
             let e =
-              infer_expr ~univ:global_universe [%here] definition scheme
+              Attrib.add_loc_error_ctx ~msg:"declaration" attrib @@ fun () ->
+              let e =
+                infer_expr ~univ:global_universe [%here] definition scheme
+              in
+              let et = AbsTypingExpr.unfix e |> AbstractExpr.get_typ in
+              let _ = unify ~pos:[%here] st initial_binding_type et in
+              e
             in
             let new_fundef scheme =
+              Attrib.add_loc_error_ctx ~msg:"declaration" attrib @@ fun () ->
               Function
                 {
-                  binding = binding scheme;
+                  binding = binding' scheme;
                   attrib;
                   definition =
                     Function
@@ -223,6 +240,7 @@ let infer_decl st visit_constraint prog scheme =
             in
             (scheme, `Decl (decl_id, new_fundef)))
     | Variable { binding; attrib; classification } ->
+        Attrib.add_loc_error_ctx ~msg:"declaration" attrib @@ fun () ->
         let scheme = decl_var_typ st global_universe scheme binding in
         let binding s = retype_var st global_universe s binding in
         let classification =
