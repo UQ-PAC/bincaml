@@ -29,17 +29,14 @@ module Value = struct
   let show a = show (fun _ _ -> ()) a
   let pp a = pp (fun _ _ -> ()) a
 
-  type cell = tc UnionFind.elem Fix.HashCons.cell
+  type cell = tc Fix.HashCons.cell
   and tc = V of cell t [@@unboxed]
 
   module Inner = struct
-    type t = tc UnionFind.elem
+    type t = tc
 
-    let equal a b =
-      match (UnionFind.get a, UnionFind.get b) with
-      | V a, V b -> equal Fix.HashCons.equal a b
-
-    let hash (e : t) = match UnionFind.get e with V e -> Hash.poly e
+    let equal a b = match (a, b) with V a, V b -> equal Fix.HashCons.equal a b
+    let hash (e : t) = Hash.poly e
   end
 end
 
@@ -59,31 +56,27 @@ functor
       type t = Value.cell
 
       let map_expr = Value.map
-      let fix (i : 'a expr) : t = H.make @@ UnionFind.make (Value.V i)
-
-      let unfix (i : t) : 'a expr =
-        match Fix.HashCons.data i |> UnionFind.find |> UnionFind.get with
-        | V i -> i
-
-      let union a b =
-        H.make @@ UnionFind.union (Fix.HashCons.data a) (Fix.HashCons.data b)
+      let fix (i : 'a expr) : t = H.make (Value.V i)
+      let unfix (i : t) : 'a expr = match Fix.HashCons.data i with V i -> i
+      let hash = Fix.HashCons.hash
+      let equal = Fix.HashCons.equal
     end
 
-    module Recursion = Bincaml_util.Recursionscheme.Recursion (Consed)
-    include Consed
-    include Recursion
+    module Memo = Fix.Memoize.ForHashedType (Consed)
 
-    let find = Fix.HashCons.data %> UnionFind.find %> H.make
-    let of_var v = find @@ fix @@ Vr v
+    let fix_impl = Memo.memoize (fun (v : Consed.t) -> UnionFind.make v)
+    let fix e = fix_impl (Consed.fix e)
+    let unfix e = UnionFind.find e |> UnionFind.get |> Consed.unfix
+    let find = UnionFind.find
+    let of_var v = fix @@ Value.Vr v
 
     let merge merge_fn a b =
-      let unwrap = function Value.V a -> a in
-      let merge_fn a b = Value.V (merge_fn (unwrap a) (unwrap b)) in
-      find @@ H.make
-      @@ UnionFind.merge merge_fn (Fix.HashCons.data a) (Fix.HashCons.data b)
+      let unwrap e = Consed.unfix e in
+      let merge_fn a b = Consed.fix @@ merge_fn (unwrap a) (unwrap b) in
+      find @@ UnionFind.merge merge_fn a b
 
-    let equal a b = Fix.HashCons.equal a b
-    let compare a b = Fix.HashCons.compare a b
+    let equal a b = UnionFind.eq a b
+    let compare a b = Fix.HashCons.compare (UnionFind.get a) (UnionFind.get b)
 
     let of_const (o : Ops.AllOps.const) =
       match o with
@@ -121,7 +114,7 @@ let extract_expr (module P : S) e =
   of_expr (module P) e
   |> Option.map P.unfix
   |> ( function
-  | Some (Value.Vr v) -> Some (Expr.BasilExpr.rvar v)
+  | Some (Value.Vr v) -> None
   | Some (Value.Val v) -> Some (VT.to_const v)
   | _ -> None )
   |> Option.get_or ~default:e
@@ -142,11 +135,6 @@ let analyse_phi (module P : S) lhs rhs =
   | [ h ] ->
       ignore (P.merge merge_fn h lhs);
       Some ()
-  | h :: tl ->
-      if List.for_all (P.equal h) tl then (
-        ignore (P.merge merge_fn h lhs);
-        Some ())
-      else None
   | h :: tl ->
       if List.for_all (P.equal h) tl then
         if not (P.equal lhs h) then (
@@ -200,8 +188,7 @@ let transform_proc (module P : S) =
       let b =
         b
         |> Block.map ~phi:Fun.id
-             (Stmt.map ~f_lvar:extract_var ~f_rvar:extract_var
-                ~f_expr:extract_expr)
+             (Stmt.map ~f_lvar:Fun.id ~f_rvar:extract_var ~f_expr:extract_expr)
       in
       { b with phis = List.filter (not % phi_redundant) b.phis })
 

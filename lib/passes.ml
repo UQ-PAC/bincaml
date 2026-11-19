@@ -162,7 +162,6 @@ module PassManager = struct
       invariants = Invariants.presupposes [ SSA ];
     }
 
-
   let cse_elim =
     {
       name = "cse-elim";
