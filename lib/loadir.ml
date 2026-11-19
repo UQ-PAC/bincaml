@@ -1313,24 +1313,21 @@ module BasilASTLoader = struct
         match op with
         | #AllOps.binary as op -> BasilExpr.binexp ~attrib ~op e1 e2
         | #AllOps.intrin as op -> BasilExpr.applyintrin ~attrib ~op [ e1; e2 ]
-        | `BVUGT ->
-            BasilExpr.boolnot ~attrib (BasilExpr.binexp ~op:`BVULE e1 e2)
-        | `BVUGE ->
-            BasilExpr.boolnot ~attrib (BasilExpr.binexp ~op:`BVULT e1 e2)
-        | `BVSGT ->
-            BasilExpr.boolnot ~attrib (BasilExpr.binexp ~op:`BVSLE e1 e2)
-        | `BVSGE ->
-            BasilExpr.boolnot ~attrib (BasilExpr.binexp ~op:`BVSLT e1 e2)
+        | `BVUGT -> BasilExpr.binexp ~attrib ~op:`BVULT e2 e1
+        | `BVUGE -> BasilExpr.binexp ~attrib ~op:`BVULE e2 e1
+        | `BVSGT -> BasilExpr.binexp ~attrib ~op:`BVSLT e2 e1
+        | `BVSGE -> BasilExpr.binexp ~attrib ~op:`BVSLE e2 e1
         | `BVXNOR ->
-            BasilExpr.boolnot ~attrib (BasilExpr.binexp ~op:`BVXOR e1 e2)
-        | `BVNOR -> BasilExpr.boolnot ~attrib (BasilExpr.binexp ~op:`BVOR e1 e2)
+            BasilExpr.unexp ~op:`BVNOT ~attrib
+              (BasilExpr.binexp ~op:`BVXOR e1 e2)
+        | `BVNOR ->
+            BasilExpr.unexp ~op:`BVNOT ~attrib
+              (BasilExpr.binexp ~op:`BVOR e1 e2)
         | `BVCOMP ->
             BasilExpr.unexp ~attrib ~op:`BOOLTOBV1
               (BasilExpr.binexp ~op:`EQ e1 e2)
-        | `INTGE ->
-            BasilExpr.boolnot ~attrib (BasilExpr.binexp ~op:`INTLT e1 e2)
-        | `INTGT ->
-            BasilExpr.boolnot ~attrib (BasilExpr.binexp ~op:`INTLE e1 e2))
+        | `INTGE -> BasilExpr.binexp ~attrib ~op:`INTLE e2 e1
+        | `INTGT -> BasilExpr.binexp ~attrib ~op:`INTLT e2 e1)
     | Expr_Unary (unop, o, expr, c) ->
         BasilExpr.unexp ~attrib:(expr_range_attr o c) ~op:(transUnOp unop)
           (trans_expr expr)
@@ -1728,7 +1725,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Input error: load error\
    \nRelated context:\
    \nno such block: %main_7\
@@ -1757,7 +1755,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Input error: load error\
    \nRelated context:\
    \nno such procedure: @cat_4198032\
@@ -1788,7 +1787,8 @@ proc @main_4196260 () -> ()
   in
   ignore @@ disable_backtrace_in run;
   [%expect.unreachable]
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   ( "Input error: parse error\
    \nRelated context:\
    \nnext token\
