@@ -546,6 +546,7 @@ module PassManager = struct
 
   let passes =
     [
+      equiv_partial_eval;
       aslp_semantics;
       lift_intrinsics_aarch64;
       hm_elaborate;

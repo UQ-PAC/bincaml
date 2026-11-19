@@ -721,6 +721,7 @@ module ExprHashCons = struct
     let t = cata BasilExpr.fix e |> BasilExpr.to_string_annot in
     Printf.sprintf "%d:%d:%d=%s==%s" i h ihash t full
 
+  let pp = show_dbg
   (*
 
   let cata_memo (alg : 'a abstract_expr -> 'a) =

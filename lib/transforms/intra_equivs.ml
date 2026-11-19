@@ -1,9 +1,10 @@
 open Lang
 open Common
+module E = Expr.ExprHashCons
 
 (* constant value type; todo: expand and unify with value type used by partial evaluator *)
 module VT = struct
-  type t = BV of Bitvec.t | I of Z.t | Bool of bool [@@deriving eq, ord]
+  type t = BV of Bitvec.t | I of Z.t | Bool of bool [@@deriving eq, ord, show]
 
   let to_const = function
     | BV i -> Expr.BasilExpr.bvconst i
@@ -16,8 +17,17 @@ module Value = struct
 
   let equal_op a b = Equal.poly a b
 
-  type 'a t = E of op * 'a list | Vr of Var.t | Val of VT.t | Poison
-  [@@deriving map, fold, eq]
+  type 'a t =
+    | E of
+        (Expr.ExprHashCons.t
+        [@printer fun fmt e -> fprintf fmt "%s" (Expr.ExprHashCons.show_dbg e)])
+    | Vr of Var.t
+    | Val of VT.t
+    | Poison
+  [@@deriving map, fold, eq, show]
+
+  let show a = show (fun _ _ -> ()) a
+  let pp a = pp (fun _ _ -> ()) a
 
   type cell = tc UnionFind.elem Fix.HashCons.cell
   and tc = V of cell t [@@unboxed]
@@ -29,10 +39,7 @@ module Value = struct
       match (UnionFind.get a, UnionFind.get b) with
       | V a, V b -> equal Fix.HashCons.equal a b
 
-    let hash (e : t) =
-      match UnionFind.get e with
-      | V e ->
-          fold (fun a b -> Hash.pair Fun.id Fun.id (a, Fix.HashCons.hash b)) 7 e
+    let hash (e : t) = match UnionFind.get e with V e -> Hash.poly e
   end
 end
 
@@ -52,9 +59,7 @@ functor
       type t = Value.cell
 
       let map_expr = Value.map
-
-      let fix (i : 'a expr) : t =
-        H.make @@ UnionFind.find @@ UnionFind.make (Value.V i)
+      let fix (i : 'a expr) : t = H.make @@ UnionFind.make (Value.V i)
 
       let unfix (i : t) : 'a expr =
         match Fix.HashCons.data i |> UnionFind.find |> UnionFind.get with
@@ -77,8 +82,8 @@ functor
       find @@ H.make
       @@ UnionFind.merge merge_fn (Fix.HashCons.data a) (Fix.HashCons.data b)
 
-    let equal a b =
-      UnionFind.eq (Fix.HashCons.data @@ find a) (Fix.HashCons.data @@ find b)
+    let equal a b = Fix.HashCons.equal a b
+    let compare a b = Fix.HashCons.compare a b
 
     let of_const (o : Ops.AllOps.const) =
       match o with
@@ -93,14 +98,15 @@ functor
 module type S = module type of Pack ()
 
 let of_expr (module P : S) e =
-  Expr.BasilExpr.unfix e |> function
+  let e = Expr.ExprHashCons.of_expr e in
+  Expr.ExprHashCons.unfix e |> function
   | RVar { id } -> Some (P.of_var id)
   | Constant { const } -> P.of_const const
-  | _ -> None
+  | o -> Some (P.fix (E e))
 
 let partial_eval_expr (module P : S) e =
   let read_var v =
-    P.of_var v |> P.find |> P.unfix |> function
+    P.of_var v |> P.unfix |> function
     | Val v -> Some (VT.to_const v)
     | _ -> None
   in
@@ -121,13 +127,12 @@ let extract_expr (module P : S) e =
   |> Option.get_or ~default:e
 
 let merge_fn a b =
+  Logs.debug (fun m -> m "unify %a %a" Value.pp a Value.pp b);
   match (a, b) with
   | Value.Poison, _ | _, Value.Poison -> Value.Poison
   | Val i, Val j -> if not @@ VT.equal i j then Poison else Val i
-  | Val i, Vr _ | Vr _, Val i -> Val i
+  | Val i, _ | _, Val i -> Val i
   | Vr i, _ | _, Vr i -> Vr i
-  | (E (op, args) as l), (E (op', args') as r) ->
-      if List.length args < List.length args' then l else r
   | a, b -> a
 
 let analyse_phi (module P : S) lhs rhs =
@@ -142,6 +147,13 @@ let analyse_phi (module P : S) lhs rhs =
         ignore (P.merge merge_fn h lhs);
         Some ())
       else None
+  | h :: tl ->
+      if List.for_all (P.equal h) tl then
+        if not (P.equal lhs h) then (
+          ignore (P.merge merge_fn h lhs);
+          Some ())
+        else None
+      else None
   | _ -> None
 
 let analyse_stmt (module P : S) stmt =
@@ -151,6 +163,7 @@ let analyse_stmt (module P : S) stmt =
   let did_anything = ref false in
   let cond_unif = function
     | a, Some b ->
+        ignore @@ P.merge merge_fn a b;
         if not @@ P.equal a b then (
           ignore @@ P.merge merge_fn a b;
           did_anything := true)
@@ -162,6 +175,7 @@ let analyse_stmt (module P : S) stmt =
 
 let analyse_stmt (module S : S) ~widen st (v : Analysis.Dataflow_graph.Vertex.t)
     =
+  Logs.debug (fun m -> m "%s" (Analysis.Dataflow_graph.Vertex.show v));
   match snd v with
   | Entry | Return -> None
   | Stmt (widen, stmt) -> analyse_stmt (module S) stmt
@@ -192,10 +206,54 @@ let transform_proc (module P : S) =
       { b with phis = List.filter (not % phi_redundant) b.phis })
 
 let analyse_proc p =
-  let module S = Pack () in
-  let _ =
-    Analysis.Dataflow_graph.SimpleSolver.fixpoint_fwd
-      ~transfer:(analyse_stmt (module S))
-      ~initial:() p
+  let module P = Pack () in
+  Analysis.Dataflow_graph.SimpleSolver.fixpoint_fwd
+    ~transfer:(analyse_stmt (module P))
+    ~initial:() p;
+  transform_proc (module P) p
+
+let%expect_test "blah" =
+  let module P = Pack () in
+  let v = Var.create "blah" Boolean in
+  let a = P.of_var v in
+  let b = P.of_var v in
+  if P.equal a b then print_endline "ok"
+
+let%expect_test "blah2" =
+  let module P = Pack () in
+  let v = Var.create "blah" Boolean in
+  let a = P.of_var v in
+  let b = P.of_var v in
+  let c = P.of_var (Var.create "c" Boolean) in
+  let d = P.merge merge_fn a b in
+  if P.equal d a then print_endline "ok"
+
+let%expect_test "blah2" =
+  let module P = Pack () in
+  let v = Var.create "blah" Boolean in
+  let value =
+    Option.get_exn_or "non-value?"
+    @@ of_expr (module P) (Expr.BasilExpr.boolconst true)
   in
-  transform_proc (module S) p
+  let a = P.of_var v in
+  let d = P.merge merge_fn a value in
+  let b = P.of_var v in
+  let c = P.of_var (Var.create "c" Boolean) in
+  let d = P.merge merge_fn a c in
+  let d = P.merge merge_fn c b in
+  let rvar = Expr.BasilExpr.rvar v in
+  let e = P.find @@ Option.get_exn_or "" @@ of_expr (module P) rvar in
+  let nv = P.of_var (Var.create "blah" Boolean) in
+  let nnv = P.of_var v in
+  if P.equal d a then print_endline "ok";
+  print_endline (Expr.BasilExpr.to_string @@ extract_expr (module P) rvar);
+  print_endline (Value.show @@ P.unfix e);
+  print_endline (Value.show @@ P.unfix value);
+  print_endline (Value.show @@ P.unfix b);
+  print_endline (Value.show @@ P.unfix nv);
+  print_endline (Value.show @@ P.unfix nnv)
+
+let%expect_test "vars" =
+  let a = Var.create "a" Boolean in
+  let b = Var.create "a" Boolean in
+  assert (Var.to_int a = Var.to_int b)
