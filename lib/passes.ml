@@ -154,6 +154,15 @@ module PassManager = struct
       invariants = Invariants.presupposes [ GtirbArm ] ~invalidates:[ GtirbArm ];
     }
 
+  let equiv_partial_eval =
+    {
+      name = "equiv-partial-eval";
+      apply = Proc Transforms.Intra_equivs.analyse_proc;
+      doc = "aggressive intraprocedural simplifier using union find";
+      invariants = Invariants.presupposes [ SSA ];
+    }
+
+
   let cse_elim =
     {
       name = "cse-elim";
