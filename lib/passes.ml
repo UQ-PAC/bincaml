@@ -694,6 +694,9 @@ module PassManager = struct
             Trace_core.with_span ~__FILE__ ~__LINE__
               ("check-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
             @@ fun _ ->
+            Attrib.add_loc_error_ctx ~msg:"checking procedure"
+              (Procedure.attrib proc)
+            @@ fun () ->
             (match app p proc with
             | false -> ()
             | true -> failwith @@ "Check failed: " ^ ID.to_string id);
@@ -705,6 +708,9 @@ module PassManager = struct
             Trace_core.with_span ~__FILE__ ~__LINE__
               ("transform-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
             @@ fun _ ->
+            Attrib.add_loc_error_ctx ~msg:"analysing procedure"
+              (Procedure.attrib proc)
+            @@ fun () ->
             let p = app proc in
             try
               Lang.Check.wf_checks p;

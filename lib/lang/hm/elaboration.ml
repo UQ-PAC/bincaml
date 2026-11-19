@@ -73,7 +73,7 @@ let assume_proc_decl st ctx ?(no_constraint = false) (p : Program.proc) =
 let infer_proc st vc prog ctx ?(no_constraint = false) (p : Program.proc) =
   let spec = Procedure.specification p in
   let univ = TypeExpr.V.proc_univ @@ Procedure.id p in
-  add_err_ctx (loc_attr ~msg:"procedure" (Procedure.attrib p)) @@ fun () ->
+  Attrib.add_loc_error_ctx ~msg:"procedure" (Procedure.attrib p) @@ fun () ->
   let ibool_list b =
     List.map
       (fun a ->
@@ -192,7 +192,7 @@ let infer_decl st visit_constraint prog scheme =
             m "%s" (Attrib.to_string ~show_internal:true (`Assoc attrib)));
         match definition with
         | Axiom b ->
-            add_err_ctx (loc_attr ~msg:"declaration" attrib) @@ fun () ->
+            Attrib.add_loc_error_ctx ~msg:"declaration" attrib @@ fun () ->
             let b = infer_expr ~univ:global_universe [%here] b scheme in
             let _ = unify ~pos:[%here] st (getty b) (bool_type st) in
             let new_axiom scheme =
@@ -219,7 +219,7 @@ let infer_decl st visit_constraint prog scheme =
               |> TypeExpr.find st
             in
             let e =
-              add_err_ctx (loc_attr ~msg:"declaration" attrib) @@ fun () ->
+              Attrib.add_loc_error_ctx ~msg:"declaration" attrib @@ fun () ->
               let e =
                 infer_expr ~univ:global_universe [%here] definition scheme
               in
@@ -228,7 +228,7 @@ let infer_decl st visit_constraint prog scheme =
               e
             in
             let new_fundef scheme =
-              add_err_ctx (loc_attr ~msg:"declaration" attrib) @@ fun () ->
+              Attrib.add_loc_error_ctx ~msg:"declaration" attrib @@ fun () ->
               Function
                 {
                   binding = binding' scheme;
@@ -240,7 +240,7 @@ let infer_decl st visit_constraint prog scheme =
             in
             (scheme, `Decl (decl_id, new_fundef)))
     | Variable { binding; attrib; classification } ->
-        add_err_ctx (loc_attr ~msg:"decl" attrib) @@ fun () ->
+        Attrib.add_loc_error_ctx ~msg:"declaration" attrib @@ fun () ->
         let scheme = decl_var_typ st global_universe scheme binding in
         let binding s = retype_var st global_universe s binding in
         let classification =

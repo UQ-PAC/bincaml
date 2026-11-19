@@ -1568,6 +1568,7 @@ let parse_expr ?input lexbuf =
     | None -> raise (BNFC_Util.Parse_error (start_pos, end_pos)))
 
 let parse_proc_string st c =
+  Errors.update_error (Errors.add_input ~input_string:c) @@ fun () ->
   conv_error_info @@ fun () ->
   let lexbuf = Lexing.from_string ~with_positions:true c in
   let input = Pp_loc.Input.string c in
@@ -1575,6 +1576,7 @@ let parse_proc_string st c =
   BasilASTLoader.trans_definition st proc
 
 let parse_proc_channel st c =
+  Errors.update_error (Errors.add_input ~input_channel:c) @@ fun () ->
   conv_error_info @@ fun () ->
   let lexbuf = Lexing.from_channel ~with_positions:true c in
   let proc = parse_proc lexbuf in
@@ -1584,6 +1586,8 @@ let parse_expr_string s =
   conv_error_info @@ fun () ->
   let lexbuf = Lexing.from_string ~with_positions:true s in
   let input = Pp_loc.Input.string s in
+  Errors.update_error (Errors.add_input ~input) @@ fun () ->
+  conv_error_info @@ fun () ->
   let e = parse_expr ~input lexbuf in
   BasilASTLoader.trans_expr (load_st_empty ()) e
 
@@ -1648,12 +1652,14 @@ let parse_single_block_proc ?proc s =
   conv_error_info @@ fun () ->
   let lexbuf = Lexing.from_string ~with_positions:true s in
   let input = Pp_loc.Input.string s in
+  Errors.update_error (Errors.add_input ~input) @@ fun () ->
   load_single_block_proc ?proc ~input lexbuf
 
 let parse_single_block s : Program.bloc =
   conv_error_info @@ fun () ->
   let lexbuf = Lexing.from_string ~with_positions:true s in
   let input = Pp_loc.Input.string s in
+  Errors.update_error (Errors.add_input ~input) @@ fun () ->
   load_single_block ~input lexbuf
 
 let ast_of_concrete_ast ?(lst : load_st option) ~name m =
@@ -1665,6 +1671,7 @@ let ast_of_concrete_ast ?(lst : load_st option) ~name m =
 
 let ast_of_string ?(lst : load_st option) ?__LINE__ ?__FILE__ ?__FUNCTION__
     string =
+  Errors.update_error (Errors.add_input ~input_string:string) @@ fun () ->
   conv_error_info @@ fun () ->
   let name =
     let open Option.Infix in
@@ -1681,6 +1688,7 @@ let ast_of_string ?(lst : load_st option) ?__LINE__ ?__FILE__ ?__FUNCTION__
     raise (LoadError { input = Some input; token_char_offset_range; msg })
 
 let ast_of_channel ?(lst : load_st option) ?input fname c =
+  Errors.update_error (Errors.add_input ~input_channel:c) @@ fun () ->
   conv_error_info @@ fun () ->
   let m =
     Trace_core.with_span ~__FILE__ ~__LINE__ "load-concrete-ast" @@ fun f ->
@@ -1723,7 +1731,10 @@ proc @main_4196260 () -> ()
 [@@expect.uncaught_exn
   {|
   ( "Related context:\
-   \nno such block: %main_7 in <?.il>Input error: load error\
+   \nno such block: %main_7\
+   \n12 |     goto(%main_7, %main_11);\
+   \n              \027[1;31m^^^^^^^\027[0m\
+   \nInput error: load error\
    \n\
    \n")
   |}]
@@ -1751,7 +1762,10 @@ proc @main_4196260 () -> ()
 [@@expect.uncaught_exn
   {|
   ( "Related context:\
-   \nno such procedure: @cat_4198032 in <?.il>Input error: load error\
+   \nno such procedure: @cat_4198032\
+   \n7 |     call @cat_4198032();\
+   \n             \027[1;31m^^^^^^^^^^^^\027[0m\
+   \nInput error: load error\
    \n\
    \n")
   |}]

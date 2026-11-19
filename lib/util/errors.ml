@@ -107,7 +107,7 @@ type error_info = {
 (** {2 Annotating error information} *)
 
 (** Add source file to error context *)
-let add_input ?input ?input_file ?input_channel c =
+let add_input ?input ?input_file ?input_channel ?input_string c =
   let input =
     Option.or_ c.input
       ~else_:
@@ -115,7 +115,10 @@ let add_input ?input ?input_file ?input_channel c =
            ~else_:
              (Option.or_
                 (Option.map Pp_loc.Input.file input_file)
-                ~else_:(Option.map Pp_loc.Input.in_channel input_channel)))
+                ~else_:
+                  (Option.or_
+                     (Option.map Pp_loc.Input.string input_string)
+                     ~else_:(Option.map Pp_loc.Input.in_channel input_channel))))
   in
   { c with input }
 

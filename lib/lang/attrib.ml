@@ -1,5 +1,4 @@
 open Common
-open Bincaml_util.Errors
 
 (** associative datastructure for attributes *)
 
@@ -131,3 +130,14 @@ let find_int_map k (m : attrib_map) =
   | Some (`CamlInt n) -> Some (Z.of_int n)
   | Some (`Integer n) -> Some n
   | _ -> None
+
+let add_loc_error_ctx ~msg attrib continue =
+  let loc =
+    (fun ~msg e ->
+      get_location e |> Option.map (fun l -> Errors.location_loc ~msg l))
+      ~msg attrib
+  in
+  match loc with
+  | None -> continue ()
+  | Some loc ->
+      Errors.update_error (Errors.add_error_context ~ctx_info:loc) continue
