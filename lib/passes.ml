@@ -90,6 +90,16 @@ module PassManager = struct
       invariants = Invariants.presupposes [ Params ];
     }
 
+  let aarch64_abi =
+    {
+      name = "aarch64-abi";
+      apply = Prog Transforms.Aarch64_abi.transform_program;
+      doc =
+        "WORK IN PROGRESS. This is (will be) the pass that implements ALL of \
+         the Aarch64-specific ABI rules and special register interpretations.";
+      invariants = Invariants.presupposes [ Params ];
+    }
+
   let sparams =
     {
       name = "simple-params";
