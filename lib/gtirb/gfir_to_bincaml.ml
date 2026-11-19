@@ -310,6 +310,7 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
       |> UUIDMap.of_iter
     in
     fun uuid ->
+      let returned = ref false and branched = ref false in
       UUIDMap.find_opt uuid verts_by_uuid
       |> Option.map_or ~default:Iter.empty List.to_iter
       |> Iter.flat_map_l (G.succ_e p.cfg)
@@ -317,11 +318,19 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
         (* fallthrough edges are inserted into gfir as unlabelled. *)
         | _, None, tgt -> (Type_Fallthrough, tgt)
         | _, Some edge, tgt -> (edge.type', tgt))
+      |> Iter.map (fun succ ->
+          (match succ with Type_Return, _ -> returned | _ -> branched) := true;
+          if !branched && !returned then
+            Printf.ksprintf failwith
+              "gfir: %s has both return successor and branch successor. \
+               successor addresses will be wrong."
+              (UUID.show uuid);
+          succ)
       |> Iter.filter_map (function
         | Type_Return, _ -> Some `True
         | (Type_Branch | Type_Fallthrough | Type_Call), tgt ->
             UUIDMap.find_opt (Vert.originating_uuid tgt) all_blocks
-            |> Option.map Gtirb.address
+            |> Option.flat_map Gtirb.address
             |> Option.map (fun addr -> `Addr addr)
         | (Type_Syscall | Type_Sysret), _ -> None)
   in
