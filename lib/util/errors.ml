@@ -170,7 +170,7 @@ let error_of_exn ?ctx_info ?input = function
       let new_err = add_error_context ?ctx_info ?input info in
       new_err
   | other ->
-      let m = error_message ?ctx_info "exception" (Exception other) in
+      let m = error_message ?ctx_info ?input "" (Exception other) in
       m
 
 (** Run a function but add error information to any exception it throws *)
@@ -236,14 +236,14 @@ let pp_bincamlerr fmt { message; reason; error_context; input } =
   let fmt_locations =
     Format.list ~sep:Format.newline (format_context_info ?source:input)
   in
-  Format.fprintf fmt "%s: %s%a" (show_error_class reason) message Format.newline
-    ();
-  Format.pp_force_newline fmt ();
   if List.is_empty error_context |> not then begin
     Format.fprintf fmt "Related context:";
     Format.pp_force_newline fmt ();
     Format.fprintf fmt "%a" fmt_locations (List.rev error_context)
-  end
+  end;
+  Format.fprintf fmt "%s: %s%a" (show_error_class reason) message Format.newline
+    ();
+  Format.pp_force_newline fmt ()
 
 let () =
   Printexc.register_printer (function

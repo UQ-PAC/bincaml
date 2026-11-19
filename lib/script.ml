@@ -244,7 +244,8 @@ let load_il st args =
                 load_st = Some st;
                 source_files = fname :: acc.source_files;
               })
-            { st with load_st = None } largs))
+            { st with load_st = None; source_files = [] }
+            largs))
 
 let run_transform st args =
   let args = P.(list string args) in
@@ -504,7 +505,7 @@ and atom_cmd ?(cmds = default_cmds) ?(echo_cmd = true) st
               let st = f st args in
               let st = { st with history = i_command :: st.history } in
               st
-          | None -> Errors.raise_error "not a command." Error))
+          | None -> Errors.raise_error ("not a command: " ^ cmd) Error))
 
 let of_channel ?st c =
   let st = Option.get_or ~default:init_st st in

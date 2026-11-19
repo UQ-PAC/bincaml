@@ -1522,7 +1522,7 @@ let conv_error_info (f : unit -> 'a) =
           let ctx_info =
             Option.map (Errors.location_loc ~msg) token_char_offset_range
           in
-          Some (Errors.error ?ctx_info "load error" InputError)
+          Some (Errors.error ?input:i ?ctx_info "load error" InputError)
       | Errors.BincamlError e -> Some e
       | other -> Some (Errors.error_of_exn other))
     f
@@ -1722,10 +1722,10 @@ proc @main_4196260 () -> ()
   [%expect.unreachable]
 [@@expect.uncaught_exn
   {|
-  ( "Input error: load error\
+  ( "Related context:\
+   \nno such block: %main_7 in <?.il>Input error: load error\
    \n\
-   \nRelated context:\
-   \nno such block: %main_7 in <?.il>")
+   \n")
   |}]
 
 let%expect_test "missing proc" =
@@ -1750,10 +1750,10 @@ proc @main_4196260 () -> ()
   [%expect.unreachable]
 [@@expect.uncaught_exn
   {|
-  ( "Input error: load error\
+  ( "Related context:\
+   \nno such procedure: @cat_4198032 in <?.il>Input error: load error\
    \n\
-   \nRelated context:\
-   \nno such procedure: @cat_4198032 in <?.il>")
+   \n")
   |}]
 
 let%expect_test "syntax error" =
@@ -1780,12 +1780,12 @@ proc @main_4196260 () -> ()
   [%expect.unreachable]
 [@@expect.uncaught_exn
   {|
-  ( "Input error: parse error\
-   \n\
-   \nRelated context:\
+  ( "Related context:\
    \nnext token\
    \n8 |     :bv1 := 1:bv1;\
    \n        \027[1;31m^\027[0m\
+   \nInput error: parse error\
+   \n\
    \n")
   |}]
 
