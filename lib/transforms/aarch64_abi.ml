@@ -44,23 +44,15 @@ let insert_callee_saved_assertions callee_saved proc =
         let var_to_callee_local_var =
           flip VarMap.find_opt callee_saved_locals %> Option.map snd
         in
+        let f_expr =
+          Lang.Expr.BasilExpr.substitute
+            (var_to_callee_local_var %> Option.map Lang.Expr.BasilExpr.rvar)
+        and f_lvar x = var_to_callee_local_var x |> Option.get_or ~default:x in
         proc
         |> Lang.Procedure.map_blocks_nondet
              (snd
              %> Lang.Block.map ~phi:Fun.id
-                  (Lang.Stmt.map
-                     ~f_expr:
-                       (Lang.Expr.BasilExpr.rewrite_down
-                          ~rw_fun:
-                            (( function
-                             | Lang.Expr.AbstractExpr.RVar { id } ->
-                                 var_to_callee_local_var id
-                             | _ -> None )
-                            %> Option.map Lang.Expr.BasilExpr.rvar
-                            %> Lang.Expr.BasilExpr.replace_opt))
-                     ~f_lvar:(fun x ->
-                       var_to_callee_local_var x |> Option.get_or ~default:x)
-                     ~f_rvar:Fun.id))
+                  (Lang.Stmt.map ~f_expr ~f_lvar ~f_rvar:Fun.id))
       in
 
       (* Store the initial values of globals, and use them to initialise the mutable local versions. *)
