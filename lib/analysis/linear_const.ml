@@ -391,6 +391,11 @@ module Label = struct
   let compose = flip compose
 end
 
+(* NOTE: this method can't easily extended to simultaneously perform constant
+   propagation, because expressions with two variables may be reduced to
+   expressions with one variable from const prop! detecting this live sounds
+   tricky *)
+
 module CopyNode = struct
   module EQ = Bincaml_util.Labelled_unionfind.MakeEquiv (Label)
 
@@ -404,77 +409,150 @@ module CopyNode = struct
   let init v : t = EQ.make { v; copied_from = [] }
 
   (** Set out edges of a given vertex (think `v := phi(a, b, c)` defining edges
-      `v -> a, v -> b, v -> c`). All cycles are trimmed (think v2 := phi(v1,
-      v2)) *)
+      `v -> a, v -> b, v -> c`). *)
   let set_copied v copied_from =
     assert (EQ.is_parent v);
     assert (EQ.is_eq_parent v);
-    let copied_from = List.filter (not % eq v) copied_from in
     EQ.update (fun b -> { b with copied_from }) v
 
-  (** Returns all reachable leaves from the given node, but aborts if the
-      predicate is violated or if a top edge cycle is found *)
-  let leaves (keep : t -> bool) v : edge list option =
-    let memo = ref VarMap.empty in
-    (* Determines whether all cycles through the node `root` are copy cycles *)
-    let is_id_cycle root =
-      let searching = ref VarSet.empty in
-      let searched = ref VarSet.empty in
-      let rec dfs f n =
-        if VarSet.mem (var n) !searched then true
-        else if VarSet.mem (var n) !searching then LF.is_id f
-        else
-          match copied_from n with
-          | [] -> true
-          | ls ->
-              searching := VarSet.add (var n) !searching;
-              let ans =
-                List.for_all
-                  (fun n' ->
-                    let f', n' = EQ.find_edge (f, n) in
-                    match VarMap.get (var n') !memo with
-                    | Some None -> if eq root n' then LF.is_id f' else dfs f' n'
-                    | _ -> true)
-                  ls
+  open struct
+    type status = Searching | Searched
+
+    let sccs_with_find find vs =
+      (* Tarjan's *)
+      let scc_map = ref VarMap.empty in
+      let sccs = ref [] in
+      let index = ref VarMap.empty in
+      let lowlink = ref VarMap.empty in
+      let on_stack = ref VarSet.empty in
+      let stack = Stack.create () in
+      let i = ref 0 in
+
+      let rec strongconnect v =
+        index := VarMap.add (var v) !i !index;
+        lowlink := VarMap.add (var v) !i !lowlink;
+        i := !i + 1;
+        Stack.push (var v) stack;
+        on_stack := VarSet.add (var v) !on_stack;
+
+        copied_from v
+        |> List.iter (fun w ->
+            let w = find w in
+            if not (VarMap.mem (var w) !index) then (
+              strongconnect w;
+              let ll =
+                min
+                  (VarMap.find (var v) !lowlink)
+                  (VarMap.find (var w) !lowlink)
               in
-              searched := VarSet.add (var n) !searched;
-              ans
+              lowlink := VarMap.add (var v) ll !lowlink)
+            else if VarSet.mem (var w) !on_stack then
+              let ll =
+                min (VarMap.find (var v) !lowlink) (VarMap.find (var w) !index)
+              in
+              lowlink := VarMap.add (var v) ll !lowlink);
+
+        if VarMap.find (var v) !lowlink = VarMap.find (var v) !index then (
+          let scc = ref VarSet.empty in
+          while
+            let w = Stack.pop stack in
+            on_stack := VarSet.remove w !on_stack;
+            scc := VarSet.add w !scc;
+            not @@ Var.equal (var v) w
+          do
+            ()
+          done;
+          sccs := !scc :: !sccs;
+          VarSet.iter (fun v -> scc_map := VarMap.add v !scc !scc_map) !scc)
       in
-      dfs LF.identity root
+      List.iter
+        (fun v ->
+          let v = find v in
+          if not @@ VarMap.mem (var v) !index then strongconnect v)
+        vs;
+      (!scc_map, !sccs |> List.rev)
+  end
+
+  (** Compute the strongly connected components in the subgraph reachable from
+      all vertices in [vs]. Returns a mapping of a variable to its scc and a
+      reverse topological ordering of the sccs. *)
+  let sccs = sccs_with_find (EQ.find %> snd)
+
+  (** Compute the strongly connected components if the subgraph reachable from
+      all variables in [vs] of the copy subgraph. Returns a mapping of a
+      variable to its scc and a reverse topological ordering of the sccs. *)
+  let copy_sccs = sccs_with_find EQ.find_eq
+
+  (** Compute the strongly connected components in the subgraph reachable from
+      [v]. *)
+  let sccs_of v = sccs [ v ] |> fst
+
+  (** Determines whether all cycles through the node `root` are identity cycles.
+
+      There is a non-id cycle at [root] iff there are two distinctly labelled
+      paths from root to another vertex which is in [root]'s scc. I think... The
+      reasoning is that you can then postcompose any path from that vertex back
+      to the root, and one of the two distinct now-obtained cycles must not be
+      the identity! I think................
+
+      It's at the very least an overapproximation... there may be a super super
+      rare edge case where two distinct edges compose to identity along the same
+      path back to the root as left inverses aren't necessarily unique. *)
+  let is_id_cycle ~sccs root =
+    let scc = VarMap.find (var root) sccs in
+    let edges = ref VarMap.empty in
+    let rec dfs f n =
+      let f, n = EQ.find_edge (f, n) in
+      if not @@ VarSet.mem (var n) scc then true
+      else
+        match VarMap.get (var n) !edges with
+        | Some f' -> LF.equal f f'
+        | None -> (
+            edges := VarMap.add (var n) f !edges;
+            match copied_from n with
+            | [] -> true
+            | ls -> ls |> List.for_all (fun n' -> dfs f n'))
     in
-    let rec dfs v f =
+    dfs LF.identity root
+
+  (** Returns all reachable "leaves" (nodes with no out-edges) from the given
+      node. If distinct paths to the same leaf have different labels, they are
+      joined.
+
+      If the supplied predicate is not met for any found leaves, the search
+      short circuits and None is returned.
+
+      If a non-identity cycle is found in the graph, None is returned, as else
+      there would possibly be infinitely many paths. *)
+  let leaves (keep : t -> bool) v : edge list option =
+    let status : status VarMap.t ref = ref VarMap.empty in
+    let sccs = sccs_of v in
+    let join =
+      VarMap.fold (fun v (f, n) acc ->
+          match VarMap.get v acc with
+          | Some (f', n') -> VarMap.add v (LF.join f f', n) acc
+          | None -> VarMap.add v (f, n) acc)
+    in
+    let rec dfs v f : edge VarMap.t option =
       let f, v = EQ.find_edge (f, v) in
-      match VarMap.get (var v) !memo with
-      | Some (Some l) -> Some l
-      (* If there's a cycle, ignore it if the composite of the cycle is id and
-         abort otherwise *)
-      | Some None when is_id_cycle v -> Some VarMap.empty
-      | Some None -> None
+      match VarMap.get (var v) !status with
+      (* We have already searched this node, and so its leaves will have
+         already been added to the list! *)
+      | Some Searched -> Some VarMap.empty
+      (* We have found a cycle! If all cycles are identity cycles, all is well
+         and we can skip recursing on this node. *)
+      | Some Searching -> Option.return_if (is_id_cycle ~sccs v) VarMap.empty
       | None -> (
           match copied_from v with
-          | [] ->
-              if keep v then Some (VarMap.singleton (var v) (f, v)) else None
-          | l :: ls ->
-              memo := VarMap.add (var v) None !memo;
-              let open Option.Infix in
-              let ans : _ option =
-                List.fold_left
-                  (fun acc l ->
-                    let* acc = acc in
-                    let* b = dfs l f in
-                    Some
-                      (VarMap.fold
-                         (fun v (f, n) acc ->
-                           match VarMap.get v acc with
-                           | Some (f', n') -> VarMap.add v (LF.join f f', n) acc
-                           | None -> VarMap.add v (f, n) acc)
-                         b acc))
-                  (dfs l f) ls
-              in
-              Option.iter
-                (fun a -> memo := VarMap.add (var v) (Some a) !memo)
-                ans;
-              ans)
+          | [] -> Option.return_if (keep v) (VarMap.singleton (var v) (f, v))
+          | ls ->
+              let open List.Traverse (Option) in
+              status := VarMap.add (var v) Searching !status;
+              ls
+              |> fold_m
+                   (fun acc l -> dfs l f |> Option.map (join acc))
+                   VarMap.empty
+              |> tap (fun _ -> status := VarMap.add (var v) Searched !status))
     in
     dfs v LF.identity |> Option.map (VarMap.values %> Iter.to_list)
 end
@@ -493,7 +571,9 @@ module CopyGraph = struct
       end)
       (Label)
 
-  let make_graph = make_graph CopyNode.copied_from
+  let make_graph =
+    make_graph (fun v ->
+        if CopyNode.EQ.is_parent v then CopyNode.copied_from v else [])
 end
 
 type call_info = {
@@ -502,12 +582,34 @@ type call_info = {
   args : Program.e StringMap.t;
 }
 
+module Graph = struct
+  type t = CopyNode.t VarMap.t
+
+  (** Return the best linear function representing the expression e if one
+      exists *)
+  let fun_of (g : t) e =
+    let f, v = LF.Extract.extract_expr e in
+    v
+    |> Option.map (fun v ->
+        VarMap.get v g
+        |> Option.map (fun v -> CopyNode.EQ.find_edge (f, v))
+        |> Option.map (fun (f, v) -> (f, CopyNode.var v))
+        |> Option.get_or ~default:(f, v))
+end
+
 module Solver = struct
+  (** Add edges from a phi assignment to the graph. *)
   let add_phi node_of (phi : Var.t Block.phi) =
     let l = node_of phi.lhs in
     let copied = List.map (fun (_, v) -> node_of v) phi.rhs in
     CopyNode.set_copied l copied
 
+  (** If the leaves of an output node of a called procedure are all inputs, then
+      we can try to propagate those paths back into the caller by composing with
+      the parameters in the call statement. This function does this.
+
+      If we did propagate new things, then the caller's graph has updated and we
+      update a worklist to indicate new information is to be propagated. *)
   let propagate_call node_of update_worklist s c ls =
     let open CopyNode in
     let open List.Traverse (Option) in
@@ -523,8 +625,6 @@ module Solver = struct
             if List.for_all (Var.equal v % snd) vs then
               let assigned = node_of c.caller_id @@ StringMap.find s c.lhs in
               if EQ.is_parent assigned then
-                (* i had so much fun writing this...
-                  match List.fold_left (( %> ) fst % LF.join) f vs with *)
                 match List.fold_left (fun f (g, _) -> LF.join f g) f vs with
                 | TopEdge | LF.Join _ -> ()
                 | f ->
@@ -534,6 +634,10 @@ module Solver = struct
                     update_worklist c.caller_id)
         | [] -> failwith "leaves should never be empty!")
 
+  (** Add edges corresponding to a statement to the graph. This can be either an
+      assignment, or a call to a procedure who's graph is already fully computed
+      (determined by sccs). If a call to an in-scc procedure is found, then we
+      log the callsite to be processed later. *)
   let add_intra_stmt summaries callers node_of pid component stmt =
     let open Stmt in
     match stmt with
@@ -568,6 +672,8 @@ module Solver = struct
 
   let exits = [ "@__assert_fail"; "@exit" ]
 
+  (** Adds assumed edges to procedures with no implementation. Exits get bottom
+      edges, and other procedures get identity edges describing the ARM ABI. *)
   let add_stub node_of proc =
     let open Option.Infix in
     let fin, fout =
@@ -607,11 +713,14 @@ module Solver = struct
 
   module Worklist = Worklist.Make (ID)
 
+  (** Solve for the graphs of all procedures in a given strongly connected
+      component. *)
   let solve_component (prog : Program.t) call_graph summaries
       (graphs : (ID.t, CopyNode.t VarMap.t) Hashtbl.t) component =
     let open CopyNode in
+    List.iter (fun pid -> Hashtbl.add graphs pid VarMap.empty) component;
     let node_of pid v =
-      let vm = Hashtbl.get_or_add graphs ~f:(const VarMap.empty) ~k:pid in
+      let vm = Hashtbl.find graphs pid in
       match VarMap.find_opt v vm with
       | Some n -> n
       | None ->
@@ -620,10 +729,11 @@ module Solver = struct
           Hashtbl.replace graphs pid vm;
           n
     in
-    (* Initialise the graph with all intraprocedural copies *)
+    (* Initialise the graph with all intraprocedural statements and out-of-scc
+       calls, and also track all in-scc calls *)
     let callers = Hashtbl.create 10 in
-    List.iter
-      (fun pid ->
+    component
+    |> List.iter (fun pid ->
         let proc = Program.proc prog pid in
         match Procedure.graph proc with
         | None -> add_stub (node_of pid) proc
@@ -633,9 +743,11 @@ module Solver = struct
                 Block.stmts_iter b
                 |> Iter.iter
                      (add_intra_stmt summaries callers node_of pid component);
-                List.iter (add_phi (node_of pid)) b.phis))
-      component;
-    (* The interproc part *)
+                List.iter (add_phi (node_of pid)) b.phis));
+    (* The interproc part:
+
+       Propagate in-scc call edges and if new information is found, update the
+       worklist to re-propagate further if necessary. *)
     let worklist = Worklist.create () in
     Worklist.add_list worklist component;
     while Worklist.non_empty worklist do
@@ -666,9 +778,13 @@ module Solver = struct
                 call leaves))
     done
 
-  type 'a skip_option = SSome of 'a | Skip | SNone
+  type 'a skip_option = SSome of 'a | Skip | SNone [@@deriving map]
 
-  (** Collapse copies through phis into copies *)
+  (** Find the earliest variable each variable is a function of, by adding edges
+      from variables with multiple out edges if all such edges have the same
+      parent.
+
+      For example if x = phi(y, z) and y = w, z = w, then x = w. *)
   let collapse_composites g =
     let open CopyNode in
     (* Invariant: var node in !searched =>
@@ -778,7 +894,7 @@ module Solver = struct
     VarMap.iter (const (search % snd % EQ.find)) g
 
   let solve (prog : Program.t) =
-    let graphs : (ID.t, CopyNode.t VarMap.t) Hashtbl.t = Hashtbl.create 100 in
+    let graphs : (ID.t, Graph.t) Hashtbl.t = Hashtbl.create 100 in
     let call_graph = Program.CallGraph.make_call_graph prog in
     let summaries = Hashtbl.create 100 in
     ( Trace_core.with_span ~__FILE__ ~__LINE__ "graph-creation" @@ fun _ ->
