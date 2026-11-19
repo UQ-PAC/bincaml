@@ -151,13 +151,15 @@ let reraise_error ?here ?ctx_info message (reason : error_class) =
   in
   Printexc.raise_with_backtrace (BincamlError e) bt
 
-let raise_error ?here ?ctx_info message (reason : error_class) =
+let raise_error ?here ?ctx_info ?(reason = Error) message =
   let e =
     error_message ?ctx_info message reason
     |> add_error_context
          ?ctx_info:(Option.map (context_callsite "thrown from") here)
   in
   raise (BincamlError e)
+
+let failwith = raise_error
 
 (** Run a function but add error information to an exception it throws *)
 let protect_with_info mod_info f =

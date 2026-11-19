@@ -505,7 +505,7 @@ and atom_cmd ?(cmds = default_cmds) ?(echo_cmd = true) st
               let st = f st args in
               let st = { st with history = i_command :: st.history } in
               st
-          | None -> Errors.raise_error ("not a command: " ^ cmd) Error))
+          | None -> Errors.raise_error ("not a command: " ^ cmd)))
 
 let of_channel ?st c =
   let st = Option.get_or ~default:init_st st in
