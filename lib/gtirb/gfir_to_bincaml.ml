@@ -305,25 +305,24 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
     let verts_by_uuid =
       Iter.from_iter (flip Gfir.G.iter_vertex p.cfg)
       |> Iter.map (Pair.dup_map Vert.uuid)
-      |> Iter.map Pair.swap |> UUIDMap.of_iter
+      |> Iter.map Pair.swap
+      |> Iter.map (Pair.map_snd List.singleton)
+      |> UUIDMap.of_iter
     in
     fun uuid ->
       UUIDMap.find_opt uuid verts_by_uuid
-      |> Option.map_or ~default:[] (G.succ_e p.cfg)
-      |> Iter.of_list
+      |> Option.map_or ~default:Iter.empty List.to_iter
+      |> Iter.flat_map_l (G.succ_e p.cfg)
       |> Iter.map (function
-        (* fallthrough edges are inserted as unlabelled. *)
+        (* fallthrough edges are inserted into gfir as unlabelled. *)
         | _, None, tgt -> (Type_Fallthrough, tgt)
         | _, Some edge, tgt -> (edge.type', tgt))
       |> Iter.filter_map (function
         | Type_Return, _ -> Some `True
         | (Type_Branch | Type_Fallthrough | Type_Call), tgt ->
-            let open Option in
-            let* tgt =
-              UUIDMap.find_opt (Vert.originating_uuid tgt) all_blocks
-            in
-            let+ addr = Gtirb.address tgt in
-            `Addr addr
+            UUIDMap.find_opt (Vert.originating_uuid tgt) all_blocks
+            |> Option.map Gtirb.address
+            |> Option.map (fun addr -> `Addr addr)
         | (Type_Syscall | Type_Sysret), _ -> None)
   in
   let proc = Lang.Procedure.create ~requires p.id () in
