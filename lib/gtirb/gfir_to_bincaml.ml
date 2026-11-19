@@ -306,7 +306,7 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
       Iter.from_iter (flip Gfir.G.iter_vertex p.cfg)
       |> Iter.map (Pair.dup_map Vert.uuid)
       |> Iter.map Pair.swap
-      |> Iter.map (Pair.map_snd List.singleton)
+      |> Iter.map (Pair.map_snd List.return)
       |> UUIDMap.of_iter
     in
     fun uuid ->
