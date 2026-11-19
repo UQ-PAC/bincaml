@@ -9,9 +9,13 @@ open Conf
 module Result = OResult
 
 open struct
-  let addr_equal_expr addr =
-    Lang.Expr.BasilExpr.(
-      binexp ~op:`EQ (bvconst (Bitvec.of_int ~size:64 addr)) (rvar conf.pc_var))
+  let addr_equal_expr = function
+    | `Addr addr ->
+        Lang.Expr.BasilExpr.(
+          binexp ~op:`EQ
+            (bvconst (Bitvec.of_int ~size:64 addr))
+            (rvar conf.pc_var))
+    | `True -> Lang.Expr.BasilExpr.boolconst true
 
   let sanitize_proc_name p =
     List.fold_left (fun a sub -> String.replace ~sub ~by:"" a) p [ "@"; "." ]
@@ -46,7 +50,7 @@ let add_new_simple_block ?(name_suffix = "") ?(attrib = StringMap.empty)
   let open Option in
   let guard =
     let* addr = addr in
-    let guard = addr_equal_expr addr in
+    let guard = addr_equal_expr (`Addr addr) in
     let guard =
       Stmt.Instr_Assume { body = guard; branch = false; attrib = Attrib.empty }
     in
@@ -297,19 +301,38 @@ let temp_proc_to_ir_proc all_blocks m (p : temp_proc) =
   in
 
   (* Addresses of successor blocks to [uuid] *)
-  let succ_addr uuid =
-    let verts =
-      Iter.from_iter (fun f -> Gfir.G.iter_vertex f p.cfg)
-      |> Iter.filter (fun x -> UUID.equal (Vert.uuid x) uuid)
+  let succ_addr =
+    let verts_by_uuid =
+      Iter.from_iter (flip Gfir.G.iter_vertex p.cfg)
+      |> Iter.map (Pair.dup_map Vert.uuid)
+      |> Iter.map Pair.swap
+      |> Iter.map (Pair.map_snd List.return)
+      |> UUIDMap.of_iter
     in
-    try
-      Gfir.(
-        verts
-        |> Iter.flat_map (fun v -> G.succ p.cfg v |> List.to_iter)
-        |> Iter.filter_map (fun v ->
-            UUIDMap.find_opt (Vert.originating_uuid v) all_blocks)
-        |> Iter.filter_map Gtirb.address)
-    with Invalid_argument _ -> Iter.empty
+    fun uuid ->
+      let returned = ref false and branched = ref false in
+      UUIDMap.find_opt uuid verts_by_uuid
+      |> Option.map_or ~default:Iter.empty List.to_iter
+      |> Iter.flat_map_l (G.succ_e p.cfg)
+      |> Iter.map (function
+        (* fallthrough edges are inserted into gfir as unlabelled. *)
+        | _, None, tgt -> (Type_Fallthrough, tgt)
+        | _, Some edge, tgt -> (edge.type', tgt))
+      |> Iter.map (fun succ ->
+          (match succ with Type_Return, _ -> returned | _ -> branched) := true;
+          if !branched && !returned then
+            Printf.ksprintf failwith
+              "gfir: %s has both return successor and branch successor. \
+               successor addresses will be wrong."
+              (UUID.show uuid);
+          succ)
+      |> Iter.filter_map (function
+        | Type_Return, _ -> Some `True
+        | (Type_Branch | Type_Fallthrough | Type_Call), tgt ->
+            UUIDMap.find_opt (Vert.originating_uuid tgt) all_blocks
+            |> Option.flat_map Gtirb.address
+            |> Option.map (fun addr -> `Addr addr)
+        | (Type_Syscall | Type_Sysret), _ -> None)
   in
   let proc = Lang.Procedure.create ~requires p.id () in
 
