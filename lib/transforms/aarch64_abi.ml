@@ -24,7 +24,7 @@ let make_unchanged_assertion (x : Var.t) =
   let open Lang.Expr.BasilExpr in
   binexp ~op:`EQ (rvar x) (unexp ~op:`Old (rvar x))
 
-let insert_callee_saved_assertions proc callee_saved =
+let insert_callee_saved_assertions callee_saved proc =
   match Lang.Procedure.graph proc with
   | None -> proc
   | Some _ ->
@@ -109,11 +109,8 @@ let transform_procedure proc =
     modifies_globs |> List.partition variable_is_callee_saved
   in
 
-  let proc =
-    Lang.Procedure.set_specification proc { spec with modifies_globs }
-  in
-
-  insert_callee_saved_assertions proc callee_saved
+  Lang.Procedure.set_specification proc { spec with modifies_globs }
+  |> insert_callee_saved_assertions callee_saved
 
 let transform_program prog =
   prog |> Lang.Program.map_procedures (Fun.const transform_procedure)
