@@ -1,9 +1,8 @@
 (** TODO: THE REST OF THE ABI. at the moment, this just implements removing of
     parameters from modsets which are callee-preserved.
 
-    At the moment, it also pre-supposes parameter form. However, parameter form
-    inference should actually be moved into here since it depends very much on
-    the calling convention. *)
+    At the moment, this should be run BEFORE parameter pass. This is so we can
+    filter the modsets before they get turned into parameters. *)
 
 open Bincaml_util.Common
 
@@ -16,9 +15,110 @@ let callee_saved_names =
   and special_regs = Iter.of_array [| "$SP"; "$LR"; "$FP" |] in
   Iter.append gpregs special_regs |> Iter.to_array
 
-let variable_is_callee_saved v = Array.mem (Var.name v) callee_saved_names
+let variable_is_callee_saved v =
+  (not (Var.equal_scope (Var.scope v) GlobalVarShared))
+  && Array.mem (Var.name v) callee_saved_names
 
-let transform_program prog = prog
-  |> Lang.Program.map_procedures (fun pid proc ->
-      let { captures_glob; modifies_glob } = failwith "blah"
-    )
+(** Returns [x == Old(x)] *)
+let make_unchanged_assertion (x : Var.t) =
+  let open Lang.Expr.BasilExpr in
+  binexp ~op:`EQ (rvar x) (unexp ~op:`Old (rvar x))
+
+let insert_callee_saved_assertions proc callee_saved =
+  match Lang.Procedure.graph proc with
+  | None -> proc
+  | Some _ ->
+      let callee_saved_locals =
+        callee_saved
+        |> List.map (fun global ->
+            let nm = Var.name global and ty = Var.typ global in
+            ( global,
+              ( Lang.Procedure.fresh_var proc ~pure:true ~name:("initial_" ^ nm)
+                  ty,
+                Lang.Procedure.fresh_var proc ~name:("local_" ^ nm) ty ) ))
+        |> VarMap.of_list
+      in
+
+      (* NOTE: this must happen before inserting the entry/exit copying, so as to not affect those. *)
+      let proc =
+        let var_to_callee_local_var =
+          flip VarMap.find_opt callee_saved_locals %> Option.map snd
+        in
+        proc
+        |> Lang.Procedure.map_blocks_nondet
+             (snd
+             %> Lang.Block.map ~phi:Fun.id
+                  (Lang.Stmt.map
+                     ~f_expr:
+                       (Lang.Expr.BasilExpr.rewrite_down
+                          ~rw_fun:
+                            (( function
+                             | Lang.Expr.AbstractExpr.RVar { id } ->
+                                 var_to_callee_local_var id
+                             | _ -> None )
+                            %> Option.map Lang.Expr.BasilExpr.rvar
+                            %> Lang.Expr.BasilExpr.replace_opt))
+                     ~f_lvar:(fun x ->
+                       var_to_callee_local_var x |> Option.get_or ~default:x)
+                     ~f_rvar:Fun.id))
+      in
+
+      (* Store the initial values of globals, and use them to initialise the mutable local versions. *)
+      let proc, fresh_entry =
+        Lang.Procedure.fresh_block ~name:"callee_saved_registers_entry" proc
+          ~stmts:
+            (let al =
+               VarMap.to_iter callee_saved_locals
+               |> Iter.flat_map_l (fun (global, (initial, local)) ->
+                   let global = Lang.Expr.BasilExpr.rvar global in
+                   [ (initial, global); (local, global) ])
+               |> Iter.to_list
+             in
+             [ Lang.Stmt.Instr_Assign { al; attrib = Lang.Attrib.empty } ])
+          ()
+      in
+      let proc, fresh_exit =
+        Lang.Procedure.fresh_block ~name:"callee_saved_registers_exit" proc
+          ~stmts:
+            (VarMap.to_iter callee_saved_locals
+            |> Iter.map (fun (_, (initial, local)) ->
+                Lang.Expr.BasilExpr.(binexp ~op:`EQ (rvar initial) (rvar local)))
+            |> Iter.map (fun body ->
+                Lang.Stmt.Instr_Assert { body; attrib = Lang.Attrib.empty })
+            |> Iter.to_list)
+          ()
+      in
+      proc
+      |> Lang.Procedure.map_graph (fun g ->
+          let g =
+            g
+            |> Lang.Procedure.transplant_succ_edges_v ~from:Entry
+                 ~to_:(End fresh_entry)
+            |> Lang.Procedure.transplant_pred_edges_v ~from:Return
+                 ~to_:(Begin fresh_exit)
+          in
+          let g = Lang.Procedure.G.add_edge g Entry (Begin fresh_entry) in
+          let g = Lang.Procedure.G.add_edge g (End fresh_exit) Return in
+          g)
+
+let transform_procedure proc =
+  let spec = Lang.Procedure.specification proc in
+  let { Lang.Procedure.modifies_globs; ensures } = spec in
+
+  let callee_saved, modifies_globs =
+    modifies_globs |> List.partition variable_is_callee_saved
+  in
+
+  let callee_saved_postconditions =
+    callee_saved |> List.map make_unchanged_assertion
+  in
+  let ensures = callee_saved_postconditions @ ensures in
+
+  let proc =
+    Lang.Procedure.set_specification proc { spec with modifies_globs; ensures }
+  in
+
+  insert_callee_saved_assertions proc callee_saved
+
+let transform_program prog =
+  prog |> Lang.Program.map_procedures (Fun.const transform_procedure)
