@@ -5,6 +5,12 @@
   (run-transforms gamma-vars)
   bincaml: [ERROR] global Gamma_$x:bool should have global sigil $
   (dump-il after.il)
+  bincaml: [WARNING] This dump-il output cannot be re-parsed: Input error: parse error
+  Related context:
+  next token
+  3 |   modifies Gamma_$x:bool, $x:bv64
+                 ^^^^^^^^
+  
 
   $ diff before.il after.il
   2,6c2,6
