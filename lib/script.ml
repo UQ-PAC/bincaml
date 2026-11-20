@@ -178,12 +178,16 @@ let dump_il st ofile =
       let s = Buffer.to_bytes b |> Bytes.unsafe_to_string in
 
       let old_reporter = Logs.reporter () in
-      ignore
-        (Fun.protect
-           ~finally:(fun () -> Logs.set_reporter old_reporter)
-           (fun () ->
-             Logs.set_reporter Logs.nop_reporter;
-             Loader.Loadir.ast_of_string s));
+      Fun.protect
+        ~finally:(fun () -> Logs.set_reporter old_reporter)
+        (fun () ->
+          Logs.set_reporter Logs.nop_reporter;
+          match Loader.Loadir.ast_of_string s with
+          | _ -> ()
+          | exception e ->
+              Logs.warn (fun m ->
+                  m "This dump-il output cannot be re-parsed: %s"
+                    (Printexc.to_string e)));
 
       output_string c s);
   st
