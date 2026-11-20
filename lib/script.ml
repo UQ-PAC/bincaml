@@ -167,7 +167,19 @@ end
 
 let dump_il st ofile =
   let ofile = P.(opt string ofile) in
-  file_opt ofile (fun c -> Program.pretty_to_chan c (get_prog st));
+  file_opt ofile (fun c ->
+      let p = get_prog st |> Lang.Program.prog_pretty in
+
+      let b = Buffer.create 1024 in
+      let fmt = Format.formatter_of_buffer b in
+
+      Containers_pp.Pretty.to_format ~width:80 fmt p;
+      Format.flush fmt ();
+      let s = Buffer.to_bytes b |> Bytes.unsafe_to_string in
+
+      ignore (Loader.Loadir.ast_of_string s);
+
+      output_string c s);
   st
 
 let dump_boogie st ofile =
