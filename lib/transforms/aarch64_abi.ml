@@ -102,7 +102,9 @@ let transform_procedure proc =
   in
 
   (* TODO: for non-stub procedures, it would be nice to avoid manually filtering the modset.
-     instead, we should just re-run the modset inference and it should pick it up. *)
+     instead, we should just re-run the modset inference and it should pick it up.
+
+     This is not possible ATM because the spec_modsets transform is whole-program. *)
   Lang.Procedure.set_specification proc { spec with modifies_globs }
   |> insert_callee_saved_assertions callee_saved
 
