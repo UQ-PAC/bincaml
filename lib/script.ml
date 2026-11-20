@@ -177,7 +177,11 @@ let dump_il st ofile =
       Format.flush fmt ();
       let s = Buffer.to_bytes b |> Bytes.unsafe_to_string in
 
-      ignore (Loader.Loadir.ast_of_string s);
+      let old_reporter = Logs.reporter () in
+      ignore
+        (Fun.protect
+           ~finally:(fun () -> Logs.set_reporter old_reporter)
+           (fun () -> Loader.Loadir.ast_of_string s));
 
       output_string c s);
   st
