@@ -38,12 +38,12 @@ let insert_callee_saved_assertions callee_saved proc =
                 Lang.Procedure.fresh_var proc ~name:("local_" ^ nm) ty ) ))
         |> VarMap.of_list
       in
+      let var_to_callee_local_var v =
+        VarMap.find_opt v callee_saved_locals |> Option.map snd
+      in
 
       (* NOTE: this must happen before inserting the entry/exit copying, so as to not affect those. *)
       let proc =
-        let var_to_callee_local_var =
-          flip VarMap.find_opt callee_saved_locals %> Option.map snd
-        in
         let f_expr =
           Lang.Expr.BasilExpr.substitute
             (var_to_callee_local_var %> Option.map Lang.Expr.BasilExpr.rvar)
