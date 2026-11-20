@@ -19,6 +19,12 @@
   (run-transforms linear-copy)
   (run-transforms dynamic-single-assignment)
   (dump-il after.il)
+  bincaml: [WARNING] This dump-il output cannot be re-parsed: Input error: parse error
+  Related context:
+  next token
+  21 |   requires ($me_addr_is_heap) { .boogie = { .msg = "Memory Error: Invalid Free (non heap object)" } }(mem_encoding_in:memory_encoding,
+                                     ^
+  
   (dump-boogie out.bpl)
   $ boogie out.bpl
   Memory Error: Invalid Free (object not live)
@@ -60,6 +66,12 @@
   (run-transforms linear-copy)
   (run-transforms dynamic-single-assignment)
   (dump-il after.il)
+  bincaml: [WARNING] This dump-il output cannot be re-parsed: Input error: parse error
+  Related context:
+  next token
+  21 |   requires ($me_addr_is_heap) { .boogie = { .msg = "Memory Error: Invalid Free (non heap object)" } }(mem_encoding_in:memory_encoding,
+                                     ^
+  
   (dump-boogie out.bpl)
 
   $ boogie out.bpl

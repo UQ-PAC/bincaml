@@ -167,7 +167,29 @@ end
 
 let dump_il st ofile =
   let ofile = P.(opt string ofile) in
-  file_opt ofile (fun c -> Program.pretty_to_chan c (get_prog st));
+  file_opt ofile (fun c ->
+      let p = get_prog st |> Lang.Program.prog_pretty in
+
+      let b = Buffer.create 1024 in
+      let fmt = Format.formatter_of_buffer b in
+
+      Containers_pp.Pretty.to_format ~width:80 fmt p;
+      Format.flush fmt ();
+      let s = Buffer.to_bytes b |> Bytes.unsafe_to_string in
+
+      let old_reporter = Logs.reporter () in
+      Logs.set_reporter Logs.nop_reporter;
+      let reparse_result =
+        Result.guard (fun () -> Loader.Loadir.ast_of_string s)
+      in
+      Logs.set_reporter old_reporter;
+      (match reparse_result with
+      | Ok _ -> ()
+      | Error e ->
+          Logs.warn (fun m ->
+              m "This dump-il output cannot be re-parsed: %s"
+                (Printexc.to_string e)));
+      output_string c s);
   st
 
 let dump_boogie st ofile =
