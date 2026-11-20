@@ -709,6 +709,8 @@ module ExprHashCons = struct
     let alg e = fix (AbstractExpr.drop_attrib e) in
     BasilExpr.cata alg e
 
+  let to_expr e = cata BasilExpr.fix e
+
   let show_dbg (e : t) =
     let i = Fix.HashCons.id e in
     let h = Fix.HashCons.hash e in

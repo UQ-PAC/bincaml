@@ -21,7 +21,11 @@ module Value = struct
     | E of
         (Expr.ExprHashCons.t
         [@printer fun fmt e -> fprintf fmt "%s" (Expr.ExprHashCons.show_dbg e)])
-    | Vr of Var.t
+    | Vr of
+        (Var.t UnionFind.elem
+        [@equal fun a b -> UnionFind.eq a b]
+        [@printer
+          fun fmt e -> fprintf fmt "%s" (UnionFind.get e |> Var.to_string)])
     | Val of VT.t
     | Poison
   [@@deriving map, fold, eq, show]
@@ -62,13 +66,18 @@ functor
       let equal = Fix.HashCons.equal
     end
 
+    module Vars = Fix.Memoize.ForHashedType (Var)
+
+    let make_var = Vars.memoize (fun (v : Var.t) -> UnionFind.make v)
+
     module Memo = Fix.Memoize.ForHashedType (Consed)
 
     let fix_impl = Memo.memoize (fun (v : Consed.t) -> UnionFind.make v)
     let fix e = fix_impl (Consed.fix e)
     let unfix e = UnionFind.find e |> UnionFind.get |> Consed.unfix
     let find = UnionFind.find
-    let of_var v = fix @@ Value.Vr v
+    let of_var v = fix @@ Value.Vr (UnionFind.find @@ make_var v)
+    let find_var v = UnionFind.find (make_var v) |> UnionFind.get
 
     let merge merge_fn a b =
       let unwrap e = Consed.unfix e in
@@ -90,10 +99,22 @@ functor
 
 module type S = module type of Pack ()
 
+let merge_vars v1 v2 =
+  let priority v =
+    if
+      String.ends_with ~suffix:"out" (Var.name v)
+      || String.ends_with ~suffix:"_in" (Var.name v)
+    then 2
+    else 1
+  in
+  if priority v1 > priority v2 then v1 else v2
+
+let merge_vars v1 v2 = UnionFind.merge merge_vars v1 v2
+
 let of_expr (module P : S) e =
   let e = Expr.ExprHashCons.of_expr e in
   Expr.ExprHashCons.unfix e |> function
-  | RVar { id } -> Some (P.of_var id)
+  | RVar { id } -> Some (UnionFind.find @@ P.of_var id)
   | Constant { const } -> P.of_const const
   | o -> Some (P.fix (E e))
 
@@ -104,29 +125,49 @@ let partial_eval_expr (module P : S) e =
     | _ -> None
   in
   let e = Expr.BasilExpr.substitute read_var e in
-  Expr_eval.partial_eval_expr e
+  Algsimp.normalise @@ Expr_eval.partial_eval_expr e
 
 let eval_expr (module P : S) e =
-  partial_eval_expr (module P : S) e |> of_expr (module P)
+  let sub_vars =
+    Expr.BasilExpr.cata (function
+      | RVar ({ id } as r) ->
+          let id = P.find_var id in
+          Expr.ExprHashCons.fix (RVar { r with id })
+      | o -> Expr.ExprHashCons.fix o)
+  in
+  let trivial = P.fix (E (sub_vars e)) in
+  let evaled = partial_eval_expr (module P : S) e |> of_expr (module P) in
+  match evaled with Some v -> v | None -> trivial
 
 let extract_expr (module P : S) e =
   let e = partial_eval_expr (module P) e in
   of_expr (module P) e
   |> Option.map P.unfix
   |> ( function
-  | Some (Value.Vr v) -> None
+  | Some (Value.Vr v) ->
+      Some (Expr.BasilExpr.rvar (UnionFind.find v |> UnionFind.get))
   | Some (Value.Val v) -> Some (VT.to_const v)
+  | Some (E e) -> Some (Expr.ExprHashCons.to_expr e)
   | _ -> None )
   |> Option.get_or ~default:e
+
+let count_subexpr (e : Expr.ExprHashCons.t) =
+  Expr.ExprHashCons.cata
+    Expr.AbstractExpr.(
+      function RVar _ -> 2 | Constant _ -> 1 | e -> fold ( + ) 1 e)
+    e
 
 let merge_fn a b =
   Logs.debug (fun m -> m "unify %a %a" Value.pp a Value.pp b);
   match (a, b) with
+  | Vr i, Vr j -> Value.Vr (merge_vars i j)
   | Value.Poison, _ | _, Value.Poison -> Value.Poison
   | Val i, Val j -> if not @@ VT.equal i j then Poison else Val i
   | Val i, _ | _, Val i -> Val i
-  | Vr i, _ | _, Vr i -> Vr i
-  | a, b -> a
+  | E i, E j ->
+      let l = count_subexpr i and r = count_subexpr j in
+      if l < r then E i else E j
+  | E i, _ | _, E i -> E i
 
 let analyse_phi (module P : S) lhs rhs =
   let lhs = P.of_var lhs in
@@ -170,7 +211,9 @@ let analyse_stmt (module S : S) ~widen st (v : Analysis.Dataflow_graph.Vertex.t)
   | Phi { lhs; rhs; widen_point } -> analyse_phi (module S) lhs rhs
 
 let extract_var (module P : S) e =
-  P.of_var e |> P.unfix |> function Value.Vr v -> v | _ -> e
+  P.of_var e |> P.unfix |> function
+  | Value.Vr v -> UnionFind.get @@ UnionFind.find v
+  | _ -> e
 
 let replace_phi (module P : S) (phi : Var.t Block.phi) =
   let extract_var = extract_var (module P) in
@@ -181,6 +224,24 @@ let replace_phi (module P : S) (phi : Var.t Block.phi) =
 let phi_redundant (phi : Var.t Block.phi) =
   List.for_all (snd %> Var.equal phi.lhs) phi.rhs
 
+let assigns_redundant assigns =
+  let equal (v, e) =
+    Expr.BasilExpr.unfix e |> function
+    | RVar { id } -> Var.equal v id
+    | _ -> false
+  in
+  let assigns = List.filter (not % equal) assigns in
+  assigns
+
+let filter_stmt stmt =
+  match stmt with
+  | Stmt.Instr_Assign { al; attrib } ->
+      begin match assigns_redundant al with
+      | [] -> None
+      | al -> Some (Stmt.Instr_Assign { al; attrib })
+      end
+  | o -> Some o
+
 let transform_proc (module P : S) =
   let extract_var = extract_var (module P) in
   let extract_expr = extract_expr (module P) in
@@ -188,8 +249,10 @@ let transform_proc (module P : S) =
       let b =
         b
         |> Block.map ~phi:Fun.id
-             (Stmt.map ~f_lvar:Fun.id ~f_rvar:extract_var ~f_expr:extract_expr)
+             (Stmt.map ~f_lvar:extract_var ~f_rvar:extract_var
+                ~f_expr:extract_expr)
       in
+      Vector.filter_map_in_place filter_stmt b.stmts;
       { b with phis = List.filter (not % phi_redundant) b.phis })
 
 let analyse_proc p =
