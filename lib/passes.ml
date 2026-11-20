@@ -700,9 +700,9 @@ module PassManager = struct
     | ProcCheck app ->
         Program.procs p
         |> Iter.iter (fun (id, proc) ->
-            Trace_core.with_span ~__FILE__ ~__LINE__
-              ("check-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
-            @@ fun _ ->
+            let msg = "check-proc::" ^ tf.name ^ "::" ^ ID.to_string id in
+            Logs.debug (fun m -> m "%s" msg);
+            Trace_core.with_span ~__FILE__ ~__LINE__ msg @@ fun _ ->
             Attrib.add_loc_error_ctx ~msg:"checking procedure"
               (Procedure.attrib proc)
             @@ fun () ->
@@ -714,9 +714,9 @@ module PassManager = struct
     | Proc app ->
         Program.map_procedures
           (fun id proc ->
-            Trace_core.with_span ~__FILE__ ~__LINE__
-              ("transform-proc::" ^ tf.name ^ "::" ^ ID.to_string id)
-            @@ fun _ ->
+            let msg = "transform-proc::" ^ tf.name ^ "::" ^ ID.to_string id in
+            Logs.debug (fun m -> m "%s" msg);
+            Trace_core.with_span ~__FILE__ ~__LINE__ msg @@ fun _ ->
             Attrib.add_loc_error_ctx ~msg:"analysing procedure"
               (Procedure.attrib proc)
             @@ fun () ->
