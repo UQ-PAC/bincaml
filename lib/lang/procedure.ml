@@ -450,6 +450,20 @@ let replace_block_succs p id succs =
 let replace_edge p id (block : (Var.t, BasilExpr.t) Block.t) =
   update_block p id block
 
+let transplant_succ_edges_v ~from ~to_ g =
+  G.fold_succ_e
+    (function
+      | (_, e, tgt) as edge ->
+          Fun.flip G.remove_edge_e edge %> Fun.flip G.add_edge_e (to_, e, tgt))
+    g from g
+
+let transplant_pred_edges_v ~from ~to_ g =
+  G.fold_pred_e
+    (function
+      | (src, e, _) as edge ->
+          Fun.flip G.remove_edge_e edge %> Fun.flip G.add_edge_e (src, e, to_))
+    g from g
+
 (** Transfers the outgoing edges of the block ID [from] to instead originate
     from the block ID [to_].
 
@@ -461,26 +475,12 @@ let replace_edge p id (block : (Var.t, BasilExpr.t) Block.t) =
 
     TODO: how does this interact with phi nodes?? probably impossible to handle.
 *)
-let transplant_outgoing_edges p ~from ~to_ : _ t =
-  let replace_outgoing_uses ~from ~to_ g =
-    G.fold_succ_e
-      (function
-        | (_, e, tgt) as edge ->
-            Fun.flip G.remove_edge_e edge %> Fun.flip G.add_edge_e (to_, e, tgt))
-      g from g
-  in
-  p |> map_graph (replace_outgoing_uses ~from:(End from) ~to_:(End to_))
+let transplant_succ_edges p ~from ~to_ : _ t =
+  p |> map_graph (transplant_succ_edges_v ~from:(End from) ~to_:(End to_))
 
-(** Like {!transplant_outgoing_edges}, but for incoming edges. *)
-let transplant_incoming_edges p ~from ~to_ : _ t =
-  let replace_incoming_uses ~from ~to_ g =
-    G.fold_pred_e
-      (function
-        | (src, e, _) as edge ->
-            Fun.flip G.remove_edge_e edge %> Fun.flip G.add_edge_e (src, e, to_))
-      g from g
-  in
-  p |> map_graph (replace_incoming_uses ~from:(Begin from) ~to_:(Begin to_))
+(** Like {!transplant_succ_edges}, but for incoming edges. *)
+let transplant_pred_edges p ~from ~to_ : _ t =
+  p |> map_graph (transplant_pred_edges_v ~from:(Begin from) ~to_:(Begin to_))
 
 (** Replaces uses of the old block ID with the new [(first, last)] block IDs.
     The incoming edges to [old] will be redirected to [first] and the outgoing
@@ -491,8 +491,8 @@ let transplant_incoming_edges p ~from ~to_ : _ t =
     the procedure. *)
 let replace_block ~old ~new_:(new_first, new_last) proc =
   proc
-  |> transplant_incoming_edges ~from:old ~to_:new_first
-  |> transplant_outgoing_edges ~from:old ~to_:new_last
+  |> transplant_pred_edges ~from:old ~to_:new_first
+  |> transplant_succ_edges ~from:old ~to_:new_last
   |>
   if ID.equal old new_first || ID.equal old new_last then Fun.id
   else Fun.flip remove_block old
@@ -766,7 +766,7 @@ let cfg_concatmap_block ~(f : proc:_ t -> _ Stmt.t -> _ mapped_stmt) base_bid
   in
   let proc =
     proc
-    |> transplant_outgoing_edges ~from:base_bid ~to_:last
+    |> transplant_succ_edges ~from:base_bid ~to_:last
     |>
     if not ID.(equal first base_bid) then
       add_goto ~from:base_bid ~targets:[ first ]
