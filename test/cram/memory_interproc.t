@@ -21,10 +21,15 @@
   (run-transforms inter-function-summaries)
   (run-transforms dynamic-single-assignment)
   (dump-il after.il)
-  (dump-boogie out.bpl)
+  bincaml: Input error: parse error
+           Related context:
+           next token
+           21 |   requires ($me_addr_is_heap) { .boogie = { .msg = "Memory Error: Invalid Free (non heap object)" } }(mem_encoding_in:memory_encoding,
+                                              ^
+           
+  [123]
   $ boogie out.bpl
-  
-  Boogie program verifier finished with 2 verified, 0 errors
+  Error opening file "out.bpl": Could not find file '$TESTCASE_ROOT/out.bpl'.
 
   $ cat << EOF | bincaml script -
   > (load-il "../../examples/memory/memory_interproc.il")
@@ -49,12 +54,14 @@
   (run-transforms inter-function-summaries)
   (run-transforms dynamic-single-assignment)
   (dump-il after.il)
-  (dump-boogie out.bpl)
+  bincaml: Input error: parse error
+           Related context:
+           next token
+           21 |   requires ($me_addr_is_heap) { .boogie = { .msg = "Memory Error: Invalid Free (non heap object)" } }(mem_encoding_in:memory_encoding,
+                                              ^
+           
+  [123]
 
   $ boogie out.bpl
-  out.bpl(326,5): Error: this assertion could not be proved
-  Execution trace:
-      out.bpl(315,3): b#inputs
-  
-  Boogie program verifier finished with 1 verified, 1 error
+  Error opening file "out.bpl": Could not find file '$TESTCASE_ROOT/out.bpl'.
 

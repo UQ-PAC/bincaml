@@ -181,7 +181,9 @@ let dump_il st ofile =
       ignore
         (Fun.protect
            ~finally:(fun () -> Logs.set_reporter old_reporter)
-           (fun () -> Loader.Loadir.ast_of_string s));
+           (fun () ->
+             Logs.set_reporter Logs.nop_reporter;
+             Loader.Loadir.ast_of_string s));
 
       output_string c s);
   st
